@@ -1,0 +1,4 @@
+add|1|3
+sub|2|4
+multiply|5|10
+add|3|100

@@ -1,5 +1,5 @@
 [workspace]
 
 members = [
-    "taurus_poc"
+    "taurus_poc", "taurus_queue",
 ]

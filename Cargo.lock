@@ -5,3 +5,7 @@ version = 4
 [[package]]
 name = "taurus_poc"
 version = "0.1.0"
+
+[[package]]
+name = "taurus_queue"
+version = "0.1.0"

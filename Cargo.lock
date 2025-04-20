@@ -513,9 +513,9 @@ dependencies = [
 
 [[package]]
 name = "code0-flow"
-version = "0.0.7"
+version = "0.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24dbc44b78c316d08a604ba077a2bd6c7cdf3d28919247161d08709159a2225b"
+checksum = "ea8fc36baafbfa933332d1f151346614abdc30876609c10cf711b12938b680d2"
 dependencies = [
  "async-trait",
  "futures-lite 2.6.0",
@@ -525,7 +525,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tucana 0.0.19",
+ "tucana 0.0.20",
 ]
 
 [[package]]

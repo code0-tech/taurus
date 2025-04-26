@@ -1,0 +1,6 @@
+{
+  "greeting": "Hello There!",
+  "farewell": "Goodbye!",
+  "debug.enabled": "yes",
+  "debug.level": "information"
+}

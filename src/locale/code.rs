@@ -1,5 +1,4 @@
-use std::ffi::OsString;
-
+#[derive(Clone, PartialEq)]
 pub enum CountryCode {
     Germany,
     UnitedStates,

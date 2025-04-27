@@ -8,6 +8,7 @@ use tucana::shared::Translation;
 
 use super::code::{code_from_file_name, CountryCode};
 
+#[derive(Debug)]
 pub struct Locale {
     translations: HashMap<String, Vec<Translation>>,
     accepted_locales: Vec<CountryCode>,
@@ -87,7 +88,7 @@ impl Locale {
             }
 
             if let Some((file_name, content)) = read_translation_file(path, &entry) {
-                let code = code_from_file_name(file_name.clone(), CountryCode::UnitedStates);
+                let code = code_from_file_name(file_name.clone(), default_locale.clone());
                 if !accepted_locales.contains(&code) {
                     continue;
                 }
@@ -106,11 +107,7 @@ impl Locale {
     pub fn reduce_to_default(&mut self) {
         let code = self.default_locale.to_string();
         for (_, translations) in self.translations.iter_mut() {
-            *translations = translations
-                .iter()
-                .filter(|translation| translation.code == code)
-                .cloned()
-                .collect();
+            translations.retain(|translation| translation.code == code);
         }
     }
 
@@ -121,11 +118,7 @@ impl Locale {
             .map(|code| code.to_string())
             .collect();
         for (_, translations) in self.translations.iter_mut() {
-            *translations = translations
-                .iter()
-                .filter(|translation| codes.contains(&translation.code.to_string()))
-                .cloned()
-                .collect();
+            translations.retain(|translation| codes.contains(&translation.code));
         }
     }
 
@@ -155,6 +148,11 @@ fn read_translation_file(path: &str, entry: &DirEntry) -> Option<(String, String
         None => return None,
     };
 
+    // Check if it's a .toml file
+    if !file_name_str.ends_with(".toml") {
+        return None;
+    }
+
     let file_path = format!("{}/{}", path, file_name_str);
     let content = match fs::read_to_string(&file_path) {
         Ok(content) => content,
@@ -164,11 +162,7 @@ fn read_translation_file(path: &str, entry: &DirEntry) -> Option<(String, String
         }
     };
 
-    let base_name = match file_name_str.strip_suffix(".toml") {
-        Some(name) => name.to_string(),
-        None => return None,
-    };
-
+    let base_name = file_name_str.strip_suffix(".toml").unwrap().to_string();
     Some((base_name, content))
 }
 
@@ -199,7 +193,7 @@ fn add_translations_to_dictionary(
 ) {
     for (key, entry) in flattened {
         let translation = Translation {
-            code: code.clone().to_string(),
+            code: code.to_string(),
             content: entry,
         };
 
@@ -256,5 +250,256 @@ fn extract_value_to_string(val: &toml::Value, key: &str, result: &mut HashMap<St
         result.insert(key.to_string(), string_val.to_string());
     } else {
         result.insert(key.to_string(), val.to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    fn create_test_translation_file(
+        dir: &Path,
+        filename: &str,
+        content: &str,
+    ) -> std::io::Result<()> {
+        let file_path = dir.join(filename);
+        let mut file = File::create(file_path)?;
+        file.write_all(content.as_bytes())?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_flatten_toml() {
+        let toml_str = r#"
+            key1 = "value1"
+
+            [section1]
+            key2 = "value2"
+
+            [section1.subsection]
+            key3 = "value3"
+        "#;
+
+        let value: toml::Value = toml::from_str(toml_str).unwrap();
+        let flattened = flatten_toml(&value, "");
+
+        assert_eq!(flattened.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(flattened.get("section1.key2"), Some(&"value2".to_string()));
+        assert_eq!(
+            flattened.get("section1.subsection.key3"),
+            Some(&"value3".to_string())
+        );
+    }
+
+    #[test]
+    fn test_add_translations_to_dictionary() {
+        let mut flattened = HashMap::new();
+        flattened.insert("key1".to_string(), "value1".to_string());
+        flattened.insert("key2".to_string(), "value2".to_string());
+
+        let code = CountryCode::UnitedStates;
+        let mut dictionary = HashMap::new();
+
+        add_translations_to_dictionary(flattened, &code, &mut dictionary);
+
+        assert_eq!(dictionary.len(), 2);
+        assert_eq!(dictionary["key1"][0].content, "value1");
+        assert_eq!(dictionary["key1"][0].code, code.to_string());
+        assert_eq!(dictionary["key2"][0].content, "value2");
+        assert_eq!(dictionary["key2"][0].code, code.to_string());
+    }
+
+    #[test]
+    fn test_reduce_to_default_empty() {
+        let mut translations = HashMap::new();
+
+        let key = "greeting".to_string();
+        let mut values = Vec::new();
+
+        values.push(Translation {
+            code: CountryCode::Germany.to_string(),
+            content: "Hallo".to_string(),
+        });
+
+        values.push(Translation {
+            code: CountryCode::France.to_string(),
+            content: "Bonjour".to_string(),
+        });
+
+        translations.insert(key.clone(), values);
+
+        let mut locale = Locale {
+            translations,
+            accepted_locales: vec![CountryCode::UnitedStates, CountryCode::France],
+            default_locale: CountryCode::UnitedStates,
+        };
+
+        locale.reduce_to_default();
+
+        let translations = locale.get_translations(key);
+        assert!(translations.is_some());
+        assert_eq!(translations.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_reduce_to_default() {
+        let mut translations = HashMap::new();
+
+        let key = "greeting".to_string();
+        let mut values = Vec::new();
+
+        values.push(Translation {
+            code: CountryCode::Germany.to_string(),
+            content: "Hallo".to_string(),
+        });
+
+        values.push(Translation {
+            code: CountryCode::France.to_string(),
+            content: "Bonjour".to_string(),
+        });
+
+        values.push(Translation {
+            code: CountryCode::UnitedStates.to_string(),
+            content: "Hello".to_string(),
+        });
+
+        translations.insert(key.clone(), values);
+
+        let mut locale = Locale {
+            translations,
+            accepted_locales: vec![CountryCode::UnitedStates, CountryCode::France],
+            default_locale: CountryCode::UnitedStates,
+        };
+
+        locale.reduce_to_default();
+
+        let translations = locale.get_translations(key);
+        assert!(translations.is_some());
+        assert_eq!(translations.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_reduce_to_accepted() {
+        let mut translations = HashMap::new();
+
+        let key = "greeting".to_string();
+        let mut values = Vec::new();
+
+        values.push(Translation {
+            code: CountryCode::UnitedStates.to_string(),
+            content: "Hello".to_string(),
+        });
+
+        values.push(Translation {
+            code: CountryCode::France.to_string(),
+            content: "Bonjour".to_string(),
+        });
+
+        values.push(Translation {
+            code: CountryCode::Germany.to_string(),
+            content: "Hallo".to_string(),
+        });
+
+        translations.insert(key.clone(), values);
+
+        let mut locale = Locale {
+            translations,
+            accepted_locales: vec![CountryCode::UnitedStates, CountryCode::France],
+            default_locale: CountryCode::UnitedStates,
+        };
+
+        locale.reduce_to_accepted();
+
+        let translations = locale.get_translations(key);
+        assert!(translations.is_some());
+        assert_eq!(translations.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_reduce_to_accepted_empty() {
+        let mut translations = HashMap::new();
+
+        let key = "greeting".to_string();
+        let mut values = Vec::new();
+
+        values.push(Translation {
+            code: CountryCode::UnitedStates.to_string(),
+            content: "Hello".to_string(),
+        });
+
+        values.push(Translation {
+            code: CountryCode::France.to_string(),
+            content: "Bonjour".to_string(),
+        });
+
+        translations.insert(key.clone(), values);
+
+        let mut locale = Locale {
+            translations,
+            accepted_locales: vec![CountryCode::Germany],
+            default_locale: CountryCode::UnitedStates,
+        };
+
+        locale.reduce_to_accepted();
+
+        let translations = locale.get_translations(key);
+        assert!(translations.is_some());
+        assert_eq!(translations.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_locale_new_with_files() {
+        let temp_dir = tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create test translation files
+        let en_file = create_test_translation_file(
+            temp_path,
+            "en_US.toml",
+            r#"
+            welcome = "Welcome"
+            goodbye = "Goodbye"
+            "#,
+        );
+
+        assert!(en_file.is_ok());
+
+        let fr_file = create_test_translation_file(
+            temp_path,
+            "fr_FR.toml",
+            r#"
+            welcome = "Bienvenue"
+            goodbye = "Au revoir"
+            "#,
+        );
+
+        assert!(fr_file.is_ok());
+
+        let locale = Locale::new(
+            temp_path.to_str().unwrap(),
+            vec![CountryCode::UnitedStates, CountryCode::France],
+            CountryCode::UnitedStates,
+        );
+
+        assert_eq!(locale.accepted_locales.len(), 2);
+        assert!(locale.accepted_locales.contains(&CountryCode::UnitedStates));
+        assert!(locale.accepted_locales.contains(&CountryCode::France));
+        assert_eq!(
+            locale.default_locale,
+            CountryCode::UnitedStates,
+            "Not the same default locale"
+        );
+
+        // Test that translations were loaded correctly
+        let welcome_translations = locale.get_translations("welcome".to_string()).unwrap();
+        let goodbye_translations = locale.get_translations("goodbye".to_string()).unwrap();
+        let empty_translations = locale.get_translations("empty".to_string());
+        assert_eq!(welcome_translations.len(), 2);
+        assert_eq!(goodbye_translations.len(), 2);
+        assert!(empty_translations.is_none());
     }
 }

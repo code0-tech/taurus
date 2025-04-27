@@ -1,4 +1,7 @@
+pub mod locale;
+
 use code0_flow::flow_queue::service::{Message, RabbitmqClient};
+use locale::locale::Locale;
 use std::sync::Arc;
 
 fn handle_message(message: Message) -> Result<Message, lapin::Error> {
@@ -13,6 +16,7 @@ fn handle_message(message: Message) -> Result<Message, lapin::Error> {
 
 #[tokio::main]
 async fn main() {
+    let locale = Locale::default();
     let rabbitmq_client = Arc::new(RabbitmqClient::new("amqp://localhost:5672").await);
 
     // Receive messages from the send_queue

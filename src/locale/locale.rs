@@ -58,8 +58,21 @@ impl Locale {
                 );
                 accepted_locales.push(code);
 
-                let json: serde_json::Value =
-                    serde_json::from_reader(file).expect("file should be proper JSON");
+    pub fn reduce_to_default(&mut self) {
+        let code = self.default_locale.to_string();
+        for entry in self.translations.iter_mut() {
+            entry
+                .1
+                .into_iter()
+                .filter_map(|translation| ({
+                    if translation.code == code {
+                        translation
+                    }
+                    
+                }))
+        }
+    }
+}
 
                 for entry in json.as_object().expect("msg").into_iter() {
                     let key = entry.0.to_string();

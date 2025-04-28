@@ -8,15 +8,15 @@ Adds two numbers together.
   "runtime_name": "std::number::add",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -32,15 +32,15 @@ Multiplies two numbers together.
   "runtime_name": "std::number::multiply",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -56,15 +56,15 @@ Subtracts the second number from the first.
   "runtime_name": "std::number::subtract",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -80,15 +80,15 @@ Divides the first number by the second.
   "runtime_name": "std::number::divide",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -104,15 +104,15 @@ Returns the remainder after division of the first number by the second.
   "runtime_name": "std::number::modulo",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -128,11 +128,11 @@ Converts a number to its absolute value.
   "runtime_name": "std::number::abs",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -148,11 +148,11 @@ Checks if a number is positive.
   "runtime_name": "std::number::is_positive",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -169,15 +169,15 @@ Checks if the first number is greater than the second.
   "runtime_name": "std::number::is_greater",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -194,15 +194,15 @@ Checks if the first number is less than the second.
   "runtime_name": "std::number::is_less",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -219,11 +219,11 @@ Checks if a number is zero.
   "runtime_name": "std::number::is_zero",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -240,11 +240,11 @@ Multiplies a number by itself.
   "runtime_name": "std::number::square",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -260,15 +260,15 @@ Raises a number to the specified power.
   "runtime_name": "std::number::exponential",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "base"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "exponent"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -283,7 +283,7 @@ Returns the mathematical constant Pi.
 {
   "runtime_name": "std::number::pi",
   "runtime_parameter_definitions": [],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -298,7 +298,7 @@ Returns the mathematical constant e (Euler's number).
 {
   "runtime_name": "std::number::euler",
   "runtime_parameter_definitions": [],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -313,7 +313,7 @@ Returns the representation of infinity.
 {
   "runtime_name": "std::number::infinity",
   "runtime_parameter_definitions": [],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -329,15 +329,15 @@ Rounds a number up to the nearest integer.
   "runtime_name": "std::number::round_up",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "decimals"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -356,15 +356,15 @@ Rounds a number down to the nearest integer.
   "runtime_name": "std::number::round_down",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "decimals"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -384,15 +384,15 @@ Rounds a number to the nearest integer.
   "runtime_name": "std::number::round",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "decimals"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -412,11 +412,11 @@ Calculates the square root of a number.
   "runtime_name": "std::number::square_root",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -432,15 +432,15 @@ Calculates the nth root of a number.
   "runtime_name": "std::number::root",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "root_exponent"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -456,15 +456,15 @@ Calculates the logarithm of a number with the specified base.
   "runtime_name": "std::number::log",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "base"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -480,11 +480,11 @@ Calculates the natural logarithm (base e) of a number.
   "runtime_name": "std::number::ln",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -492,19 +492,19 @@ Calculates the natural logarithm (base e) of a number.
 
 2.71828... --> 1 (ln of e)
 
-## parseNumber
+## fromText
 Converts a string to a number.
 
 ```json
 {
-  "runtime_name": "std::number::parse_number",
+  "runtime_name": "std::number::from_text",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "text"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -512,6 +512,28 @@ Converts a string to a number.
 
 "123" --> 123
 "3.14" --> 3.14
+
+## asText
+Converts a number to a text.
+
+```json
+{
+  "runtime_name": "std::number::as_text",
+  "runtime_parameter_definitions": [
+    {
+      "data_type_identifier": "NUMBER",
+      "runtime_name": "number"
+    }
+  ],
+  "return_type_identifier": "TEXT"
+}
+```
+
+**Example**:
+
+123 --> "123"
+3.14 --> "3.14"
+
 
 ## min
 Returns the smaller of two numbers.
@@ -521,15 +543,15 @@ Returns the smaller of two numbers.
   "runtime_name": "std::number::min",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -546,15 +568,15 @@ Returns the larger of two numbers.
   "runtime_name": "std::number::max",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "first"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "second"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -571,11 +593,11 @@ Returns the additive inverse of a number.
   "runtime_name": "std::number::negate",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -592,15 +614,15 @@ Generates a random number between the specified minimum and maximum values.
   "runtime_name": "std::number::random_number",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "min"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "max"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -616,11 +638,11 @@ Calculates the sine of an angle (in radians).
   "runtime_name": "std::number::sin",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "radians"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -637,11 +659,11 @@ Calculates the cosine of an angle (in radians).
   "runtime_name": "std::number::cos",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "radians"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -658,11 +680,11 @@ Calculates the tangent of an angle (in radians).
   "runtime_name": "std::number::tan",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "radians"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -679,11 +701,11 @@ Calculates the inverse sine (in radians).
   "runtime_name": "std::number::arcsin",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -700,11 +722,11 @@ Calculates the inverse cosine (in radians).
   "runtime_name": "std::number::arccos",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -721,11 +743,11 @@ Calculates the inverse tangent (in radians).
   "runtime_name": "std::number::arctan",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -742,11 +764,11 @@ Calculates the hyperbolic sine of a number.
   "runtime_name": "std::number::sinh",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -763,11 +785,11 @@ Calculates the hyperbolic cosine of a number.
   "runtime_name": "std::number::cosh",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -784,19 +806,19 @@ Constrains a number to be within a specified range.
   "runtime_name": "std::number::clamp",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "min"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "max"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 

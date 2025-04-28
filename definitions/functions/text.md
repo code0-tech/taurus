@@ -1,18 +1,18 @@
 # std for PRIMITIVE: TEXT
 
 ## asBytes
-Converts the text to a byte array.
+Converts the text to a number array.
 
 ```json
 {
   "runtime_name": "std::text::as_bytes",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "ARRAY"
+  "return_type_identifier": "NUMBER_ARRAY"
 }
 ```
 
@@ -28,11 +28,11 @@ Returns the size of the text in bytes.
   "runtime_name": "std::text::byte_size",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -48,11 +48,11 @@ Capitalizes the first character of the text.
   "runtime_name": "std::text::capitalize",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -70,11 +70,11 @@ Converts all characters in the text to uppercase.
   "runtime_name": "std::text::uppercase",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -92,11 +92,11 @@ Converts all characters in the text to lowercase.
   "runtime_name": "std::text::lowercase",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -114,11 +114,11 @@ Swaps the case of all characters in the text.
   "runtime_name": "std::text::swapcase",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -136,11 +136,11 @@ Splits the text into an array of characters.
   "runtime_name": "std::text::chars",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "ARRAY"
+  "return_type_identifier": "TEXT_ARRAY"
 }
 ```
 
@@ -156,15 +156,15 @@ Returns the character at the specified index.
   "runtime_name": "std::text::at",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "index"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -182,11 +182,11 @@ Removes whitespace from both ends of the text.
   "runtime_name": "std::text::trim",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -204,15 +204,15 @@ Concatenates two strings together.
   "runtime_name": "std::text::append",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "suffix"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -230,15 +230,15 @@ Adds text to the beginning of the string.
   "runtime_name": "std::text::prepend",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "prefix"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -256,19 +256,19 @@ Inserts text at the specified position.
   "runtime_name": "std::text::insert",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "position"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "text"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -286,11 +286,11 @@ Returns the length of the text.
   "runtime_name": "std::text::length",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -308,19 +308,19 @@ Removes a portion of text from the specified start index to end index.
   "runtime_name": "std::text::remove",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "start"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "end"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -338,19 +338,19 @@ Replaces all occurrences of a substring with another string.
   "runtime_name": "std::text::replace",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "old"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "new"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -368,19 +368,19 @@ Replaces the first occurrence of a substring with another string.
   "runtime_name": "std::text::replace_first",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "old"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "new"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -398,19 +398,19 @@ Replaces the last occurrence of a substring with another string.
   "runtime_name": "std::text::replace_last",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "old"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "new"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -428,11 +428,11 @@ Converts the text to a hexadecimal representation.
   "runtime_name": "std::text::hex",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -450,11 +450,11 @@ Converts the text to an octal representation.
   "runtime_name": "std::text::octal",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -472,15 +472,15 @@ Returns the index of the first occurrence of a substring, or -1 if not found.
   "runtime_name": "std::text::index_of",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "substring"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -498,15 +498,15 @@ Checks if the text contains a specified substring.
   "runtime_name": "std::text::contains",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "substring"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -524,15 +524,15 @@ Splits the text into an array of strings based on a delimiter.
   "runtime_name": "std::text::split",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "delimiter"
     }
   ],
-  "return_type_identifier": "ARRAY"
+  "return_type_identifier": "TEXT_ARRAY"
 }
 ```
 
@@ -550,11 +550,11 @@ Reverses the text.
   "runtime_name": "std::text::reverse",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -572,15 +572,15 @@ Checks if the text starts with a specified prefix.
   "runtime_name": "std::text::start_with",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "prefix"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -598,15 +598,15 @@ Checks if the text ends with a specified suffix.
   "runtime_name": "std::text::ends_with",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "suffix"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -624,11 +624,11 @@ Converts each character to its ASCII code as an array of numbers.
   "runtime_name": "std::text::to_ascii",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "ARRAY"
+  "return_type_identifier": "NUMBER_ARRAY"
 }
 ```
 
@@ -646,11 +646,11 @@ Converts an array of ASCII codes to a text string.
   "runtime_name": "std::text::from_ascii",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "ARRAY",
+      "data_type_identifier": "NUMBER_ARRAY",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -668,15 +668,15 @@ Encodes the text using a specified encoding.
   "runtime_name": "std::text::encode",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     },
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT_ENCODING",
       "runtime_name": "encoding"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 

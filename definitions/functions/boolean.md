@@ -8,11 +8,11 @@ Will convert the boolean to a number.
   "runtime_name": "std::boolean::as_number",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "BOOLEAN",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "NUMBER"
 }
 ```
 
@@ -30,11 +30,11 @@ Will convert the boolean to a string.
   "runtime_name": "std::boolean::as_text",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "BOOLEAN",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "TEXT"
 }
 ```
 
@@ -53,11 +53,11 @@ Will convert the number to a boolean.
   "runtime_name": "std::boolean::from_number",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "NUMBER",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -76,11 +76,11 @@ Will convert the string to a boolean.
   "runtime_name": "std::boolean::from_text",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "TEXT",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 
@@ -99,11 +99,11 @@ Will negate the boolean.
   "runtime_name": "std::boolean::negate",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "PRIMITIVE",
+      "data_type_identifier": "BOOLEAN",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "PRIMITIVE"
+  "return_type_identifier": "BOOLEAN"
 }
 ```
 

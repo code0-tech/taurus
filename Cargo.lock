@@ -513,9 +513,9 @@ dependencies = [
 
 [[package]]
 name = "code0-flow"
-version = "0.0.8"
+version = "0.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8fc36baafbfa933332d1f151346614abdc30876609c10cf711b12938b680d2"
+checksum = "b691df7fa5e48beb1e4de29bf5928a286a5bfe4f1bb6ae6b13804d257197e0c7"
 dependencies = [
  "async-trait",
  "futures-lite 2.6.0",
@@ -525,7 +525,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tucana",
+ "tonic",
+ "tucana 0.0.24",
 ]
 
 [[package]]
@@ -1857,13 +1858,14 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.29.5"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bc42f3a12fd4408ce64d8efef67048a924e543bd35c6591c0447fda9054695f"
+checksum = "438a4e5f8e9aa246d6f3666d6978441bf1b37d5f417b50c4dd220be09f5fcc17"
 dependencies = [
  "arc-swap",
  "async-std",
  "bytes",
+ "cfg-if",
  "combine",
  "futures-util",
  "itoa",
@@ -2303,7 +2305,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
- "tucana",
+ "tucana 0.0.20",
 ]
 
 [[package]]
@@ -2600,6 +2602,20 @@ name = "tucana"
 version = "0.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39e88fda8f4b12a650904dbce5d3462ba161215a2cd5c0799c728be6747ac7fc"
+dependencies = [
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
+name = "tucana"
+version = "0.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cb09367cc920fc735409a26a9f7494df3c6aaa5681d6a5e06424413071c759a"
 dependencies = [
  "prost",
  "prost-types",

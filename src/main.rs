@@ -1,3 +1,6 @@
+pub mod context;
+pub mod error;
+pub mod registry;
 use code0_flow::flow_queue::service::{Message, RabbitmqClient};
 use std::sync::Arc;
 

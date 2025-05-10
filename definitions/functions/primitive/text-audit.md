@@ -36,3 +36,9 @@
 ## Renamed:
  - strip --> trim
  - concate --> append
+
+
+# 06.05.2025
+
+## Added
+- isEqual

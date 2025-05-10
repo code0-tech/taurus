@@ -8,10 +8,19 @@
   "name": [
     {
       "code": "en-US",
-      "content": "Array"
+      "content": "Generic Array"
     }
   ],
+  "rules": [
+    {
+      "contains_type": {
+        "data_type_identifier": "GENERIC"
+      }
+    }
+  ],
+  "parent_type_identifier": null
 }
+
 ```
 ## NUMBER_ARRAY
 
@@ -27,10 +36,8 @@
   ],
   "rules": [
     {
-      "config": {
-        "contains_type": {
-          "data_type_identifier": "NUMBER"
-        }
+      "contains_type": {
+        "data_type_identifier": "NUMBER"
       }
     }
   ],
@@ -52,10 +59,8 @@
   ],
   "rules": [
     {
-      "config": {
-        "contains_type": {
-          "data_type_identifier": "TEXT"
-        }
+      "contains_type": {
+        "data_type_identifier": "TEXT"
       }
     }
   ],
@@ -77,10 +82,8 @@
   ],
   "rules": [
     {
-      "config": {
-        "contains_type": {
-          "data_type_identifier": "BOOLEAN"
-        }
+      "contains_type": {
+        "data_type_identifier": "BOOLEAN"
       }
     }
   ],

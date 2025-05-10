@@ -91,16 +91,20 @@ Will convert the string to a boolean.
 "true" --> true
 
 
-## negate
-Will negate the boolean.
+## isEqual
+Will compare one boolean to another.
 
 ```json
 {
-  "runtime_name": "std::boolean::negate",
+  "runtime_name": "std::boolean::isEqual",
   "runtime_parameter_definitions": [
     {
       "data_type_identifier": "BOOLEAN",
-      "runtime_name": "value"
+      "runtime_name": "first"
+    },
+    {
+      "data_type_identifier": "BOOLEAN",
+      "runtime_name": "second"
     }
   ],
   "return_type_identifier": "BOOLEAN"
@@ -109,6 +113,6 @@ Will negate the boolean.
 
 **Example**:
 
-false --> true
+false, false --> true
 
-true --> false
+true, false --> false

@@ -65,3 +65,9 @@
 
 ## Added
 - asText
+
+
+# 06.05.2025
+
+## Added
+- isEqual

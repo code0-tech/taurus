@@ -683,3 +683,28 @@ Encodes the text using a specified encoding.
 **Example**:
 
 "hello", "base64" --> "aGVsbG8="
+
+## isEqual
+
+```json
+{
+  "runtime_name": "std::text::isEqual",
+  "runtime_parameter_definitions": [
+    {
+      "data_type_identifier": "TEXT",
+      "runtime_name": "first"
+    },
+    {
+      "data_type_identifier": "TEXT",
+      "runtime_name": "second"
+    }
+  ],
+  "return_type_identifier": "BOOLEAN"
+}
+```
+
+**Example**:
+
+"TEXT", "TEXT" --> true
+
+"TEXT", "WORD" --> false

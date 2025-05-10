@@ -828,6 +828,32 @@ Constrains a number to be within a specified range.
 -3, 0, 5 --> 0 (clamped to min)
 3, 0, 5 --> 3 (within range, unchanged)
 
+## isEqual
+Will compare one boolean to another.
+
+```json
+{
+  "runtime_name": "std::number::isEqual",
+  "runtime_parameter_definitions": [
+    {
+      "data_type_identifier": "NUMBER",
+      "runtime_name": "first"
+    },
+    {
+      "data_type_identifier": "NUMBER",
+      "runtime_name": "second"
+    }
+  ],
+  "return_type_identifier": "BOOLEAN"
+}
+```
+
+**Example**:
+
+1, 1 --> true
+
+1, 2 --> false
+
 # Additions:
 - isGreaterOrEqual
 - isLessOrEqual

@@ -14,16 +14,14 @@
   ],
   "rules": [
     {
-      "config": {
-        "item_of_collection": {
-          "items": [
+      "item_of_collection": {
+        "items": [
             "ASCII",
             "UTF-8",
             "UTF-16",
             "UTF-32"
           ]
         }
-      }
     }
   ]
 }

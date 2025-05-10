@@ -1,0 +1,6 @@
+greeting = "Guten Tag!"
+farewell = "Auf Wiedersehen!"
+
+[debug]
+enabled = "Ja"
+level = "Information"

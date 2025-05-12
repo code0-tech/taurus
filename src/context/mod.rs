@@ -12,6 +12,11 @@ pub struct ContextReference {
     pub tertiary_level: Option<i32>,
 }
 
+pub struct ContextLayer {
+    is_finished: bool,
+    result: Option<Result<Value, RuntimeError>>,
+}
+
 #[derive(Debug)]
 pub struct Context {
     /// A stack of environments: layer 0 is the outermost.

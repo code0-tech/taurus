@@ -2280,7 +2280,9 @@ name = "taurus"
 version = "0.1.0"
 dependencies = [
  "code0-flow",
+ "futures-lite 2.6.0",
  "lapin",
+ "log",
  "serde",
  "serde_json",
  "tempfile",

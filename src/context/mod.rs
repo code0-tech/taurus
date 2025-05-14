@@ -5,21 +5,29 @@ use std::{
 };
 use tucana::shared::{ReferenceValue, Value};
 
-type NodeResult = Option<Result<Value, RuntimeError>>;
+type NodeResult = Result<Value, RuntimeError>;
 
-enum ContextResult {
+pub enum ContextResult {
     // Will return the value / error if present of an executed node
-    NodeResult(NodeResult),
+    NodeExecutionResult(NodeResult),
 
     // Will return the parameter of the node (indexed by the context)
     ParameterResult(Value),
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct ContextEntry {
-    was_executed: bool,
-    result: NodeResult,
+    result: Result<Value, RuntimeError>,
     parameter: Vec<Value>,
+}
+
+impl ContextEntry {
+    pub fn new(result: NodeResult, parameter: Vec<Value>) -> Self {
+        ContextEntry {
+            result: result,
+            parameter: parameter,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -122,7 +130,7 @@ impl Context {
                 return Some(ContextResult::ParameterResult(value.clone()));
             }
 
-            return Some(ContextResult::NodeResult(value.result.clone()));
+            return Some(ContextResult::NodeExecutionResult(value.result.clone()));
         }
         None
     }
@@ -146,8 +154,12 @@ impl Context {
                 return Some(ContextResult::ParameterResult(value.clone()));
             }
 
-            return Some(ContextResult::NodeResult(value.result.clone()));
+            return Some(ContextResult::NodeExecutionResult(value.result.clone()));
         }
         None
+    }
+
+    pub fn is_end(&self) -> bool {
+        self.current_context_level.primary_level == 0
     }
 }

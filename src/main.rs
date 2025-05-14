@@ -7,7 +7,7 @@ pub mod registry;
 use std::sync::Arc;
 
 use code0_flow::flow_queue::service::{Message, RabbitmqClient};
-use context::Context;
+use context::{Context, ContextEntry, ContextResult};
 use error::RuntimeError;
 use futures_lite::StreamExt;
 use lapin::{options::BasicConsumeOptions, types::FieldTable};
@@ -48,25 +48,38 @@ fn handle_node_function(
                             }
                         };
 
+                        // A reference is present. Look up the real value
                         match context_result {
-                            Ok(v) => {
-                                parameter_collection.push(v.clone());
-                            }
-                            Err(_) => {
-                                todo!(
-                                    "Reqired function that holds the paramter failed in execution"
-                                )
+                            // The reference is a exeuction result of a node
+                            ContextResult::NodeExecutionResult(node_result) => match node_result {
+                                Ok(value) => {
+                                    parameter_collection.push(value.clone());
+                                }
+                                Err(err) => return Err(err),
+                            },
+                            // The reference is a parameter of a node
+                            ContextResult::ParameterResult(parameter_result) => {
+                                parameter_collection.push(parameter_result.clone());
                             }
                         }
                     }
 
                     // Its another function, that result is a direct parameter to this function
                     tucana::shared::node_parameter::Value::FunctionValue(another_node_function) => {
+                        // As this is another new indent, a new context will be opened
+                        context.next_context();
                         let function_result =
                             handle_node_function(another_node_function, &store, context);
 
+                        let entry = ContextEntry::new(
+                            function_result.clone(),
+                            parameter_collection.clone(),
+                        );
+                        context.write_to_current_context(entry);
+
                         match function_result {
                             Ok(v) => {
+                                // Add the value back to the main parameter
                                 parameter_collection.push(v.clone());
                             }
                             Err(_) => {
@@ -82,23 +95,36 @@ fn handle_node_function(
 
         let result = runtime_function(&parameter_collection, context);
 
-        if let Some(ref next_node) = function.next_node {
-            let next: NodeFunction = (**next_node).clone();
-            let _ = handle_node_function(next, store, context);
-            todo!()
-        };
+        // Result will be added to the current context
+        let entry = ContextEntry::new(result.clone(), parameter_collection.clone());
+        context.write_to_current_context(entry);
 
-        return result;
+        // Check if there is a next node, if not then this was the last one
+        match function.next_node {
+            Some(ref next_node_function) => {
+                let next = (**next_node_function).clone();
+
+                // Increment the context node!
+                context.next_node();
+
+                return handle_node_function(next, store, context);
+            }
+            None => {
+                if context.is_end() {
+                    return result;
+                }
+
+                context.leave_context();
+            }
+        }
     };
 
     Err(RuntimeError::default())
 }
 
-fn handle_message(
-    message: Message,
-    store: &FunctionStore,
-    context: &mut Context,
-) -> Result<Message, lapin::Error> {
+fn handle_message(message: Message, store: &FunctionStore) -> Result<Message, lapin::Error> {
+    let mut context = Context::new();
+
     let flow: Flow = match serde_json::from_str(&message.body) {
         Ok(flow) => flow,
         Err(_) => {
@@ -107,7 +133,7 @@ fn handle_message(
     };
 
     if let Some(node) = flow.starting_node {
-        match handle_node_function(node, store, context) {
+        match handle_node_function(node, store, &mut context) {
             Ok(result) => match serde_json::to_string(&result) {
                 Ok(res) => {
                     return Ok(Message {
@@ -147,7 +173,6 @@ fn handle_message(
 async fn main() {
     let _locale = Locale::default();
     let store = FunctionStore::new();
-    let mut context = Context::new();
 
     let rabbitmq_client = Arc::new(RabbitmqClient::new("amqp://localhost:5672").await);
 
@@ -200,7 +225,7 @@ async fn main() {
             }
         };
 
-        let message = match handle_message(inc_message, &store, &mut context) {
+        let message = match handle_message(inc_message, &store) {
             Ok(mess) => mess,
             Err(err) => {
                 log::error!("Error handling message: {}", err);

@@ -23,7 +23,7 @@ impl FunctionStore {
     }
 
     /// Execute all the registration closures to populate the map.
-    fn populate(&mut self, regs: Vec<(&'static str, HandlerFn)>) {
+    pub fn populate(&mut self, regs: Vec<(&'static str, HandlerFn)>) {
         for (id, func) in regs {
             self.functions.insert(id.to_string(), func);
         }

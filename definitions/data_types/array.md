@@ -14,14 +14,17 @@
   "rules": [
     {
       "contains_type": {
-        "data_type_identifier": "GENERIC"
+        "data_type_identifier": {
+          "generic_key": "T"
+        }
       }
     }
   ],
+  "generic_keys": ["T"],
   "parent_type_identifier": null
 }
-
 ```
+
 ## NUMBER_ARRAY
 
 ```json

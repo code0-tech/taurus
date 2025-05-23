@@ -1,52 +1,104 @@
-## Input Node
-
 ```json
 {
+  "identifier": "PREDICATE",
   "variant": "NODE",
-  "identifier": "FILTER_GENERIC_INPUT_NODE",
-  "name": [
-    {
-      "code": "en-US",
-      "content": "Input"
-    }
-  ],
   "rules": [
     {
-      "input_type": {
-        "identifier": "GENERIC"
+      "return_type": {
+        "data_type_identifier": "BOOLEAN"
       }
     },
     {
-      "return_type": {
-        "identifier": "BOOLEAN"
-      }
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "T"
+          },
+          "input_identifier": "predicate"
+        }
+      ]
     }
-  ]
+  ],
+  "generic_keys": ["T"]
 }
 ```
-## Input Node
 
 ```json
 {
+  "identifier": "CONSUMER",
   "variant": "NODE",
-  "identifier": "MAP_GENERIC_INPUT_NODE",
-  "name": [
-    {
-      "code": "en-US",
-      "content": "Input"
-    }
-  ],
   "rules": [
     {
-      "input_type": {
-        "identifier": "A_GENERIC"
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "T"
+          },
+          "input_identifier": "consumer"
+        }
+      ]
+    }
+  ],
+  "generic_keys": ["T"]
+}
+```
+
+```json
+{
+  "identifier": "TRANSFORM",
+  "variant": "NODE",
+  "rules": [
+    {
+      "return_type": {
+        "data_type_identifier": {
+          "generic_key": "R"
+        }
       }
     },
     {
-      "return_type": {
-        "identifier": "B_GENERIC"
-      }
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "I"
+          },
+          "input_identifier": "transform"
+        }
+      ]
     }
-  ]
+  ],
+  "generic_keys": ["I", "R"]
+}
+```
+
+```json
+{
+  "identifier": "COMPARITOR",
+  "variant": "NODE",
+  "rules": [
+    {
+      "return_type": {
+        "data_type_identifier": {
+          "data_type_identifier": "NUMBER"
+        }
+      }
+    },
+    {
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "I"
+          },
+          "input_identifier": "left"
+        },
+        {
+          "data_type_identifier": {
+            "generic_key": "I"
+          },
+          "input_identifier": "right"
+        }
+      ]
+    }
+  ],
+  "generic_keys": ["I"]
 }
 ```

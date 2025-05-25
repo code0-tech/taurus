@@ -16,3 +16,10 @@ futures-lite = "2.6.0"
 
 [dev-dependencies]
 tempfile = "3.19.1"
+
+[build-dependencies]
+serde = "1.0.219"
+serde_json = "1.0.140"
+tucana = { version = "0.0.24" }
+quote = "1.0"
+proc-macro2 = "1.0"

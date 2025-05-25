@@ -2283,6 +2283,8 @@ dependencies = [
  "futures-lite 2.6.0",
  "lapin",
  "log",
+ "proc-macro2",
+ "quote",
  "serde",
  "serde_json",
  "tempfile",

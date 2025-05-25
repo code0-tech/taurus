@@ -1,12 +1,12 @@
 use std::{
     collections::HashMap,
-    fs::{self, read_dir, DirEntry},
+    fs::{self, DirEntry, read_dir},
 };
 
 use serde::Deserialize;
 use tucana::shared::Translation;
 
-use super::code::{code_from_file_name, CountryCode};
+use super::code::{CountryCode, code_from_file_name};
 
 #[derive(Debug)]
 pub struct Locale {

@@ -142,7 +142,7 @@ fn handle_message(message: Message, store: &FunctionStore) -> Result<Message, la
                         timestamp: message.timestamp,
                         sender: message.sender,
                         body: res,
-                    })
+                    });
                 }
                 Err(_) => {
                     todo!("")
@@ -155,7 +155,7 @@ fn handle_message(message: Message, store: &FunctionStore) -> Result<Message, la
                     timestamp: message.timestamp,
                     sender: message.sender,
                     body: runtime_error.to_string(),
-                })
+                });
             }
         }
     };

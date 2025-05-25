@@ -1,4 +1,4 @@
-use tucana::shared::{value::Kind, Value};
+use tucana::shared::{Value, value::Kind};
 
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 
@@ -20,13 +20,16 @@ pub fn collect() -> Vec<(&'static str, HandlerFn)> {
 }
 
 fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -37,13 +40,16 @@ fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -54,13 +60,16 @@ fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
 }
 
 fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -71,13 +80,16 @@ fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
 }
 
 fn devide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -88,13 +100,16 @@ fn devide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -105,10 +120,12 @@ fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn abs(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -119,10 +136,12 @@ fn abs(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn is_positive(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -133,13 +152,16 @@ fn is_positive(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
 }
 
 fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -150,13 +172,16 @@ fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
 }
 
 fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-        ..
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+            ..
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -167,10 +192,12 @@ fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 }
 
 fn is_zero(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -181,10 +208,12 @@ fn is_zero(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 }
 
 fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(string_value)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::StringValue(string_value)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };
@@ -200,10 +229,12 @@ fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
 }
 
 fn as_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-        ..
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+            ..
+        },
+    ] = values
     else {
         return Err(RuntimeError::default());
     };

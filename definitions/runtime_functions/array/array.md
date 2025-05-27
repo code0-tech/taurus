@@ -32,7 +32,6 @@ Will return the value at the index of the array.
 
 ## concat
 Will merge to arrays together and return a new one.
-
 ```json
 {
   "runtime_name": "std::array::concat",

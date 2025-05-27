@@ -1,3 +1,4 @@
+## PREDICATE
 ```json
 {
   "identifier": "PREDICATE",
@@ -23,6 +24,7 @@
 }
 ```
 
+## CONSUMER
 ```json
 {
   "identifier": "CONSUMER",
@@ -43,6 +45,7 @@
 }
 ```
 
+## TRANSFORM
 ```json
 {
   "identifier": "TRANSFORM",
@@ -70,6 +73,7 @@
 }
 ```
 
+## COMPARITOR
 ```json
 {
   "identifier": "COMPARITOR",

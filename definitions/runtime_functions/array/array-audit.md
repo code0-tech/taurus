@@ -1,12 +1,12 @@
-23.05.2025
+# 23.05.2025
 
-Added
+## Added
 - find last
 
-Removed
+## Removed
 - sortASC
 - clear (Doesnt make sense because taurus works with immutable variables)
 - replace (Doesnt make sense because taurus works with immutable variables)
 
-Renamed:
+## Renamed:
 - sortDEC --> sortReverse

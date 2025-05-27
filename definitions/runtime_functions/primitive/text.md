@@ -12,7 +12,15 @@ Converts the text to a number array.
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "NUMBER_ARRAY"
+  "return_type_identifier": {
+    "data_type_identifier": "ARRAY"
+  },
+  "generic_mappers": [
+    {
+      "source": "NUMBER",
+      "target": "T"
+    }
+  ]
 }
 ```
 
@@ -140,7 +148,16 @@ Splits the text into an array of characters.
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "TEXT_ARRAY"
+  "return_type_identifier": {
+    "data_type_identifier": "ARRAY"
+  },
+  "generic_keys": ["R"],
+  "generic_mappers": [
+    {
+      "source": "TEXT",
+      "target": "R"
+    }
+  ]
 }
 ```
 
@@ -532,7 +549,16 @@ Splits the text into an array of strings based on a delimiter.
       "runtime_name": "delimiter"
     }
   ],
-  "return_type_identifier": "TEXT_ARRAY"
+  "return_type_identifier": {
+    "data_type_identifier": "ARRAY"
+  },
+  "generic_keys": ["R"],
+  "generic_mappers": [
+    {
+      "source": "TEXT",
+      "target": "R"
+    }
+  ]
 }
 ```
 
@@ -628,7 +654,16 @@ Converts each character to its ASCII code as an array of numbers.
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "NUMBER_ARRAY"
+  "return_type_identifier": {
+    "data_type_identifier": "ARRAY"
+  },
+  "generic_keys": ["R"],
+  "generic_mappers": [
+    {
+      "source": "NUMBER",
+      "target": "R"
+    }
+  ]
 }
 ```
 
@@ -646,11 +681,18 @@ Converts an array of ASCII codes to a text string.
   "runtime_name": "std::text::from_ascii",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "NUMBER_ARRAY",
+      "data_type_identifier": "ARRAY",
       "runtime_name": "value"
     }
   ],
-  "return_type_identifier": "TEXT"
+  "return_type_identifier": "TEXT",
+  "generic_mappers": [
+    {
+      "parameter_id": "value",
+      "source": "NUMBER",
+      "target": "T"
+    }
+  ]
 }
 ```
 

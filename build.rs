@@ -222,7 +222,7 @@ fn main() {
     write!(file, "] }} }}").expect("Cannot write to file");
 
     Command::new("rustfmt")
-        .arg("out/output.rs")
+        .arg("./out/output.rs")
         .arg("--edition")
         .arg("2024");
 }

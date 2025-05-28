@@ -8,7 +8,9 @@ Will convert the boolean to a number.
   "runtime_name": "std::boolean::as_number",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "BOOLEAN",
+      "data_type_identifier": {
+        "data_type_identifier": "BOOLEAN"
+      },
       "runtime_name": "value",
       "name": [
         {
@@ -30,7 +32,9 @@ Will convert the boolean to a number.
       ]
     }
   ],
-  "return_type_identifier": "NUMBER",
+  "return_type_identifier": {
+    "data_type_identifier": "NUMBER"
+  },
   "name": [
     {
       "code": "en-US",
@@ -50,7 +54,9 @@ Will convert the boolean to a number.
     }
   ],
   "deprecation_message": [],
-  "error_type_identifiers": []
+  "error_type_identifiers": [],
+  "generic_keys": [],
+  "generic_mappers": []
 }
 ```
 
@@ -68,7 +74,9 @@ Will convert the boolean to a string.
   "runtime_name": "std::boolean::as_text",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "BOOLEAN",
+      "data_type_identifier": {
+        "data_type_identifier": "BOOLEAN"
+      },
       "runtime_name": "value",
       "name": [
         {
@@ -90,7 +98,9 @@ Will convert the boolean to a string.
       ]
     }
   ],
-  "return_type_identifier": "TEXT",
+  "return_type_identifier": {
+    "data_type_identifier": "TEXT"
+  },
   "name": [
     {
       "code": "en-US",
@@ -110,7 +120,9 @@ Will convert the boolean to a string.
     }
   ],
   "deprecation_message": [],
-  "error_type_identifiers": []
+  "error_type_identifiers": [],
+  "generic_keys": [],
+  "generic_mappers": []
 }
 ```
 
@@ -129,7 +141,9 @@ Will convert the number to a boolean.
   "runtime_name": "std::boolean::from_number",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "NUMBER",
+      "data_type_identifier": {
+        "data_type_identifier": "NUMBER"
+      },
       "runtime_name": "value",
       "name": [
         {
@@ -151,7 +165,9 @@ Will convert the number to a boolean.
       ]
     }
   ],
-  "return_type_identifier": "BOOLEAN",
+  "return_type_identifier": {
+    "data_type_identifier": "BOOLEAN"
+  },
   "name": [
     {
       "code": "en-US",
@@ -171,7 +187,9 @@ Will convert the number to a boolean.
     }
   ],
   "deprecation_message": [],
-  "error_type_identifiers": []
+  "error_type_identifiers": [],
+  "generic_keys": [],
+  "generic_mappers": []
 }
 ```
 
@@ -190,7 +208,9 @@ Will convert the string to a boolean.
   "runtime_name": "std::boolean::from_text",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "TEXT",
+      "data_type_identifier": {
+        "data_type_identifier": "TEXT"
+      },
       "runtime_name": "value",
       "name": [
         {
@@ -212,7 +232,9 @@ Will convert the string to a boolean.
       ]
     }
   ],
-  "return_type_identifier": "BOOLEAN",
+  "return_type_identifier": {
+    "data_type_identifier": "BOOLEAN"
+  },
   "name": [
     {
       "code": "en-US",
@@ -232,7 +254,9 @@ Will convert the string to a boolean.
     }
   ],
   "deprecation_message": [],
-  "error_type_identifiers": []
+  "error_type_identifiers": [],
+  "generic_keys": [],
+  "generic_mappers": []
 }
 ```
 
@@ -251,7 +275,9 @@ Will compare one boolean to another.
   "runtime_name": "std::boolean::isEqual",
   "runtime_parameter_definitions": [
     {
-      "data_type_identifier": "BOOLEAN",
+      "data_type_identifier": {
+        "data_type_identifier": "BOOLEAN"
+      },
       "runtime_name": "first",
       "name": [
         {
@@ -273,7 +299,9 @@ Will compare one boolean to another.
       ]
     },
     {
-      "data_type_identifier": "BOOLEAN",
+      "data_type_identifier": {
+        "data_type_identifier": "BOOLEAN"
+      },
       "runtime_name": "second",
       "name": [
         {
@@ -295,7 +323,9 @@ Will compare one boolean to another.
       ]
     }
   ],
-  "return_type_identifier": "BOOLEAN",
+  "return_type_identifier": {
+    "data_type_identifier": "BOOLEAN"
+  },
   "name": [
     {
       "code": "en-US",
@@ -315,7 +345,9 @@ Will compare one boolean to another.
     }
   ],
   "deprecation_message": [],
-  "error_type_identifiers": []
+  "error_type_identifiers": [],
+  "generic_keys": [],
+  "generic_mappers": []
 }
 ```
 

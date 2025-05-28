@@ -117,6 +117,7 @@ fn runtime_function_parameter_to_token(
         let documentation = translation_to_token(param.documentation);
 
         let quote = quote! {
+            /*
             tucana::shared::RuntimeParameterDefinition {
                 runtime_name: String::from(#runtime_name),
                 data_type_identifier: String::from(#data_type_identifier),
@@ -125,6 +126,7 @@ fn runtime_function_parameter_to_token(
                 description: vec![#(#description),*],
                 documentation: vec![#(#documentation),*]
             }
+            */
         };
 
         result.push(quote);
@@ -137,7 +139,7 @@ fn runtime_function_definition_to_token(definition: RuntimeFunctionDefinition) -
     let runtime_parameter_definitions =
         runtime_function_parameter_to_token(definition.runtime_parameter_definitions);
 
-    let return_type_identifier = definition.return_type_identifier.into_token_stream();
+    // let return_type_identifier = definition.return_type_identifier.into_token_stream();
 
     let error_type_identifiers = definition
         .error_type_identifiers
@@ -159,7 +161,7 @@ fn runtime_function_definition_to_token(definition: RuntimeFunctionDefinition) -
         tucana::shared::RuntimeFunctionDefinition {
             runtime_name: String::from(#runtime_name),
             runtime_parameter_definitions: vec![#(#runtime_parameter_definitions),*],
-            return_type_identifier: Option::Some(String::from(#return_type_identifier)),
+        //    return_type_identifier: Option::Some(String::from(#return_type_identifier)),
             error_type_identifiers: vec![#(#error_type_identifiers),*],
             name: vec![#(#name),*],
             description: vec![#(#description),*],
@@ -169,9 +171,9 @@ fn runtime_function_definition_to_token(definition: RuntimeFunctionDefinition) -
     }
 }
 fn main() {
-    let mut file = File::create("./out/output.rs").expect("msg");
+    // let mut file = File::create("./out/output.rs").expect("msg");
 
-    let path = "./definitions/runtime_functions/primitive/boolean.md";
+    let path = "./definitions/runtime_functions/array/array.md";
     let file_content = read_to_string(path).unwrap();
     let mut lines = file_content.split("\n");
     let mut inside_code_block = false;
@@ -198,9 +200,20 @@ fn main() {
         }
     }
 
-    let results = code_blocks
-        .iter()
-        .map(|f| serde_json::from_str::<RuntimeFunctionDefinition>(f));
+    for code in code_blocks {
+        match serde_json::from_str::<RuntimeFunctionDefinition>(&code) {
+            Ok(def) => {
+                //   let quote = runtime_function_definition_to_token(def);
+                //   write!(file, "{},", quote).expect("Cannot write to file");
+            }
+            Err(err) => {
+                print_on_build!("Error parsing JSON: {:?}", err);
+                print_on_build!("JSON: {:?}", code);
+            }
+        }
+    }
+
+    /*
     write!(
         file,
         "pub mod output {{ fn getDefinitions() -> Vec<tucana::shared::RuntimeFunctionDefinition> {{ vec!["
@@ -225,4 +238,5 @@ fn main() {
         .arg("./out/output.rs")
         .arg("--edition")
         .arg("2024");
+    */
 }

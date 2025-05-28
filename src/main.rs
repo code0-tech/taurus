@@ -20,73 +20,67 @@ fn handle_node_function(
     store: &FunctionStore,
     context: &mut Context,
 ) -> Result<Value, RuntimeError> {
-    if let Some(definition) = function.definition {
-        let runtime_function = match store.get(definition.runtime_function_id.as_str()) {
-            Some(fc) => fc,
-            None => todo!("Retrun if no funtion is present"),
-        };
+    let runtime_function = match store.get(function.runtime_function_id.as_str()) {
+        Some(fc) => fc,
+        None => todo!("Retrun if no funtion is present"),
+    };
 
-        let mut parameter_collection: Vec<Value> = vec![];
+    let mut parameter_collection: Vec<Value> = vec![];
 
-        for parameter in function.parameters {
-            if let Some(value) = parameter.value {
-                match value {
-                    // Its just a normal value, directly a paramter
-                    tucana::shared::node_parameter::Value::LiteralValue(v) => {
-                        parameter_collection.push(v)
-                    }
+    for parameter in function.parameters {
+        if let Some(value) = parameter.value {
+            match value {
+                // Its just a normal value, directly a paramter
+                tucana::shared::node_parameter::Value::LiteralValue(v) => {
+                    parameter_collection.push(v)
+                }
 
-                    // Its a reference to an already executed function that returns value is the parameter of this function
-                    tucana::shared::node_parameter::Value::ReferenceValue(reference) => {
-                        let optional_value = context.get(&reference);
+                // Its a reference to an already executed function that returns value is the parameter of this function
+                tucana::shared::node_parameter::Value::ReferenceValue(reference) => {
+                    let optional_value = context.get(&reference);
 
-                        // Look if its even present
-                        let context_result = match optional_value {
-                            Some(context_result) => context_result,
-                            None => {
-                                todo!("Required function that holds the parameter wasnt executed")
+                    // Look if its even present
+                    let context_result = match optional_value {
+                        Some(context_result) => context_result,
+                        None => {
+                            todo!("Required function that holds the parameter wasnt executed")
+                        }
+                    };
+
+                    // A reference is present. Look up the real value
+                    match context_result {
+                        // The reference is a exeuction result of a node
+                        ContextResult::NodeExecutionResult(node_result) => match node_result {
+                            Ok(value) => {
+                                parameter_collection.push(value.clone());
                             }
-                        };
-
-                        // A reference is present. Look up the real value
-                        match context_result {
-                            // The reference is a exeuction result of a node
-                            ContextResult::NodeExecutionResult(node_result) => match node_result {
-                                Ok(value) => {
-                                    parameter_collection.push(value.clone());
-                                }
-                                Err(err) => return Err(err),
-                            },
-                            // The reference is a parameter of a node
-                            ContextResult::ParameterResult(parameter_result) => {
-                                parameter_collection.push(parameter_result.clone());
-                            }
+                            Err(err) => return Err(err),
+                        },
+                        // The reference is a parameter of a node
+                        ContextResult::ParameterResult(parameter_result) => {
+                            parameter_collection.push(parameter_result.clone());
                         }
                     }
+                }
 
-                    // Its another function, that result is a direct parameter to this function
-                    tucana::shared::node_parameter::Value::FunctionValue(another_node_function) => {
-                        // As this is another new indent, a new context will be opened
-                        context.next_context();
-                        let function_result =
-                            handle_node_function(another_node_function, &store, context);
+                // Its another function, that result is a direct parameter to this function
+                tucana::shared::node_parameter::Value::FunctionValue(another_node_function) => {
+                    // As this is another new indent, a new context will be opened
+                    context.next_context();
+                    let function_result =
+                        handle_node_function(another_node_function, &store, context);
 
-                        let entry = ContextEntry::new(
-                            function_result.clone(),
-                            parameter_collection.clone(),
-                        );
-                        context.write_to_current_context(entry);
+                    let entry =
+                        ContextEntry::new(function_result.clone(), parameter_collection.clone());
+                    context.write_to_current_context(entry);
 
-                        match function_result {
-                            Ok(v) => {
-                                // Add the value back to the main parameter
-                                parameter_collection.push(v.clone());
-                            }
-                            Err(_) => {
-                                todo!(
-                                    "Reqired function that holds the paramter failed in execution"
-                                )
-                            }
+                    match function_result {
+                        Ok(v) => {
+                            // Add the value back to the main parameter
+                            parameter_collection.push(v.clone());
+                        }
+                        Err(_) => {
+                            todo!("Reqired function that holds the paramter failed in execution")
                         }
                     }
                 }
@@ -117,7 +111,7 @@ fn handle_node_function(
                 context.leave_context();
             }
         }
-    };
+    }
 
     Err(RuntimeError::default())
 }

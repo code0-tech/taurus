@@ -4,7 +4,7 @@
 
 ```json
 {
-  "variant": "PRIMITIVE",
+  "variant": 1,
   "identifier": "NUMBER",
   "name": [
     {
@@ -18,7 +18,8 @@
         "pattern": "/^(?:-(?:[1-9](?:\d{0,2}(?:,\d{3})+|\d*))|(?:0|(?:[1-9](?:\d{0,2}(?:,\d{3})+|\d*))))(?:.\d+|)$/"
       }
     }
-  ]
+  ],
+  "generic_keys": []
 }
 ```
 
@@ -27,7 +28,7 @@
 
 ```json
 {
-  "variant": "PRIMITIVE",
+  "variant": 1,
   "identifier": "TEXT",
   "name": [
     {
@@ -41,7 +42,8 @@
         "pattern": "[\s\S]*"
       }
     }
-  ]
+  ],
+  "generic_keys": []
 }
 ```
 
@@ -49,7 +51,7 @@
 
 ```json
 {
-  "variant": "PRIMITIVE",
+  "variant": 1,
   "identifier": "BOOLEAN",
   "name": [
     {
@@ -63,6 +65,7 @@
         "pattern": "^(true|false)$"
       }
     }
-  ]
+  ],
+  "generic_keys": []
 }
 ```

@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct RuntimeError {}
 
 impl Error for RuntimeError {}

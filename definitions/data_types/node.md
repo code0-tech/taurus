@@ -1,51 +1,133 @@
-## Input Node
-
+## PREDICATE
 ```json
 {
-  "variant": "NODE",
-  "identifier": "FILTER_GENERIC_INPUT_NODE",
-  "name": [
-    {
-      "code": "en-US",
-      "content": "Input"
-    }
-  ],
+  "identifier": "PREDICATE",
+  "variant": 7,
   "rules": [
     {
-      "input_type": {
-        "identifier": "GENERIC"
+      "return_type": {
+        "data_type_identifier": "BOOLEAN"
       }
     },
     {
-      "return_type": {
-        "identifier": "BOOLEAN"
-      }
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "T"
+          },
+          "input_identifier": "predicate"
+        }
+      ]
+    }
+  ],
+  "generic_keys": ["T"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Predicate"
     }
   ]
 }
 ```
-## Input Node
 
+## CONSUMER
 ```json
 {
-  "variant": "NODE",
-  "identifier": "MAP_GENERIC_INPUT_NODE",
+  "identifier": "CONSUMER",
+  "variant": 7,
+  "rules": [
+    {
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "T"
+          },
+          "input_identifier": "consumer"
+        }
+      ]
+    }
+  ],
+  "generic_keys": ["T"],
   "name": [
     {
       "code": "en-US",
-      "content": "Input"
+      "content": "Consumer"
     }
-  ],
+  ]
+
+}
+```
+
+## TRANSFORM
+```json
+{
+  "identifier": "TRANSFORM",
+  "variant": 7,
   "rules": [
     {
-      "input_type": {
-        "identifier": "A_GENERIC"
+      "return_type": {
+        "data_type_identifier": {
+          "generic_key": "R"
+        }
       }
     },
     {
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "I"
+          },
+          "input_identifier": "transform"
+        }
+      ]
+    }
+  ],
+  "generic_keys": ["I", "R"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Transform"
+    }
+  ]
+
+}
+```
+
+## COMPARITOR
+```json
+{
+  "identifier": "COMPARITOR",
+  "variant": 7,
+  "rules": [
+    {
       "return_type": {
-        "identifier": "B_GENERIC"
+        "data_type_identifier": {
+          "data_type_identifier": "NUMBER"
+        }
       }
+    },
+    {
+      "input_type": [
+        {
+          "data_type_identifier": {
+            "generic_key": "I"
+          },
+          "input_identifier": "left"
+        },
+        {
+          "data_type_identifier": {
+            "generic_key": "I"
+          },
+          "input_identifier": "right"
+        }
+      ]
+    }
+  ],
+  "generic_keys": ["I"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Comparitor"
     }
   ]
 }

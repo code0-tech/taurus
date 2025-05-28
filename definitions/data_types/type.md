@@ -4,7 +4,7 @@
 
 ```json
 {
-  "variant": "Type",
+  "variant": 2,
   "identifier": "TEXT_ENCODING",
   "name": [
     {
@@ -23,6 +23,7 @@
           ]
         }
     }
-  ]
+  ],
+  "generic_keys": []
 }
 ```

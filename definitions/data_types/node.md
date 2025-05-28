@@ -2,7 +2,7 @@
 ```json
 {
   "identifier": "PREDICATE",
-  "variant": "NODE",
+  "variant": 7,
   "rules": [
     {
       "return_type": {
@@ -20,7 +20,13 @@
       ]
     }
   ],
-  "generic_keys": ["T"]
+  "generic_keys": ["T"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Predicate"
+    }
+  ]
 }
 ```
 
@@ -28,7 +34,7 @@
 ```json
 {
   "identifier": "CONSUMER",
-  "variant": "NODE",
+  "variant": 7,
   "rules": [
     {
       "input_type": [
@@ -41,7 +47,14 @@
       ]
     }
   ],
-  "generic_keys": ["T"]
+  "generic_keys": ["T"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Consumer"
+    }
+  ]
+
 }
 ```
 
@@ -49,7 +62,7 @@
 ```json
 {
   "identifier": "TRANSFORM",
-  "variant": "NODE",
+  "variant": 7,
   "rules": [
     {
       "return_type": {
@@ -69,7 +82,14 @@
       ]
     }
   ],
-  "generic_keys": ["I", "R"]
+  "generic_keys": ["I", "R"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Transform"
+    }
+  ]
+
 }
 ```
 
@@ -77,7 +97,7 @@
 ```json
 {
   "identifier": "COMPARITOR",
-  "variant": "NODE",
+  "variant": 7,
   "rules": [
     {
       "return_type": {
@@ -103,6 +123,12 @@
       ]
     }
   ],
-  "generic_keys": ["I"]
+  "generic_keys": ["I"],
+  "name": [
+    {
+      "code": "en-US",
+      "content": "Comparitor"
+    }
+  ]
 }
 ```

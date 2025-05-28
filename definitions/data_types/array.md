@@ -3,7 +3,7 @@
 ## ARRAY
 ```json
 {
-  "variant": "ARRAY",
+  "variant": 5,
   "identifier": "ARRAY",
   "name": [
     {

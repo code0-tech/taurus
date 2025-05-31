@@ -5,7 +5,9 @@ use std::io::Write;
 use std::process::Command;
 use tucana::shared::value::Kind;
 
-use tucana::shared::{RuntimeFunctionDefinition, RuntimeParameterDefinition, Translation, Value};
+use tucana::shared::{
+    DataType, RuntimeFunctionDefinition, RuntimeParameterDefinition, Translation, Value,
+};
 
 macro_rules! print_on_build {
     ($($tokens: tt)*) => {
@@ -201,7 +203,7 @@ fn main() {
     }
 
     for code in code_blocks {
-        match serde_json::from_str::<RuntimeFunctionDefinition>(&code) {
+        match serde_json::from_str::<DataType>(&code) {
             Ok(def) => {
                 //   let quote = runtime_function_definition_to_token(def);
                 //   write!(file, "{},", quote).expect("Cannot write to file");

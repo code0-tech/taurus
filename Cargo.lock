@@ -2276,6 +2276,7 @@ dependencies = [
  "futures-lite 2.6.0",
  "lapin",
  "log",
+ "rand",
  "serde",
  "serde_json",
  "tempfile",

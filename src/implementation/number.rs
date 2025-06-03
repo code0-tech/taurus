@@ -54,7 +54,13 @@ fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -69,7 +75,13 @@ fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -84,7 +96,13 @@ fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -99,11 +117,17 @@ fn devide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     if rhs == &0.0 {
-        return Err(RuntimeError::simple(
+        return Err(RuntimeError::simple_str(
             "DivisionByZero",
             "You cannot divide by zero",
         ));
@@ -121,11 +145,17 @@ fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     if rhs == &0.0 {
-        return Err(RuntimeError::simple(
+        return Err(RuntimeError::simple_str(
             "DivisionByZero",
             "You cannot divide by zero",
         ));
@@ -141,7 +171,10 @@ fn abs(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected a number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -154,7 +187,10 @@ fn is_positive(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected a number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -169,7 +205,13 @@ fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -184,7 +226,13 @@ fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -197,7 +245,10 @@ fn is_zero(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected a number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -210,7 +261,10 @@ fn square(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected a number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -225,7 +279,13 @@ fn exponential(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         kind: Some(Kind::NumberValue(exponent)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -258,7 +318,13 @@ fn round_up(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         kind: Some(Kind::NumberValue(decimal_places)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     let factor = 10_f64.powi(decimal_places.clone() as i32);
@@ -275,7 +341,13 @@ fn round_down(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         kind: Some(Kind::NumberValue(decimal_places)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     let factor = 10_f64.powi(decimal_places.clone() as i32);
@@ -292,7 +364,13 @@ fn round(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(decimal_places)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     let factor = 10_f64.powi(decimal_places.clone() as i32);
@@ -307,7 +385,10 @@ fn square_root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -322,7 +403,13 @@ fn root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(root)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -337,7 +424,13 @@ fn log(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(log)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -350,7 +443,10 @@ fn ln(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -363,12 +459,20 @@ fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         kind: Some(Kind::StringValue(string_value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one string as argument but received {:?}", values),
+        ));
     };
 
     let value: f64 = match string_value.parse() {
         Ok(result) => result,
-        Err(_) => return Err(RuntimeError::default()),
+        Err(_) => {
+            return Err(RuntimeError::simple(
+                "InvalidArgumentRuntimeError",
+                format!("Failed to parse string as number: {}", string_value),
+            ))
+        }
     };
 
     Ok(Value {
@@ -381,7 +485,10 @@ fn as_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -396,7 +503,13 @@ fn min(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -411,7 +524,13 @@ fn max(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -424,7 +543,10 @@ fn negate(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -439,7 +561,13 @@ fn random(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(max)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -454,7 +582,10 @@ fn sin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -467,7 +598,10 @@ fn cos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -480,7 +614,10 @@ fn tan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -493,7 +630,10 @@ fn arcsin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -506,7 +646,10 @@ fn arccos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -519,7 +662,10 @@ fn arctan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -531,7 +677,10 @@ fn sinh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -544,7 +693,10 @@ fn cosh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected one number as argument but received {:?}", values),
+        ));
     };
 
     Ok(Value {
@@ -561,7 +713,13 @@ fn clamp(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::NumberValue(max)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected three numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {
@@ -576,7 +734,13 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         kind: Some(Kind::NumberValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
     };
 
     Ok(Value {

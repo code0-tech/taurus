@@ -27,10 +27,18 @@ impl RuntimeError {
         }
     }
 
-    pub fn simple(name: &str, message: &str) -> Self {
+    pub fn simple_str(name: &str, message: &str) -> Self {
         Self {
             name: name.to_string(),
             message: message.to_string(),
+            suggestion: None,
+        }
+    }
+
+    pub fn simple(name: &str, message: String) -> Self {
+        Self {
+            name: name.to_string(),
+            message: message,
             suggestion: None,
         }
     }

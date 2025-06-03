@@ -1,6 +1,5 @@
 use crate::registry::HandlerFn;
 
-pub mod boolean;
 pub mod number;
 
 pub fn collect() -> Vec<(&'static str, HandlerFn)> {

@@ -17,7 +17,10 @@ fn as_number(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         kind: Some(Kind::BoolValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(format!(
+            "Expected a boolean value but received {:?}",
+            values
+        )));
     };
 
     Ok(Value {
@@ -30,7 +33,10 @@ fn as_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         kind: Some(Kind::BoolValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(format!(
+            "Expected a boolean value but received {:?}",
+            values
+        )));
     };
 
     Ok(Value {
@@ -43,7 +49,10 @@ fn from_number(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         kind: Some(Kind::NumberValue(number)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(format!(
+            "Expected a number value but received {:?}",
+            values
+        )));
     };
 
     let is_zero = number == &0.0;
@@ -58,12 +67,20 @@ fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         kind: Some(Kind::StringValue(text)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(format!(
+            "Expected a string value but received {:?}",
+            values
+        )));
     };
 
     let bool: bool = match text.to_lowercase().parse() {
         Ok(value) => value,
-        Err(_) => return Err(RuntimeError::default()),
+        Err(_) => {
+            return Err(RuntimeError::simple(format!(
+                "Failed to parse boolean from string: {:?}",
+                text
+            )))
+        }
     };
 
     Ok(Value {
@@ -78,7 +95,10 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         kind: Some(Kind::BoolValue(rhs)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(format!(
+            "Expected two boolean values but received {:?}",
+            values
+        )));
     };
 
     Ok(Value {
@@ -91,7 +111,10 @@ fn negate(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         kind: Some(Kind::BoolValue(value)),
     }] = values
     else {
-        return Err(RuntimeError::default());
+        return Err(RuntimeError::simple(format!(
+            "Expected a boolean value but received {:?}",
+            values
+        )));
     };
 
     Ok(Value {

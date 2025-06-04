@@ -2,6 +2,7 @@ use crate::registry::HandlerFn;
 
 pub mod boolean;
 pub mod number;
+pub mod text;
 
 pub fn collect() -> Vec<(&'static str, HandlerFn)> {
     let mut result = vec![];

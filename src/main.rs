@@ -1,12 +1,15 @@
+mod configuration;
 pub mod context;
 pub mod error;
 pub mod implementation;
 pub mod locale;
 pub mod registry;
-
 use std::sync::Arc;
 
-use code0_flow::flow_queue::service::{Message, RabbitmqClient};
+use code0_flow::{
+    flow_config::load_env_file,
+    flow_queue::service::{Message, RabbitmqClient},
+};
 use context::{Context, ContextEntry, ContextResult};
 use error::RuntimeError;
 use futures_lite::StreamExt;
@@ -14,6 +17,8 @@ use lapin::{options::BasicConsumeOptions, types::FieldTable};
 use locale::locale::Locale;
 use registry::FunctionStore;
 use tucana::shared::{Flow, NodeFunction, Value};
+
+use crate::configuration::Config;
 
 fn handle_node_function(
     function: NodeFunction,
@@ -165,10 +170,18 @@ fn handle_message(message: Message, store: &FunctionStore) -> Result<Message, la
 
 #[tokio::main]
 async fn main() {
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Debug)
+        .init();
+
+    load_env_file();
+
+    let config = Config::new();
+
     let _locale = Locale::default();
     let store = FunctionStore::new();
 
-    let rabbitmq_client = Arc::new(RabbitmqClient::new("amqp://localhost:5672").await);
+    let rabbitmq_client = Arc::new(RabbitmqClient::new(config.rabbitmq_url.as_str()).await);
 
     let mut consumer = {
         let channel = rabbitmq_client.channel.lock().await;

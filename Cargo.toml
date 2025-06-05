@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-code0-flow = { version = "0.0.12", features = ["all"] }
+code0-flow = { version = "0.0.13", features = ["all"] }
 tucana = { version = "0.0.28", features = ["aquila"] }
 lapin = "2.5.3"
 serde = "1.0.219"

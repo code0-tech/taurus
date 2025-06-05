@@ -11,9 +11,10 @@ use context::{Context, ContextEntry, ContextResult};
 use error::RuntimeError;
 use futures_lite::StreamExt;
 use lapin::{options::BasicConsumeOptions, types::FieldTable};
-use locale::locale::Locale;
 use registry::FunctionStore;
 use tucana::shared::{Flow, NodeFunction, Value};
+
+use crate::implementation::collect;
 
 fn handle_node_function(
     function: NodeFunction,
@@ -165,8 +166,8 @@ fn handle_message(message: Message, store: &FunctionStore) -> Result<Message, la
 
 #[tokio::main]
 async fn main() {
-    let _locale = Locale::default();
-    let store = FunctionStore::new();
+    let mut store = FunctionStore::new();
+    store.populate(collect());
 
     let rabbitmq_client = Arc::new(RabbitmqClient::new("amqp://localhost:5672").await);
 

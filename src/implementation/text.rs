@@ -44,10 +44,7 @@ fn as_bytes(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!(
-                "Expected two numbers as arguments but received {:?}",
-                values
-            ),
+            format!("Expected one string as argument but received {:?}", values),
         ));
     };
 
@@ -72,7 +69,7 @@ fn byte_size(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -91,7 +88,7 @@ fn capitalize(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -133,7 +130,7 @@ fn uppercase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -152,7 +149,7 @@ fn lowercase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -171,7 +168,7 @@ fn swapcase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -203,7 +200,7 @@ fn chars(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -231,7 +228,7 @@ fn at(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string followed by one number as arguments but received {:?}",
                 values
             ),
         ));
@@ -273,7 +270,7 @@ fn trim(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an arguments but received {:?}",
                 values
             ),
         ));
@@ -293,10 +290,7 @@ fn append(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!(
-                "Expected two numbers as arguments but received {:?}",
-                values
-            ),
+            format!("Expected two numbers as argument but received {:?}", values),
         ));
     };
 
@@ -315,7 +309,7 @@ fn prepend(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -338,7 +332,7 @@ fn insert(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected string, number, and string as arguments but received {:?}",
                 values
             ),
         ));
@@ -361,7 +355,7 @@ fn length(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -384,7 +378,7 @@ fn remove(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string followed by two numbers as arguments but received {:?}",
                 values
             ),
         ));
@@ -416,7 +410,7 @@ fn replace(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected three strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -441,7 +435,7 @@ fn replace_first(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeE
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected three strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -466,7 +460,7 @@ fn replace_last(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeEr
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected three strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -500,7 +494,7 @@ fn hex(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -525,7 +519,7 @@ fn octal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -552,7 +546,7 @@ fn index_of(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -580,7 +574,7 @@ fn contains(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -601,7 +595,7 @@ fn split(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -627,7 +621,7 @@ fn reverse(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -650,7 +644,7 @@ fn starts_with(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -671,7 +665,7 @@ fn ends_with(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -690,7 +684,7 @@ fn to_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected one string as an argument but received {:?}",
                 values
             ),
         ));
@@ -710,8 +704,6 @@ fn to_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
     })
 }
 
-// todo!("from_ascii")
-
 fn from_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     let [Value {
         kind: Some(Kind::ListValue(list)),
@@ -720,7 +712,7 @@ fn from_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected a list of numbers as an argument but received {:?}",
                 values
             ),
         ));
@@ -768,7 +760,7 @@ fn encode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -799,7 +791,7 @@ fn decode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));
@@ -846,7 +838,7 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
-                "Expected two numbers as arguments but received {:?}",
+                "Expected two strings as arguments but received {:?}",
                 values
             ),
         ));

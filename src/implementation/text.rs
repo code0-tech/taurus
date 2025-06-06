@@ -1,4 +1,5 @@
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
+use base64::Engine;
 use tucana::shared::{value::Kind, ListValue, Value};
 
 pub fn collect_text_functions() -> Vec<(&'static str, HandlerFn)> {
@@ -758,11 +759,81 @@ fn from_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
 //TODO: Implement encode function , what about decode? UTF-8, 16 and 32 does not make sense
 
 fn encode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    todo!("not implemented")
+    let [Value {
+        kind: Some(Kind::StringValue(value)),
+    }, Value {
+        kind: Some(Kind::StringValue(encoding)),
+    }] = values
+    else {
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
+    };
+
+    let encoded_string = match encoding.clone().to_lowercase().as_str() {
+        "base64" => base64::prelude::BASE64_STANDARD.encode(value),
+        _ => {
+            return Err(RuntimeError::simple(
+                "InvalidArgumentRuntimeError",
+                format!("Unsupported encoding: {}", encoding),
+            ))
+        }
+    };
+
+    Ok(Value {
+        kind: Some(Kind::StringValue(encoded_string)),
+    })
 }
 
 fn decode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    todo!("not implemented")
+    let [Value {
+        kind: Some(Kind::StringValue(value)),
+    }, Value {
+        kind: Some(Kind::StringValue(encoding)),
+    }] = values
+    else {
+        return Err(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "Expected two numbers as arguments but received {:?}",
+                values
+            ),
+        ));
+    };
+
+    let decoded_string = match encoding.clone().to_lowercase().as_str() {
+        "base64" => match base64::prelude::BASE64_STANDARD.decode(value) {
+            Ok(bytes) => match String::from_utf8(bytes) {
+                Ok(string) => string,
+                Err(err) => {
+                    return Err(RuntimeError::simple(
+                        "DecodeError",
+                        format!("Failed to decode base64 string: {:?}", err),
+                    ))
+                }
+            },
+            Err(err) => {
+                return Err(RuntimeError::simple(
+                    "DecodeError",
+                    format!("Failed to decode base64 string: {:?}", err),
+                ))
+            }
+        },
+        _ => {
+            return Err(RuntimeError::simple(
+                "InvalidArgumentRuntimeError",
+                format!("Unsupported decoding: {}", encoding),
+            ))
+        }
+    };
+
+    Ok(Value {
+        kind: Some(Kind::StringValue(decoded_string)),
+    })
 }
 
 fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
@@ -1360,6 +1431,67 @@ mod tests {
         let values = vec![create_string_value("aba")];
         let result = reverse(&values, &mut ctx).unwrap();
         assert_eq!(result, create_string_value("aba"));
+    }
+
+    #[test]
+    fn test_encode_invalid_parameter() {
+        let mut ctx = Context::new();
+        let values = vec![create_string_value("aba")];
+        let result = encode(&values, &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encode_invalid_encoding() {
+        let mut ctx = Context::new();
+        let values = vec![create_string_value("aba"), create_string_value("gug")];
+        let result = encode(&values, &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encode_correct() {
+        let mut ctx = Context::new();
+        let values = vec![create_string_value("hello"), create_string_value("BASE64")];
+        let result = encode(&values, &mut ctx).unwrap();
+        assert_eq!(
+            result,
+            Value {
+                kind: Some(Kind::StringValue(String::from("aGVsbG8=")))
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_invalid_parameter() {
+        let mut ctx = Context::new();
+        let values = vec![create_string_value("aba")];
+        let result = decode(&values, &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_invalid_encoding() {
+        let mut ctx = Context::new();
+        let values = vec![create_string_value("aba"), create_string_value("gug")];
+        let result = decode(&values, &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_correct() {
+        let mut ctx = Context::new();
+        let values = vec![
+            create_string_value("aGVsbG8="),
+            create_string_value("BASE64"),
+        ];
+        let result = decode(&values, &mut ctx).unwrap();
+        assert_eq!(
+            result,
+            Value {
+                kind: Some(Kind::StringValue(String::from("hello")))
+            }
+        );
     }
 
     #[test]

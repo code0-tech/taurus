@@ -1,6 +1,6 @@
 use std::f64;
 
-use tucana::shared::{value::Kind, Value};
+use tucana::shared::{Value, value::Kind};
 
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 
@@ -9,7 +9,7 @@ pub fn collect_number_functions() -> Vec<(&'static str, HandlerFn)> {
         ("std::number::add", add),
         ("std::number::multiply", multiply),
         ("std::number::substract", substract),
-        ("std::number::devide", devide),
+        ("std::number::divide", divide),
         ("std::number::modulo", modulo),
         ("std::number::abs", abs),
         ("std::number::is_positive", is_positive),
@@ -48,11 +48,14 @@ pub fn collect_number_functions() -> Vec<(&'static str, HandlerFn)> {
 }
 
 fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -69,11 +72,14 @@ fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -90,11 +96,14 @@ fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
 }
 
 fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -110,12 +119,15 @@ fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
     })
 }
 
-fn devide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+fn divide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -139,11 +151,14 @@ fn devide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -167,9 +182,11 @@ fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn abs(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -183,9 +200,11 @@ fn abs(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn is_positive(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -199,11 +218,14 @@ fn is_positive(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
 }
 
 fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -220,11 +242,14 @@ fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
 }
 
 fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -241,9 +266,11 @@ fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 }
 
 fn is_zero(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -257,9 +284,11 @@ fn is_zero(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 }
 
 fn square(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -273,11 +302,14 @@ fn square(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn exponential(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(base)),
-    }, Value {
-        kind: Some(Kind::NumberValue(exponent)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(base)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(exponent)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -312,11 +344,14 @@ fn infinity(_values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
 }
 
 fn round_up(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(decimal_places)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(decimal_places)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -335,11 +370,14 @@ fn round_up(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
 }
 
 fn round_down(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(decimal_places)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(decimal_places)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -358,11 +396,14 @@ fn round_down(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
 }
 
 fn round(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(decimal_places)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(decimal_places)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -381,9 +422,11 @@ fn round(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn square_root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -397,11 +440,14 @@ fn square_root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
 }
 
 fn root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(root)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(root)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -418,11 +464,14 @@ fn root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn log(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(log)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(log)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -439,9 +488,11 @@ fn log(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn ln(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -455,9 +506,11 @@ fn ln(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(string_value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::StringValue(string_value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -471,7 +524,7 @@ fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
             return Err(RuntimeError::simple(
                 "InvalidArgumentRuntimeError",
                 format!("Failed to parse string as number: {}", string_value),
-            ))
+            ));
         }
     };
 
@@ -481,9 +534,11 @@ fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
 }
 
 fn as_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -497,11 +552,14 @@ fn as_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 }
 
 fn min(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -518,11 +576,14 @@ fn min(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn max(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -539,9 +600,11 @@ fn max(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn negate(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -555,11 +618,14 @@ fn negate(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn random(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(min)),
-    }, Value {
-        kind: Some(Kind::NumberValue(max)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(min)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(max)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -578,9 +644,11 @@ fn random(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn sin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -594,9 +662,11 @@ fn sin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn cos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -610,9 +680,11 @@ fn cos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn tan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -626,9 +698,11 @@ fn tan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn arcsin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -642,9 +716,11 @@ fn arcsin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn arccos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -658,9 +734,11 @@ fn arccos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn arctan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -673,9 +751,11 @@ fn arctan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     })
 }
 fn sinh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -689,9 +769,11 @@ fn sinh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn cosh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -705,13 +787,17 @@ fn cosh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn clamp(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(min)),
-    }, Value {
-        kind: Some(Kind::NumberValue(max)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(min)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(max)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -728,11 +814,14 @@ fn clamp(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
 }
 
 fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::NumberValue(lhs)),
-    }, Value {
-        kind: Some(Kind::NumberValue(rhs)),
-    }] = values
+    let [
+        Value {
+            kind: Some(Kind::NumberValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(rhs)),
+        },
+    ] = values
     else {
         return Err(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
@@ -752,7 +841,7 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
 mod tests {
     use super::*;
     use crate::context::Context;
-    use tucana::shared::{value::Kind, Value};
+    use tucana::shared::{Value, value::Kind};
 
     // Helper function to create a number value
     fn create_number_value(num: f64) -> Value {
@@ -853,10 +942,10 @@ mod tests {
     }
 
     #[test]
-    fn test_devide_success() {
+    fn test_divide_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(15.0), create_number_value(3.0)];
-        let result = devide(&values, &mut ctx).unwrap();
+        let result = divide(&values, &mut ctx).unwrap();
 
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 5.0),
@@ -865,21 +954,21 @@ mod tests {
     }
 
     #[test]
-    fn test_devide_by_zero_exception() {
+    fn test_divide_by_zero_exception() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(10.0), create_number_value(0.0)];
-        let result = devide(&values, &mut ctx);
+        let result = divide(&values, &mut ctx);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_devide_runtime_exception() {
+    fn test_divide_runtime_exception() {
         let mut ctx = Context::new();
         let values = vec![
             create_string_value("not_a_number"),
             create_number_value(2.0),
         ];
-        let result = devide(&values, &mut ctx);
+        let result = divide(&values, &mut ctx);
         assert!(result.is_err());
     }
 

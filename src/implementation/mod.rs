@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::registry::HandlerFn;
 
 pub mod boolean;

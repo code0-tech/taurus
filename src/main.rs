@@ -14,11 +14,11 @@ use context::{Context, ContextEntry, ContextResult};
 use error::RuntimeError;
 use futures_lite::StreamExt;
 use lapin::{options::BasicConsumeOptions, types::FieldTable};
-use locale::locale::Locale;
 use registry::FunctionStore;
 use tucana::shared::{Flow, NodeFunction, Value};
 
 use crate::configuration::Config;
+use crate::implementation::collect;
 
 fn handle_node_function(
     function: NodeFunction,
@@ -177,9 +177,8 @@ async fn main() {
     load_env_file();
 
     let config = Config::new();
-
-    let _locale = Locale::default();
-    let store = FunctionStore::new();
+    let mut store = FunctionStore::new();
+    store.populate(collect());
 
     let rabbitmq_client = Arc::new(RabbitmqClient::new(config.rabbitmq_url.as_str()).await);
 

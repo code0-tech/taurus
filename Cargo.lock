@@ -212,7 +212,7 @@ dependencies = [
  "async-task",
  "concurrent-queue",
  "fastrand 2.3.0",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "pin-project-lite",
  "slab",
 ]
@@ -228,7 +228,7 @@ dependencies = [
  "async-io 2.4.0",
  "async-lock 3.4.0",
  "blocking",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "once_cell",
 ]
 
@@ -243,7 +243,7 @@ dependencies = [
  "async-io 2.4.0",
  "async-lock 3.4.0",
  "blocking",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
 ]
 
 [[package]]
@@ -287,7 +287,7 @@ dependencies = [
  "cfg-if",
  "concurrent-queue",
  "futures-io",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "parking",
  "polling 3.7.4",
  "rustix 0.38.44",
@@ -342,7 +342,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-io",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "gloo-timers",
  "kv-log-macro",
  "log",
@@ -494,7 +494,7 @@ dependencies = [
  "async-channel 2.3.1",
  "async-task",
  "futures-io",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "piper",
 ]
 
@@ -564,7 +564,7 @@ checksum = "ecc2b4e3ce2fb62521a5fc6825074525cc88269218e4919c1e4d3a9a83ba197b"
 dependencies = [
  "async-trait",
  "dotenv",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "lapin",
  "log",
  "redis",
@@ -925,9 +925,9 @@ dependencies = [
 
 [[package]]
 name = "futures-lite"
-version = "2.6.0"
+version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5edaec856126859abb19ed65f39e90fea3a9574b9707f13539acf4abf7eb532"
+checksum = "f78e10609fe0e0b3f4157ffab1876319b5b0db102a2c60dc4626306dc46b44ad"
 dependencies = [
  "fastrand 2.3.0",
  "futures-core",
@@ -2433,7 +2433,7 @@ dependencies = [
  "base64",
  "code0-flow",
  "env_logger",
- "futures-lite 2.6.0",
+ "futures-lite 2.6.1",
  "lapin",
  "log",
  "rand",

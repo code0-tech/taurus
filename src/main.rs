@@ -2,23 +2,18 @@ mod configuration;
 pub mod context;
 pub mod error;
 pub mod implementation;
-pub mod locale;
 pub mod registry;
-use std::sync::Arc;
-
-use code0_flow::{
-    flow_config::load_env_file,
-    flow_queue::service::{Message, RabbitmqClient},
-};
-use context::{Context, ContextEntry, ContextResult};
-use error::RuntimeError;
-use futures_lite::StreamExt;
-use lapin::{options::BasicConsumeOptions, types::FieldTable};
-use registry::FunctionStore;
-use tucana::shared::{Flow, NodeFunction, Value};
 
 use crate::configuration::Config;
 use crate::implementation::collect;
+use code0_flow::flow_config::load_env_file;
+use context::{Context, ContextEntry, ContextResult};
+use error::RuntimeError;
+use futures_lite::StreamExt;
+use prost::Message;
+use registry::FunctionStore;
+use tucana::shared::value::Kind;
+use tucana::shared::{ExecutionFlow, ListValue, NodeFunction, Value};
 
 fn handle_node_function(
     function: NodeFunction,
@@ -31,61 +26,82 @@ fn handle_node_function(
     };
 
     let mut parameter_collection: Vec<Value> = vec![];
-
     for parameter in function.parameters {
-        if let Some(value) = parameter.value {
-            match value {
-                // Its just a normal value, directly a paramter
-                tucana::shared::node_parameter::Value::LiteralValue(v) => {
-                    parameter_collection.push(v)
-                }
+        if let Some(node_value) = parameter.value {
+            if let Some(value) = node_value.value {
+                match value {
+                    // Its just a normal value, directly a paramter
+                    tucana::shared::node_value::Value::LiteralValue(v) => {
+                        parameter_collection.push(v)
+                    }
+                    // Its a reference to an already executed function that returns value is the parameter of this function
+                    tucana::shared::node_value::Value::ReferenceValue(reference) => {
+                        let optional_value = context.get(&reference);
 
-                // Its a reference to an already executed function that returns value is the parameter of this function
-                tucana::shared::node_parameter::Value::ReferenceValue(reference) => {
-                    let optional_value = context.get(&reference);
-
-                    // Look if its even present
-                    let context_result = match optional_value {
-                        Some(context_result) => context_result,
-                        None => {
-                            todo!("Required function that holds the parameter wasnt executed")
-                        }
-                    };
-
-                    // A reference is present. Look up the real value
-                    match context_result {
-                        // The reference is a exeuction result of a node
-                        ContextResult::NodeExecutionResult(node_result) => match node_result {
-                            Ok(value) => {
-                                parameter_collection.push(value.clone());
+                        // Look if its even present
+                        let context_result = match optional_value {
+                            Some(context_result) => context_result,
+                            None => {
+                                todo!("Required function that holds the parameter wasnt executed")
                             }
-                            Err(err) => return Err(err),
-                        },
-                        // The reference is a parameter of a node
-                        ContextResult::ParameterResult(parameter_result) => {
-                            parameter_collection.push(parameter_result.clone());
+                        };
+
+                        // A reference is present. Look up the real value
+                        match context_result {
+                            // The reference is a exeuction result of a node
+                            ContextResult::NodeExecutionResult(node_result) => match node_result {
+                                Ok(value) => {
+                                    parameter_collection.push(value.clone());
+                                }
+                                Err(err) => return Err(err),
+                            },
+                            // The reference is a parameter of a node
+                            ContextResult::ParameterResult(parameter_result) => {
+                                parameter_collection.push(parameter_result.clone());
+                            }
                         }
                     }
-                }
 
-                // Its another function, that result is a direct parameter to this function
-                tucana::shared::node_parameter::Value::FunctionValue(another_node_function) => {
-                    // As this is another new indent, a new context will be opened
-                    context.next_context();
-                    let function_result =
-                        handle_node_function(another_node_function, &store, context);
+                    // Its another function, that result is a direct parameter to this function
+                    tucana::shared::node_value::Value::NodeFunctions(another_node_function) => {
+                        // As this is another new indent, a new context will be opened
+                        context.next_context();
+                        let function_result: Vec<_> = another_node_function
+                            .functions
+                            .into_iter()
+                            .map(|f| handle_node_function(f, &store, context))
+                            .collect();
 
-                    let entry =
-                        ContextEntry::new(function_result.clone(), parameter_collection.clone());
-                    context.write_to_current_context(entry);
-
-                    match function_result {
-                        Ok(v) => {
-                            // Add the value back to the main parameter
-                            parameter_collection.push(v.clone());
+                        let mut collected = Vec::new();
+                        for res in &function_result {
+                            if let Ok(v) = res {
+                                collected.push(v.clone());
+                            }
                         }
-                        Err(_) => {
-                            todo!("Reqired function that holds the paramter failed in execution")
+
+                        let list = Value {
+                            kind: Some(Kind::ListValue(ListValue { values: collected })),
+                        };
+
+                        let is_faulty = function_result.iter().any(|res| res.is_err());
+
+                        let entry = ContextEntry::new(
+                            Result::Ok(list.clone()),
+                            parameter_collection.clone(),
+                        );
+
+                        context.write_to_current_context(entry);
+
+                        match !is_faulty {
+                            true => {
+                                // Add the value back to the main parameter
+                                parameter_collection.push(list.clone());
+                            }
+                            false => {
+                                todo!(
+                                    "Reqired function that holds the paramter failed in execution"
+                                )
+                            }
                         }
                     }
                 }
@@ -121,51 +137,25 @@ fn handle_node_function(
     Err(RuntimeError::default())
 }
 
-fn handle_message(message: Message, store: &FunctionStore) -> Result<Message, lapin::Error> {
+fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Option<Value> {
     let mut context = Context::new();
-
-    let flow: Flow = match serde_json::from_str(&message.body) {
-        Ok(flow) => flow,
-        Err(_) => {
-            todo!()
-        }
-    };
 
     if let Some(node) = flow.starting_node {
         match handle_node_function(node, store, &mut context) {
-            Ok(result) => match serde_json::to_string(&result) {
-                Ok(res) => {
-                    return Ok(Message {
-                        message_id: message.message_id,
-                        message_type: message.message_type,
-                        timestamp: message.timestamp,
-                        sender: message.sender,
-                        body: res,
-                    });
-                }
-                Err(_) => {
-                    todo!("")
-                }
-            },
+            Ok(result) => {
+                println!(
+                    "Execution completed successfully: The value is {:?}",
+                    result
+                );
+                return Some(result);
+            }
             Err(runtime_error) => {
-                return Ok(Message {
-                    message_id: message.message_id,
-                    message_type: message.message_type,
-                    timestamp: message.timestamp,
-                    sender: message.sender,
-                    body: runtime_error.to_string(),
-                });
+                println!("Runtime Error: {:?}", runtime_error);
+                return None;
             }
         }
     };
-
-    Ok(Message {
-        message_id: message.message_id,
-        message_type: message.message_type,
-        timestamp: message.timestamp,
-        sender: message.sender,
-        body: "{ \"text\": \"Hihi, World!\" }".to_string(),
-    })
+    return None;
 }
 
 #[tokio::main]
@@ -180,83 +170,45 @@ async fn main() {
     let mut store = FunctionStore::new();
     store.populate(collect());
 
-    let rabbitmq_client = Arc::new(RabbitmqClient::new(config.rabbitmq_url.as_str()).await);
-
-    let mut consumer = {
-        let channel = rabbitmq_client.channel.lock().await;
-
-        let consumer_res = channel
-            .basic_consume(
-                "send_queue",
-                "consumer",
-                BasicConsumeOptions::default(),
-                FieldTable::default(),
-            )
-            .await;
-
-        match consumer_res {
-            Ok(consumer) => consumer,
-            Err(err) => panic!("Cannot consume messages: {}", err),
+    let client = match async_nats::connect("nats://127.0.0.1:4222").await {
+        Ok(client) => client,
+        Err(err) => {
+            panic!("Failed to connect to NATS server: {}", err);
         }
     };
 
-    log::debug!("Starting to consume from send_queue");
+    let _ = match client
+        .queue_subscribe(String::from("execution.*"), "taurus".into())
+        .await
+    {
+        Ok(mut sub) => {
+            println!("Subscribed to 'execution.*'");
 
-    while let Some(delivery) = consumer.next().await {
-        let delivery = match delivery {
-            Ok(del) => del,
-            Err(err) => {
-                log::error!("Error receiving message: {}", err);
-                return;
-            }
-        };
+            while let Some(msg) = sub.next().await {
+                let flow: ExecutionFlow = match ExecutionFlow::decode(&*msg.payload) {
+                    Ok(flow) => flow,
+                    Err(err) => {
+                        println!("Failed to deserialize flow: {}, {:?}", err, &msg.payload);
+                        continue;
+                    }
+                };
 
-        let data = &delivery.data;
-        let message_str = match std::str::from_utf8(&data) {
-            Ok(str) => {
-                log::info!("Received message: {}", str);
-                str
-            }
-            Err(err) => {
-                log::error!("Error decoding message: {}", err);
-                return;
-            }
-        };
-        // Parse the messagey
-        let inc_message = match serde_json::from_str::<Message>(message_str) {
-            Ok(mess) => mess,
-            Err(err) => {
-                log::error!("Error parsing message: {}", err);
-                return;
-            }
-        };
+                let value = match handle_message(flow, &store) {
+                    Some(value) => value,
+                    None => Value {
+                        kind: Some(Kind::NullValue(0)),
+                    },
+                };
 
-        let message = match handle_message(inc_message, &store) {
-            Ok(mess) => mess,
-            Err(err) => {
-                log::error!("Error handling message: {}", err);
-                return;
+                // Send a response to the reply subject
+                if let Some(reply) = msg.reply {
+                    match client.publish(reply, value.encode_to_vec().into()).await {
+                        Ok(_) => println!("Response sent"),
+                        Err(err) => println!("Failed to send response: {}", err),
+                    }
+                }
             }
-        };
-
-        let message_json = match serde_json::to_string(&message) {
-            Ok(json) => json,
-            Err(err) => {
-                log::error!("Error serializing message: {}", err);
-                return;
-            }
-        };
-
-        {
-            let _ = rabbitmq_client
-                .send_message(message_json, "recieve_queue")
-                .await;
         }
-
-        // Acknowledge the message
-        delivery
-            .ack(lapin::options::BasicAckOptions::default())
-            .await
-            .expect("Failed to acknowledge message");
-    }
+        Err(err) => panic!("Failed to subscribe to 'execution.*': {}", err),
+    };
 }

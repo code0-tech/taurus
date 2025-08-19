@@ -2,6 +2,7 @@ use crate::registry::HandlerFn;
 
 pub mod array;
 pub mod boolean;
+mod control;
 pub mod number;
 pub mod object;
 pub mod text;
@@ -14,6 +15,7 @@ pub fn collect() -> Vec<(&'static str, HandlerFn)> {
     result.extend(boolean::collect_boolean_functions());
     result.extend(text::collect_text_functions());
     result.extend(object::collect_object_functions());
+    result.extend(control::collect_control_functions());
 
     result
 }

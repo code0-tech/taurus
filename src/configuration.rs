@@ -15,11 +15,15 @@ pub struct Config {
     /// `hybrid`
     pub mode: Mode,
 
-    /// Verification Token required for internal communication
-    pub rabbitmq_url: String,
+    pub nats_url: String,
 
-    /// URL to the `Sagittarius` Server.
     pub aquila_url: String,
+
+    pub with_health_service: bool,
+
+    pub grpc_host: String,
+
+    pub grpc_port: u16,
 }
 
 /// Implementation for all relevant `Aquila` startup configurations
@@ -31,8 +35,11 @@ impl Config {
         Config {
             environment: env_with_default("ENVIRONMENT", Environment::Development),
             mode: env_with_default("MODE", Mode::STATIC),
-            rabbitmq_url: env_with_default("RABBITMQ_URL", String::from("amqp://localhost:5672")),
-            aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:8080")),
+            nats_url: env_with_default("RABBITMQ_URL", String::from("amqp://localhost:5672")),
+            aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:50051")),
+            with_health_service: env_with_default("WITH_HEALTH_SERVICE", false),
+            grpc_host: env_with_default("GRPC_HOST", "127.0.0.1".to_string()),
+            grpc_port: env_with_default("GRPC_PORT", 50051),
         }
     }
 }

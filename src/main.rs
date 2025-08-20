@@ -10,7 +10,9 @@ use code0_flow::flow_config::load_env_file;
 use context::{Context, ContextEntry, ContextResult};
 use error::RuntimeError;
 use futures_lite::StreamExt;
+use log::error;
 use prost::Message;
+use tonic_health::pb::health_server::HealthServer;
 use registry::FunctionStore;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, ListValue, NodeFunction, Value};
@@ -170,12 +172,33 @@ async fn main() {
     let mut store = FunctionStore::new();
     store.populate(collect());
 
-    let client = match async_nats::connect("nats://127.0.0.1:4222").await {
+    let client = match async_nats::connect(config.nats_url.clone()).await {
         Ok(client) => client,
         Err(err) => {
             panic!("Failed to connect to NATS server: {}", err);
         }
     };
+
+    if config.with_health_service {
+        let health_service =
+            code0_flow::flow_health::HealthService::new(config.nats_url.clone());
+        let address = match format!("{}:{}", config.grpc_host, config.grpc_port).parse() {
+            Ok(address) => address,
+            Err(err) => {
+                error!("Failed to parse grpc address: {:?}", err);
+                return;
+            }
+        };
+
+        tokio::spawn(async move {
+            let _ = tonic::transport::Server::builder()
+                .add_service(HealthServer::new(health_service))
+                .serve(address)
+                .await;
+        });
+
+        println!("Health server started at {}", address);
+    }
 
     let _ = match client
         .queue_subscribe(String::from("execution.*"), "taurus".into())
@@ -193,12 +216,9 @@ async fn main() {
                     }
                 };
 
-                let value = match handle_message(flow, &store) {
-                    Some(value) => value,
-                    None => Value {
-                        kind: Some(Kind::NullValue(0)),
-                    },
-                };
+                let value = handle_message(flow, &store).unwrap_or_else(|| Value {
+                    kind: Some(Kind::NullValue(0)),
+                });
 
                 // Send a response to the reply subject
                 if let Some(reply) = msg.reply {

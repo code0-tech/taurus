@@ -35,7 +35,7 @@ impl Config {
         Config {
             environment: env_with_default("ENVIRONMENT", Environment::Development),
             mode: env_with_default("MODE", Mode::STATIC),
-            nats_url: env_with_default("RABBITMQ_URL", String::from("amqp://localhost:5672")),
+            nats_url: env_with_default("NATS_URL", String::from("nats://localhost:4222")),
             aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:50051")),
             with_health_service: env_with_default("WITH_HEALTH_SERVICE", false),
             grpc_host: env_with_default("GRPC_HOST", "127.0.0.1".to_string()),

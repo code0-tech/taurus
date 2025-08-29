@@ -1,6 +1,0 @@
-greeting = "Hello There!"
-farewell = "Goodbye!"
-
-[debug]
-enabled = "yes"
-level = "information"

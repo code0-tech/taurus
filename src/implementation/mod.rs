@@ -1,11 +1,12 @@
 use crate::registry::HandlerFn;
 
-pub mod array;
-pub mod boolean;
+mod array;
+mod boolean;
 mod control;
-pub mod number;
-pub mod object;
-pub mod text;
+mod number;
+mod object;
+mod text;
+mod http;
 
 pub fn collect() -> Vec<(&'static str, HandlerFn)> {
     let mut result = vec![];
@@ -16,6 +17,7 @@ pub fn collect() -> Vec<(&'static str, HandlerFn)> {
     result.extend(text::collect_text_functions());
     result.extend(object::collect_object_functions());
     result.extend(control::collect_control_functions());
+    result.extend(http::collect_http_functions());
 
     result
 }

@@ -47,6 +47,7 @@ impl<'a> Executor<'a> {
                     }
                     Signal::Failure(error) => return Signal::Failure(error),
                     Signal::Stop => return Signal::Stop,
+                    Signal::Respond(value) => return Signal::Respond(value)
                 }
             }
 
@@ -71,6 +72,7 @@ impl<'a> Executor<'a> {
                 }
                 Signal::Failure(runtime_error) => return Signal::Failure(runtime_error),
                 Signal::Return(value) => return Signal::Return(value),
+                Signal::Respond(value) => return Signal::Respond(value),
                 Signal::Stop => return Signal::Stop,
             }
         }

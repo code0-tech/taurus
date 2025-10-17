@@ -1,8 +1,9 @@
-use crate::{context::Context, error::RuntimeError};
+use crate::{context::Context};
 use std::collections::HashMap;
 use tucana::shared::Value;
+use crate::context::signal::Signal;
 
-pub type HandlerFn = fn(&[Value], &mut Context) -> Result<Value, RuntimeError>;
+pub type HandlerFn = fn(&[Value], &mut Context) -> Signal;
 
 /// Holds all registered handlers.
 pub struct FunctionStore {

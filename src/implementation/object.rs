@@ -1,5 +1,6 @@
 use tucana::shared::{Value, value::Kind};
 
+use crate::context::signal::Signal;
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 
 pub fn collect_object_functions() -> Vec<(&'static str, HandlerFn)> {
@@ -11,7 +12,7 @@ pub fn collect_object_functions() -> Vec<(&'static str, HandlerFn)> {
     ]
 }
 
-fn contains_key(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn contains_key(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StructValue(object)),
@@ -21,7 +22,7 @@ fn contains_key(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeEr
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected an object and a text as arguments but recieved: {:?}",
@@ -32,19 +33,19 @@ fn contains_key(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeEr
 
     let contains = object.fields.contains_key(key);
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(contains)),
     })
 }
 
-fn size(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn size(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StructValue(object)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected an object as an argument but received {:?}",
@@ -52,19 +53,19 @@ fn size(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
             ),
         ));
     };
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(object.fields.len() as f64)),
     })
 }
 
-fn keys(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn keys(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StructValue(object)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected an object as an argument but received {:?}",
@@ -81,12 +82,12 @@ fn keys(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         })
         .collect::<Vec<Value>>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::ListValue(tucana::shared::ListValue { values: keys })),
     })
 }
 
-fn set(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn set(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StructValue(object)),
@@ -97,7 +98,7 @@ fn set(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         value,
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected an object as an argument but received {:?}",
@@ -109,7 +110,7 @@ fn set(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     let mut new_object = object.clone();
     new_object.fields.insert(key.clone(), value.clone());
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StructValue(new_object)),
     })
 }
@@ -175,7 +176,12 @@ mod tests {
 
         // Test existing key
         let values = vec![test_object.clone(), create_string_value("name")];
-        let result = contains_key(&values, &mut ctx).unwrap();
+        let signal = contains_key(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
@@ -184,7 +190,12 @@ mod tests {
 
         // Test non-existing key
         let values = vec![test_object, create_string_value("nonexistent")];
-        let result = contains_key(&values, &mut ctx).unwrap();
+        let signal = contains_key(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
@@ -198,7 +209,12 @@ mod tests {
         let empty_object = create_empty_object();
 
         let values = vec![empty_object, create_string_value("any_key")];
-        let result = contains_key(&values, &mut ctx).unwrap();
+        let signal = contains_key(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
@@ -213,7 +229,7 @@ mod tests {
         // Test with wrong number of parameters
         let values = vec![create_test_object()];
         let result = contains_key(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong first parameter type (not an object)
         let values = vec![
@@ -221,17 +237,17 @@ mod tests {
             create_string_value("key"),
         ];
         let result = contains_key(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong second parameter type (not a string)
         let values = vec![create_test_object(), create_number_value(123.0)];
         let result = contains_key(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with invalid values
         let values = vec![create_invalid_value(), create_string_value("key")];
         let result = contains_key(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with too many parameters
         let values = vec![
@@ -240,7 +256,7 @@ mod tests {
             create_string_value("extra"),
         ];
         let result = contains_key(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -250,7 +266,12 @@ mod tests {
         // Test with object containing fields
         let test_object = create_test_object();
         let values = vec![test_object];
-        let result = size(&values, &mut ctx).unwrap();
+        let signal = size(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 3.0), // name, age, active
@@ -260,7 +281,12 @@ mod tests {
         // Test with empty object
         let empty_object = create_empty_object();
         let values = vec![empty_object];
-        let result = size(&values, &mut ctx).unwrap();
+        let signal = size(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 0.0),
@@ -275,22 +301,22 @@ mod tests {
         // Test with wrong number of parameters (no parameters)
         let values = vec![];
         let result = size(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong parameter type
         let values = vec![create_string_value("not_an_object")];
         let result = size(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with invalid value
         let values = vec![create_invalid_value()];
         let result = size(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with too many parameters
         let values = vec![create_test_object(), create_string_value("extra")];
         let result = size(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -300,7 +326,12 @@ mod tests {
         // Test with object containing fields
         let test_object = create_test_object();
         let values = vec![test_object];
-        let result = keys(&values, &mut ctx).unwrap();
+        let signal = keys(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::ListValue(list)) => {
@@ -329,7 +360,12 @@ mod tests {
         // Test with empty object
         let empty_object = create_empty_object();
         let values = vec![empty_object];
-        let result = keys(&values, &mut ctx).unwrap();
+        let signal = keys(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::ListValue(list)) => assert_eq!(list.values.len(), 0),
@@ -344,22 +380,22 @@ mod tests {
         // Test with wrong number of parameters
         let values = vec![];
         let result = keys(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong parameter type
         let values = vec![create_number_value(42.0)];
         let result = keys(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with invalid value
         let values = vec![create_invalid_value()];
         let result = keys(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with too many parameters
         let values = vec![create_test_object(), create_string_value("extra")];
         let result = keys(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -373,7 +409,12 @@ mod tests {
             create_string_value("email"),
             create_string_value("john@example.com"),
         ];
-        let result = set(&values, &mut ctx).unwrap();
+        let signal = set(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::StructValue(struct_val)) => {
@@ -398,7 +439,12 @@ mod tests {
             create_string_value("age"),
             create_number_value(31.0),
         ];
-        let result = set(&values, &mut ctx).unwrap();
+        let signal = set(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::StructValue(struct_val)) => {
@@ -427,7 +473,12 @@ mod tests {
             create_string_value("first_key"),
             create_bool_value(true),
         ];
-        let result = set(&values, &mut ctx).unwrap();
+        let signal = set(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::StructValue(struct_val)) => {
@@ -458,7 +509,12 @@ mod tests {
         let nested_object = create_object_value(nested_fields);
 
         let values = vec![test_object, create_string_value("address"), nested_object];
-        let result = set(&values, &mut ctx).unwrap();
+        let signal = set(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::StructValue(struct_val)) => {
@@ -484,7 +540,7 @@ mod tests {
         // Test with wrong number of parameters (too few)
         let values = vec![create_test_object(), create_string_value("key")];
         let result = set(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong first parameter type (not an object)
         let values = vec![
@@ -493,7 +549,7 @@ mod tests {
             create_string_value("value"),
         ];
         let result = set(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong second parameter type (not a string key)
         let values = vec![
@@ -502,7 +558,7 @@ mod tests {
             create_string_value("value"),
         ];
         let result = set(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with invalid values
         let values = vec![
@@ -511,12 +567,12 @@ mod tests {
             create_string_value("value"),
         ];
         let result = set(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with no parameters
         let values = vec![];
         let result = set(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with too many parameters
         let values = vec![
@@ -526,7 +582,7 @@ mod tests {
             create_string_value("extra"),
         ];
         let result = set(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -545,7 +601,12 @@ mod tests {
             create_string_value("new_key"),
             create_string_value("new_value"),
         ];
-        let _result = set(&values, &mut ctx).unwrap();
+        let signal = set(&values, &mut ctx);
+
+        let _value = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         // Verify original object is unchanged
         match &original_object.kind {

@@ -1,6 +1,7 @@
 use tucana::shared::{Struct, Value};
 use tucana::shared::value::Kind;
 use crate::context::Context;
+use crate::context::signal::Signal;
 use crate::error::RuntimeError;
 use crate::registry::HandlerFn;
 
@@ -11,7 +12,7 @@ pub fn collect_http_functions() -> Vec<(&'static str, HandlerFn)> {
     ]
 }
 
-fn create_request(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn create_request(values: &[Value], _ctx: &mut Context) -> Signal {
     let [Value {
         kind: Some(Kind::StringValue(http_method)),
     },
@@ -24,7 +25,7 @@ fn create_request(values: &[Value], _ctx: &mut Context) -> Result<Value, Runtime
     payload
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected [method, headers, url, payload] but received {:?}", values),
         ));
@@ -45,12 +46,12 @@ fn create_request(values: &[Value], _ctx: &mut Context) -> Result<Value, Runtime
     });
     fields.insert("body".to_string(), payload.clone());
 
-    Ok(Value {
+   Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),
     })
 }
 
-fn create_response(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn create_response(values: &[Value], _ctx: &mut Context) -> Signal {
     let [Value {
         kind: Some(Kind::NumberValue(http_status_code)),
     },
@@ -60,7 +61,7 @@ fn create_response(values: &[Value], _ctx: &mut Context) -> Result<Value, Runtim
     payload
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected [http_status_code, headers, payload] but received {:?}", values),
         ));
@@ -77,7 +78,7 @@ fn create_response(values: &[Value], _ctx: &mut Context) -> Result<Value, Runtim
     });
     fields.insert("body".to_string(), payload.clone());
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),
     })
 }

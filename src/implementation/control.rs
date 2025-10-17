@@ -1,6 +1,7 @@
 use tucana::shared::Value;
 
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
+use crate::context::signal::Signal;
 
 pub fn collect_control_functions() -> Vec<(&'static str, HandlerFn)> {
     vec![
@@ -9,24 +10,24 @@ pub fn collect_control_functions() -> Vec<(&'static str, HandlerFn)> {
     ]
 }
 
-fn r#break(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn r#break(values: &[Value], _ctx: &mut Context) -> Signal {
     let [Value { kind }] = values else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one generic value but received {:?}", values),
         ));
     };
 
-    Ok(Value { kind: kind.clone() })
+    Signal::Success(Value { kind: kind.clone() })
 }
 
-fn r#return(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn r#return(values: &[Value], _ctx: &mut Context) -> Signal {
     let [Value { kind }] = values else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one generic value but received {:?}", values),
         ));
     };
 
-    Ok(Value { kind: kind.clone() })
+    Signal::Success(Value { kind: kind.clone() })
 }

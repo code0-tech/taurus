@@ -1,6 +1,7 @@
+use crate::context::signal::Signal;
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 use base64::Engine;
-use tucana::shared::{value::Kind, ListValue, Value};
+use tucana::shared::{ListValue, Value, value::Kind};
 
 pub fn collect_text_functions() -> Vec<(&'static str, HandlerFn)> {
     vec![
@@ -37,12 +38,14 @@ pub fn collect_text_functions() -> Vec<(&'static str, HandlerFn)> {
     ]
 }
 
-fn as_bytes(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn as_bytes(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one string as argument but received {:?}", values),
         ));
@@ -56,17 +59,19 @@ fn as_bytes(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         })
         .collect();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::ListValue(ListValue { values: bytes })),
     })
 }
 
-fn byte_size(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn byte_size(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -75,17 +80,19 @@ fn byte_size(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.len() as f64)),
     })
 }
 
-fn capitalize(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn capitalize(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -117,17 +124,19 @@ fn capitalize(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         .collect::<Vec<String>>()
         .join(" ");
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(capitalized_value)),
     })
 }
 
-fn uppercase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn uppercase(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -136,17 +145,19 @@ fn uppercase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_uppercase())),
     })
 }
 
-fn lowercase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn lowercase(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -155,17 +166,19 @@ fn lowercase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_lowercase())),
     })
 }
 
-fn swapcase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn swapcase(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -187,17 +200,19 @@ fn swapcase(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         })
         .collect();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(swapped)),
     })
 }
 
-fn chars(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn chars(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -213,19 +228,22 @@ fn chars(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         })
         .collect::<Vec<Value>>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::ListValue(ListValue { values: chars })),
     })
 }
 
-fn at(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(index)),
-    }] = values
+fn at(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(index)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string followed by one number as arguments but received {:?}",
@@ -235,7 +253,7 @@ fn at(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     };
 
     if index < &0.0 {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected a positive number as the second argument but received {}",
@@ -248,10 +266,10 @@ fn at(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     let char = value.chars().into_iter().nth(usize_index);
 
     match char {
-        Some(c) => Ok(Value {
+        Some(c) => Signal::Success(Value {
             kind: Some(Kind::StringValue(c.to_string())),
         }),
-        None => Err(RuntimeError::simple(
+        None => Signal::Failure(RuntimeError::simple(
             "IndexOutOfBoundsRuntimeError",
             format!(
                 "Index {} is out of bounds for string of length {}",
@@ -262,12 +280,14 @@ fn at(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     }
 }
 
-fn trim(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn trim(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an arguments but received {:?}",
@@ -276,37 +296,43 @@ fn trim(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(value.trim().to_string())),
     })
 }
 
-fn append(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(suffix)),
-    }] = values
+fn append(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(suffix)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected two numbers as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(value.clone() + suffix)),
     })
 }
 
-fn prepend(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(prefix)),
-    }] = values
+fn prepend(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(prefix)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -315,21 +341,25 @@ fn prepend(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(prefix.clone() + value)),
     })
 }
 
-fn insert(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(position)),
-    }, Value {
-        kind: Some(Kind::StringValue(text)),
-    }] = values
+fn insert(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(position)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(text)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected string, number, and string as arguments but received {:?}",
@@ -342,17 +372,19 @@ fn insert(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     let mut new_value = value.clone();
     new_value.insert_str(usize_position, text.as_str());
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(new_value)),
     })
 }
 
-fn length(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn length(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -361,21 +393,25 @@ fn length(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.chars().count() as f64)),
     })
 }
 
-fn remove(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::NumberValue(from)),
-    }, Value {
-        kind: Some(Kind::NumberValue(to)),
-    }] = values
+fn remove(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(from)),
+        },
+        Value {
+            kind: Some(Kind::NumberValue(to)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string followed by two numbers as arguments but received {:?}",
@@ -393,21 +429,25 @@ fn remove(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         .map(|e| e.1)
         .collect::<String>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(new)),
     })
 }
 
-fn replace(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(old)),
-    }, Value {
-        kind: Some(Kind::StringValue(new)),
-    }] = values
+fn replace(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(old)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(new)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected three strings as arguments but received {:?}",
@@ -418,21 +458,25 @@ fn replace(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 
     let replaced = value.replace(old, new);
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(replaced)),
     })
 }
 
-fn replace_first(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(old)),
-    }, Value {
-        kind: Some(Kind::StringValue(new)),
-    }] = values
+fn replace_first(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(old)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(new)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected three strings as arguments but received {:?}",
@@ -443,21 +487,25 @@ fn replace_first(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeE
 
     let replaced = value.replacen(old, new, 1);
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(replaced)),
     })
 }
 
-fn replace_last(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(old)),
-    }, Value {
-        kind: Some(Kind::StringValue(new)),
-    }] = values
+fn replace_last(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(old)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(new)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected three strings as arguments but received {:?}",
@@ -481,17 +529,19 @@ fn replace_last(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeEr
 
     let replaced = replace_last(value.as_str(), old.as_str(), new.as_str());
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(replaced)),
     })
 }
 
-fn hex(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn hex(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -506,17 +556,19 @@ fn hex(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         .map(|byte| format!("{:02x}", byte))
         .collect::<String>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(hex)),
     })
 }
 
-fn octal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn octal(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -531,19 +583,22 @@ fn octal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         .map(|byte| format!("{:03o}", byte))
         .collect::<String>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(hex)),
     })
 }
 
-fn index_of(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(sub_string)),
-    }] = values
+fn index_of(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(sub_string)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -555,23 +610,26 @@ fn index_of(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
     let index_option = value.find(sub_string);
 
     match index_option {
-        Some(index) => Ok(Value {
+        Some(index) => Signal::Success(Value {
             kind: Some(Kind::NumberValue(index as f64)),
         }),
-        None => Ok(Value {
+        None => Signal::Success(Value {
             kind: Some(Kind::NumberValue(-1.0)),
         }),
     }
 }
 
-fn contains(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(sub_string)),
-    }] = values
+fn contains(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(sub_string)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -580,19 +638,22 @@ fn contains(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(value.contains(sub_string))),
     })
 }
 
-fn split(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(delimiter)),
-    }] = values
+fn split(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(delimiter)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -608,17 +669,19 @@ fn split(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         })
         .collect::<Vec<Value>>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::ListValue(ListValue { values: words })),
     })
 }
 
-fn reverse(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn reverse(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -629,19 +692,22 @@ fn reverse(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
 
     let reversed = value.chars().rev().collect::<String>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(reversed)),
     })
 }
 
-fn starts_with(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(prefix)),
-    }] = values
+fn starts_with(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(prefix)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -650,19 +716,22 @@ fn starts_with(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(value.starts_with(prefix))),
     })
 }
 
-fn ends_with(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(suffix)),
-    }] = values
+fn ends_with(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(suffix)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -671,17 +740,19 @@ fn ends_with(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(value.ends_with(suffix))),
     })
 }
 
-fn to_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }] = values
+fn to_ascii(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected one string as an argument but received {:?}",
@@ -697,19 +768,21 @@ fn to_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         })
         .collect::<Vec<Value>>();
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::ListValue(ListValue {
             values: ascii_value,
         })),
     })
 }
 
-fn from_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::ListValue(list)),
-    }] = values
+fn from_ascii(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::ListValue(list)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected a list of numbers as an argument but received {:?}",
@@ -738,10 +811,10 @@ fn from_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         .collect::<Option<String>>();
 
     match string {
-        Some(string) => Ok(Value {
+        Some(string) => Signal::Success(Value {
             kind: Some(Kind::StringValue(string)),
         }),
-        None => Err(RuntimeError::simple(
+        None => Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             "Expected a list of numbers between 0 and 127".to_string(),
         )),
@@ -750,14 +823,17 @@ fn from_ascii(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
 
 //TODO: Implement encode function , what about decode? UTF-8, 16 and 32 does not make sense
 
-fn encode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(encoding)),
-    }] = values
+fn encode(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(encoding)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -769,26 +845,29 @@ fn encode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     let encoded_string = match encoding.clone().to_lowercase().as_str() {
         "base64" => base64::prelude::BASE64_STANDARD.encode(value),
         _ => {
-            return Err(RuntimeError::simple(
+            return Signal::Failure(RuntimeError::simple(
                 "InvalidArgumentRuntimeError",
                 format!("Unsupported encoding: {}", encoding),
-            ))
+            ));
         }
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(encoded_string)),
     })
 }
 
-fn decode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(value)),
-    }, Value {
-        kind: Some(Kind::StringValue(encoding)),
-    }] = values
+fn decode(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(value)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(encoding)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -802,40 +881,43 @@ fn decode(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
             Ok(bytes) => match String::from_utf8(bytes) {
                 Ok(string) => string,
                 Err(err) => {
-                    return Err(RuntimeError::simple(
+                    return Signal::Failure(RuntimeError::simple(
                         "DecodeError",
                         format!("Failed to decode base64 string: {:?}", err),
-                    ))
+                    ));
                 }
             },
             Err(err) => {
-                return Err(RuntimeError::simple(
+                return Signal::Failure(RuntimeError::simple(
                     "DecodeError",
                     format!("Failed to decode base64 string: {:?}", err),
-                ))
+                ));
             }
         },
         _ => {
-            return Err(RuntimeError::simple(
+            return Signal::Failure(RuntimeError::simple(
                 "InvalidArgumentRuntimeError",
                 format!("Unsupported decoding: {}", encoding),
-            ))
+            ));
         }
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(decoded_string)),
     })
 }
 
-fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    let [Value {
-        kind: Some(Kind::StringValue(lhs)),
-    }, Value {
-        kind: Some(Kind::StringValue(rhs)),
-    }] = values
+fn is_equal(values: &[Value], _ctx: &mut Context) -> Signal {
+    let [
+        Value {
+            kind: Some(Kind::StringValue(lhs)),
+        },
+        Value {
+            kind: Some(Kind::StringValue(rhs)),
+        },
+    ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two strings as arguments but received {:?}",
@@ -844,7 +926,7 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
     })
 }
@@ -853,7 +935,7 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
 mod tests {
     use super::*;
     use crate::context::Context;
-    use tucana::shared::{value::Kind, ListValue, Value};
+    use tucana::shared::{ListValue, Value, value::Kind};
 
     // Helper function to create a string value
     fn create_string_value(s: &str) -> Value {
@@ -887,7 +969,11 @@ mod tests {
     fn test_as_bytes_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = as_bytes(&values, &mut ctx).unwrap();
+        let signal = as_bytes(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -908,7 +994,11 @@ mod tests {
     fn test_as_bytes_empty_string() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = as_bytes(&values, &mut ctx).unwrap();
+        let signal = as_bytes(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -925,14 +1015,18 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(123.0)];
         let result = as_bytes(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_byte_size_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = byte_size(&values, &mut ctx).unwrap();
+        let signal = byte_size(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(5.0));
     }
 
@@ -940,7 +1034,11 @@ mod tests {
     fn test_byte_size_empty() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = byte_size(&values, &mut ctx).unwrap();
+        let signal = byte_size(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(0.0));
     }
 
@@ -948,7 +1046,11 @@ mod tests {
     fn test_byte_size_unicode() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("café")];
-        let result = byte_size(&values, &mut ctx).unwrap();
+        let signal = byte_size(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(5.0)); // 'é' is 2 bytes in UTF-8
     }
 
@@ -956,7 +1058,11 @@ mod tests {
     fn test_capitalize_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello world")];
-        let result = capitalize(&values, &mut ctx).unwrap();
+        let signal = capitalize(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("Hello World"));
     }
 
@@ -964,7 +1070,11 @@ mod tests {
     fn test_capitalize_empty() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = capitalize(&values, &mut ctx).unwrap();
+        let signal = capitalize(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value(""));
     }
 
@@ -972,7 +1082,11 @@ mod tests {
     fn test_capitalize_single_char() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("a")];
-        let result = capitalize(&values, &mut ctx).unwrap();
+        let signal = capitalize(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("A"));
     }
 
@@ -980,7 +1094,11 @@ mod tests {
     fn test_uppercase_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("Hello World")];
-        let result = uppercase(&values, &mut ctx).unwrap();
+        let signal = uppercase(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("HELLO WORLD"));
     }
 
@@ -988,7 +1106,11 @@ mod tests {
     fn test_uppercase_already_upper() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("HELLO")];
-        let result = uppercase(&values, &mut ctx).unwrap();
+        let signal = uppercase(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("HELLO"));
     }
 
@@ -996,7 +1118,11 @@ mod tests {
     fn test_lowercase_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("Hello World")];
-        let result = lowercase(&values, &mut ctx).unwrap();
+        let signal = lowercase(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world"));
     }
 
@@ -1004,7 +1130,11 @@ mod tests {
     fn test_lowercase_already_lower() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = lowercase(&values, &mut ctx).unwrap();
+        let signal = lowercase(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello"));
     }
 
@@ -1012,7 +1142,11 @@ mod tests {
     fn test_swapcase_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("Hello World")];
-        let result = swapcase(&values, &mut ctx).unwrap();
+        let signal = swapcase(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hELLO wORLD"));
     }
 
@@ -1020,7 +1154,11 @@ mod tests {
     fn test_swapcase_mixed() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("HeLLo123")];
-        let result = swapcase(&values, &mut ctx).unwrap();
+        let signal = swapcase(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hEllO123"));
     }
 
@@ -1028,7 +1166,11 @@ mod tests {
     fn test_chars_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("abc")];
-        let result = chars(&values, &mut ctx).unwrap();
+        let signal = chars(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -1047,7 +1189,11 @@ mod tests {
     fn test_chars_empty() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = chars(&values, &mut ctx).unwrap();
+        let signal = chars(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -1063,7 +1209,11 @@ mod tests {
     fn test_at_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_number_value(1.0)];
-        let result = at(&values, &mut ctx).unwrap();
+        let signal = at(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("e"));
     }
 
@@ -1071,7 +1221,11 @@ mod tests {
     fn test_at_first_char() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_number_value(0.0)];
-        let result = at(&values, &mut ctx).unwrap();
+        let signal = at(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("h"));
     }
 
@@ -1080,7 +1234,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_number_value(10.0)];
         let result = at(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1088,14 +1242,18 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_number_value(-1.0)];
         let result = at(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_trim_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("  hello world  ")];
-        let result = trim(&values, &mut ctx).unwrap();
+        let signal = trim(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world"));
     }
 
@@ -1103,7 +1261,11 @@ mod tests {
     fn test_trim_no_whitespace() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = trim(&values, &mut ctx).unwrap();
+        let signal = trim(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello"));
     }
 
@@ -1111,7 +1273,11 @@ mod tests {
     fn test_append_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value(" world")];
-        let result = append(&values, &mut ctx).unwrap();
+        let signal = append(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world"));
     }
 
@@ -1119,7 +1285,11 @@ mod tests {
     fn test_append_empty_suffix() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value("")];
-        let result = append(&values, &mut ctx).unwrap();
+        let signal = append(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello"));
     }
 
@@ -1127,7 +1297,11 @@ mod tests {
     fn test_prepend_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("world"), create_string_value("hello ")];
-        let result = prepend(&values, &mut ctx).unwrap();
+        let signal = prepend(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world"));
     }
 
@@ -1135,7 +1309,11 @@ mod tests {
     fn test_prepend_empty_prefix() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value("")];
-        let result = prepend(&values, &mut ctx).unwrap();
+        let signal = prepend(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello"));
     }
 
@@ -1147,7 +1325,11 @@ mod tests {
             create_number_value(2.0),
             create_string_value("XXX"),
         ];
-        let result = insert(&values, &mut ctx).unwrap();
+        let signal = insert(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("heXXXllo"));
     }
 
@@ -1159,7 +1341,11 @@ mod tests {
             create_number_value(0.0),
             create_string_value("XXX"),
         ];
-        let result = insert(&values, &mut ctx).unwrap();
+        let signal = insert(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("XXXhello"));
     }
 
@@ -1171,7 +1357,11 @@ mod tests {
             create_number_value(5.0),
             create_string_value("XXX"),
         ];
-        let result = insert(&values, &mut ctx).unwrap();
+        let signal = insert(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("helloXXX"));
     }
 
@@ -1179,7 +1369,11 @@ mod tests {
     fn test_length_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = length(&values, &mut ctx).unwrap();
+        let signal = length(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(5.0));
     }
 
@@ -1187,7 +1381,11 @@ mod tests {
     fn test_length_empty() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = length(&values, &mut ctx).unwrap();
+        let signal = length(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(0.0));
     }
 
@@ -1195,7 +1393,11 @@ mod tests {
     fn test_length_unicode() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("café")];
-        let result = length(&values, &mut ctx).unwrap();
+        let signal = length(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(4.0)); // 4 characters
     }
 
@@ -1207,7 +1409,11 @@ mod tests {
             create_number_value(2.0),
             create_number_value(7.0),
         ];
-        let result = remove(&values, &mut ctx).unwrap();
+        let signal = remove(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("heorld"));
     }
 
@@ -1219,7 +1425,11 @@ mod tests {
             create_number_value(0.0),
             create_number_value(2.0),
         ];
-        let result = remove(&values, &mut ctx).unwrap();
+        let signal = remove(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("llo"));
     }
 
@@ -1231,7 +1441,11 @@ mod tests {
             create_string_value("hello"),
             create_string_value("hi"),
         ];
-        let result = replace(&values, &mut ctx).unwrap();
+        let signal = replace(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hi world hi"));
     }
 
@@ -1243,7 +1457,11 @@ mod tests {
             create_string_value("xyz"),
             create_string_value("abc"),
         ];
-        let result = replace(&values, &mut ctx).unwrap();
+        let signal = replace(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world"));
     }
 
@@ -1255,7 +1473,11 @@ mod tests {
             create_string_value("hello"),
             create_string_value("hi"),
         ];
-        let result = replace_first(&values, &mut ctx).unwrap();
+        let signal = replace_first(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hi world hello"));
     }
 
@@ -1267,7 +1489,11 @@ mod tests {
             create_string_value("hello"),
             create_string_value("hi"),
         ];
-        let result = replace_last(&values, &mut ctx).unwrap();
+        let signal = replace_last(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world hi"));
     }
 
@@ -1279,7 +1505,11 @@ mod tests {
             create_string_value("xyz"),
             create_string_value("abc"),
         ];
-        let result = replace_last(&values, &mut ctx).unwrap();
+        let signal = replace_last(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello world"));
     }
 
@@ -1287,7 +1517,11 @@ mod tests {
     fn test_hex_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = hex(&values, &mut ctx).unwrap();
+        let signal = hex(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("68656c6c6f"));
     }
 
@@ -1295,7 +1529,11 @@ mod tests {
     fn test_hex_empty() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = hex(&values, &mut ctx).unwrap();
+        let signal = hex(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value(""));
     }
 
@@ -1303,7 +1541,11 @@ mod tests {
     fn test_octal_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("A")];
-        let result = octal(&values, &mut ctx).unwrap();
+        let signal = octal(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("101")); // 'A' is 65 in ASCII, 101 in octal
     }
 
@@ -1314,7 +1556,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("world"),
         ];
-        let result = index_of(&values, &mut ctx).unwrap();
+        let signal = index_of(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(6.0));
     }
 
@@ -1325,7 +1571,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("xyz"),
         ];
-        let result = index_of(&values, &mut ctx).unwrap();
+        let signal = index_of(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(-1.0));
     }
 
@@ -1336,7 +1586,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("hello"),
         ];
-        let result = index_of(&values, &mut ctx).unwrap();
+        let signal = index_of(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_number_value(0.0));
     }
 
@@ -1347,7 +1601,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("world"),
         ];
-        let result = contains(&values, &mut ctx).unwrap();
+        let signal = contains(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(true));
     }
 
@@ -1358,7 +1616,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("xyz"),
         ];
-        let result = contains(&values, &mut ctx).unwrap();
+        let signal = contains(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(false));
     }
 
@@ -1369,7 +1631,11 @@ mod tests {
             create_string_value("hello,world,test"),
             create_string_value(","),
         ];
-        let result = split(&values, &mut ctx).unwrap();
+        let signal = split(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -1388,7 +1654,11 @@ mod tests {
     fn test_split_no_delimiter() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value(",")];
-        let result = split(&values, &mut ctx).unwrap();
+        let signal = split(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -1405,7 +1675,11 @@ mod tests {
     fn test_reverse_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello")];
-        let result = reverse(&values, &mut ctx).unwrap();
+        let signal = reverse(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("olleh"));
     }
 
@@ -1413,7 +1687,11 @@ mod tests {
     fn test_reverse_empty() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("")];
-        let result = reverse(&values, &mut ctx).unwrap();
+        let signal = reverse(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value(""));
     }
 
@@ -1421,7 +1699,11 @@ mod tests {
     fn test_reverse_palindrome() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("aba")];
-        let result = reverse(&values, &mut ctx).unwrap();
+        let signal = reverse(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("aba"));
     }
 
@@ -1430,7 +1712,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("aba")];
         let result = encode(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1438,14 +1720,18 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("aba"), create_string_value("gug")];
         let result = encode(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_encode_correct() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value("BASE64")];
-        let result = encode(&values, &mut ctx).unwrap();
+        let signal = encode(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(
             result,
             Value {
@@ -1459,7 +1745,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("aba")];
         let result = decode(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1467,7 +1753,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("aba"), create_string_value("gug")];
         let result = decode(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1477,7 +1763,11 @@ mod tests {
             create_string_value("aGVsbG8="),
             create_string_value("BASE64"),
         ];
-        let result = decode(&values, &mut ctx).unwrap();
+        let signal = decode(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(
             result,
             Value {
@@ -1493,7 +1783,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("hello"),
         ];
-        let result = starts_with(&values, &mut ctx).unwrap();
+        let signal = starts_with(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(true));
     }
 
@@ -1504,7 +1798,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("world"),
         ];
-        let result = starts_with(&values, &mut ctx).unwrap();
+        let signal = starts_with(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(false));
     }
 
@@ -1515,7 +1813,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("world"),
         ];
-        let result = ends_with(&values, &mut ctx).unwrap();
+        let signal = ends_with(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(true));
     }
 
@@ -1526,7 +1828,11 @@ mod tests {
             create_string_value("hello world"),
             create_string_value("hello"),
         ];
-        let result = ends_with(&values, &mut ctx).unwrap();
+        let signal = ends_with(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(false));
     }
 
@@ -1534,7 +1840,11 @@ mod tests {
     fn test_to_ascii_valid() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("AB")];
-        let result = to_ascii(&values, &mut ctx).unwrap();
+        let signal = to_ascii(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         if let Value {
             kind: Some(Kind::ListValue(list)),
@@ -1557,7 +1867,11 @@ mod tests {
             create_number_value(67.0), // 'C'
         ];
         let values = vec![create_list_value(ascii_values)];
-        let result = from_ascii(&values, &mut ctx).unwrap();
+        let signal = from_ascii(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("ABC"));
     }
 
@@ -1565,7 +1879,11 @@ mod tests {
     fn test_from_ascii_empty_list() {
         let mut ctx = Context::new();
         let values = vec![create_list_value(vec![])];
-        let result = from_ascii(&values, &mut ctx).unwrap();
+        let signal = from_ascii(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value(""));
     }
 
@@ -1578,7 +1896,7 @@ mod tests {
         ];
         let values = vec![create_list_value(ascii_values)];
         let result = from_ascii(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1590,7 +1908,7 @@ mod tests {
         ];
         let values = vec![create_list_value(ascii_values)];
         let result = from_ascii(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1602,14 +1920,18 @@ mod tests {
         ];
         let values = vec![create_list_value(ascii_values)];
         let result = from_ascii(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_is_equal_true() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value("hello")];
-        let result = is_equal(&values, &mut ctx).unwrap();
+        let signal = is_equal(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(true));
     }
 
@@ -1617,7 +1939,11 @@ mod tests {
     fn test_is_equal_false() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("hello"), create_string_value("world")];
-        let result = is_equal(&values, &mut ctx).unwrap();
+        let signal = is_equal(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(false));
     }
 
@@ -1625,7 +1951,11 @@ mod tests {
     fn test_is_equal_empty_strings() {
         let mut ctx = Context::new();
         let values = vec![create_string_value(""), create_string_value("")];
-        let result = is_equal(&values, &mut ctx).unwrap();
+        let signal = is_equal(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_bool_value(true));
     }
 
@@ -1637,19 +1967,58 @@ mod tests {
         // Test functions that expect 1 string argument
         let invalid_values = vec![create_number_value(123.0)];
 
-        assert!(as_bytes(&invalid_values, &mut ctx).is_err());
-        assert!(byte_size(&invalid_values, &mut ctx).is_err());
-        assert!(capitalize(&invalid_values, &mut ctx).is_err());
-        assert!(uppercase(&invalid_values, &mut ctx).is_err());
-        assert!(lowercase(&invalid_values, &mut ctx).is_err());
-        assert!(swapcase(&invalid_values, &mut ctx).is_err());
-        assert!(chars(&invalid_values, &mut ctx).is_err());
-        assert!(trim(&invalid_values, &mut ctx).is_err());
-        assert!(length(&invalid_values, &mut ctx).is_err());
-        assert!(reverse(&invalid_values, &mut ctx).is_err());
-        assert!(hex(&invalid_values, &mut ctx).is_err());
-        assert!(octal(&invalid_values, &mut ctx).is_err());
-        assert!(to_ascii(&invalid_values, &mut ctx).is_err());
+        assert_eq!(
+            as_bytes(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            byte_size(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            capitalize(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            uppercase(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            lowercase(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            swapcase(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            chars(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            trim(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            length(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            reverse(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            hex(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            octal(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            to_ascii(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
     }
 
     #[test]
@@ -1659,14 +2028,38 @@ mod tests {
         // Test functions that expect 2 string arguments
         let invalid_values = vec![create_string_value("hello"), create_number_value(123.0)];
 
-        assert!(append(&invalid_values, &mut ctx).is_err());
-        assert!(prepend(&invalid_values, &mut ctx).is_err());
-        assert!(index_of(&invalid_values, &mut ctx).is_err());
-        assert!(contains(&invalid_values, &mut ctx).is_err());
-        assert!(split(&invalid_values, &mut ctx).is_err());
-        assert!(starts_with(&invalid_values, &mut ctx).is_err());
-        assert!(ends_with(&invalid_values, &mut ctx).is_err());
-        assert!(is_equal(&invalid_values, &mut ctx).is_err());
+        assert_eq!(
+            append(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            prepend(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            index_of(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            contains(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            split(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            starts_with(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            ends_with(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            is_equal(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
     }
 
     #[test]
@@ -1676,7 +2069,10 @@ mod tests {
         // Test functions that expect string and number
         let invalid_values = vec![create_number_value(123.0), create_string_value("test")];
 
-        assert!(at(&invalid_values, &mut ctx).is_err());
+        assert_eq!(
+            at(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
     }
 
     #[test]
@@ -1690,11 +2086,26 @@ mod tests {
             create_number_value(123.0),
         ];
 
-        assert!(insert(&invalid_values, &mut ctx).is_err());
-        assert!(remove(&invalid_values, &mut ctx).is_err());
-        assert!(replace(&invalid_values, &mut ctx).is_err());
-        assert!(replace_first(&invalid_values, &mut ctx).is_err());
-        assert!(replace_last(&invalid_values, &mut ctx).is_err());
+        assert_eq!(
+            insert(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            remove(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            replace(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            replace_first(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            replace_last(&invalid_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
     }
 
     #[test]
@@ -1710,11 +2121,23 @@ mod tests {
             create_string_value("test4"),
         ];
 
-        assert!(as_bytes(&empty_values, &mut ctx).is_err());
-        assert!(as_bytes(&too_many_values, &mut ctx).is_err());
+        assert_eq!(
+            as_bytes(&empty_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            as_bytes(&too_many_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
 
-        assert!(append(&empty_values, &mut ctx).is_err());
-        assert!(append(&too_many_values, &mut ctx).is_err());
+        assert_eq!(
+            append(&empty_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
+        assert_eq!(
+            append(&too_many_values, &mut ctx),
+            Signal::Failure(RuntimeError::default())
+        );
     }
 
     #[test]
@@ -1725,25 +2148,40 @@ mod tests {
         let long_string = "a".repeat(1000);
         let values = vec![create_string_value(&long_string)];
 
-        assert!(length(&values, &mut ctx).is_ok());
-        assert!(reverse(&values, &mut ctx).is_ok());
-        assert!(uppercase(&values, &mut ctx).is_ok());
+        assert_eq!(length(&values, &mut ctx), Signal::Success(Value::default()));
+        assert_eq!(
+            reverse(&values, &mut ctx),
+            Signal::Success(Value::default())
+        );
+        assert_eq!(
+            uppercase(&values, &mut ctx),
+            Signal::Success(Value::default())
+        );
 
         // Test with special characters
         let special_string = "!@#$%^&*(){}[]|\\:;\"'<>,.?/~`";
         let values = vec![create_string_value(special_string)];
 
-        assert!(length(&values, &mut ctx).is_ok());
-        assert!(reverse(&values, &mut ctx).is_ok());
-        assert!(uppercase(&values, &mut ctx).is_ok());
+        assert_eq!(length(&values, &mut ctx), Signal::Success(Value::default()));
+        assert_eq!(
+            uppercase(&values, &mut ctx),
+            Signal::Success(Value::default())
+        );
+        assert_eq!(
+            reverse(&values, &mut ctx),
+            Signal::Success(Value::default())
+        );
 
         // Test with unicode characters
         let unicode_string = "🦀🚀✨🎉";
         let values = vec![create_string_value(unicode_string)];
 
-        assert!(length(&values, &mut ctx).is_ok());
-        assert!(reverse(&values, &mut ctx).is_ok());
-        assert!(chars(&values, &mut ctx).is_ok());
+        assert_eq!(length(&values, &mut ctx), Signal::Success(Value::default()));
+        assert_eq!(
+            reverse(&values, &mut ctx),
+            Signal::Success(Value::default())
+        );
+        assert_eq!(chars(&values, &mut ctx), Signal::Success(Value::default()));
     }
 
     #[test]
@@ -1759,7 +2197,7 @@ mod tests {
                 create_string_value("X"),
             ];
             let result = insert(&values, &mut ctx);
-            assert!(result.is_ok(), "Insert at position {} should work", i);
+            assert_eq!(result, Signal::Success(Value::default()));
         }
 
         // Test remove with edge cases
@@ -1768,7 +2206,11 @@ mod tests {
             create_number_value(0.0),
             create_number_value(0.0), // Remove nothing
         ];
-        let result = remove(&values, &mut ctx).unwrap();
+        let signal = remove(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value("hello"));
 
         // Test remove entire string
@@ -1777,7 +2219,11 @@ mod tests {
             create_number_value(0.0),
             create_number_value(5.0),
         ];
-        let result = remove(&values, &mut ctx).unwrap();
+        let signal = remove(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         assert_eq!(result, create_string_value(""));
     }
 }

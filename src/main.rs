@@ -1,10 +1,11 @@
+mod config;
 pub mod context;
 pub mod error;
+mod executor;
 pub mod implementation;
 pub mod registry;
-mod executor;
-mod config;
 
+use crate::config::Config;
 use crate::context::signal::Signal;
 use crate::executor::Executor;
 use crate::implementation::collect;
@@ -18,7 +19,6 @@ use std::collections::HashMap;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
-use crate::config::Config;
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Option<Value> {
     let context = Context::new();
@@ -28,11 +28,12 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Option<Value> {
         .into_iter()
         .map(|node| return (node.database_id, node))
         .collect();
-   
+
     let mut executor = Executor::new(store, node_functions, context);
     match executor.execute(flow.starting_node_id) {
         Signal::Success(v) => Some(v.clone()),
-        _ => None
+        Signal::Respond(v) => Some(v.clone()),
+        _ => None,
     }
 }
 

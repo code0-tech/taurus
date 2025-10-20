@@ -33,6 +33,10 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Option<Value> {
     match executor.execute(flow.starting_node_id) {
         Signal::Success(v) => Some(v.clone()),
         Signal::Respond(v) => Some(v.clone()),
+        Signal::Failure(error ) => {
+            log::error!("{:?}", error);
+            None
+        }
         _ => None,
     }
 }
@@ -92,9 +96,18 @@ async fn main() {
                     }
                 };
 
-                let value = handle_message(flow, &store).unwrap_or_else(|| Value {
-                    kind: Some(Kind::NullValue(0)),
-                });
+                let value = match handle_message(flow, &store) {
+                    None => {
+                        log::error!("Failed to handle message");
+                        Value {
+                            kind: Some(Kind::NullValue(0)),
+                        }
+                    }
+                    Some(v) => {
+                        log::info!("Handled message successfully");
+                        v
+                    }
+                };
 
                 // Send a response to the reply subject
                 if let Some(reply) = msg.reply {

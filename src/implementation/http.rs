@@ -56,10 +56,10 @@ fn respond(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let Some(Kind::StringValue(_status_code_str)) = &status_code_val.kind else {
+    let Some(Kind::NumberValue(_status_code_str)) = &status_code_val.kind else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected 'status_code' to be StringValue".to_string(),
+            "Expected 'status_code' to be NumberValue".to_string(),
         ));
     };
 
@@ -162,7 +162,7 @@ fn create_response(values: &[Value], _ctx: &mut Context) -> Signal {
             kind: Some(Kind::StructValue(headers.clone())),
         },
     );
-    fields.insert("body".to_string(), payload.clone());
+    fields.insert("payload".to_string(), payload.clone());
 
     Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),

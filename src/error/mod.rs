@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::{
     error::Error,
     fmt::{Display, Formatter},
 };
+use tucana::shared::value::Kind::{StringValue, StructValue};
+use tucana::shared::{Struct, Value};
 
 #[derive(Debug, Default, Clone)]
 pub struct RuntimeError {
@@ -38,8 +41,37 @@ impl RuntimeError {
     pub fn simple(name: &str, message: String) -> Self {
         Self {
             name: name.to_string(),
-            message: message,
+            message,
             suggestion: None,
+        }
+    }
+
+    pub fn as_value(&self) -> Value {
+        let suggestion = match self.suggestion {
+            Some(ref s) => Value {
+                kind: Some(StringValue(s.clone())),
+            },
+            None => Value { kind: None },
+        };
+
+        Value {
+            kind: Some(StructValue(Struct {
+                fields: HashMap::from([
+                    (
+                        String::from("name"),
+                        Value {
+                            kind: Some(StringValue(self.name.clone())),
+                        },
+                    ),
+                    (
+                        String::from("message"),
+                        Value {
+                            kind: Some(StringValue(self.message.clone())),
+                        },
+                    ),
+                    (String::from("suggestion"), suggestion),
+                ]),
+            })),
         }
     }
 }

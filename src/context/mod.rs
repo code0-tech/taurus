@@ -143,26 +143,7 @@ impl Context {
 
     /// Looks up the context of a reference
     pub fn get(&self, reference: &ReferenceValue) -> Option<ContextResult> {
-        for (context, value) in self.layers.iter() {
-            if context.primary_level != reference.primary_level {
-                continue;
-            }
-
-            if context.secondary_level != reference.secondary_level {
-                continue;
-            }
-
-            if let Some(index) = reference.tertiary_level {
-                let params = &value.parameter;
-
-                let real_index = index as usize;
-                let value = params.index(real_index);
-                return Some(ContextResult::ParameterResult(value.clone()));
-            }
-
-            return Some(ContextResult::NodeExecutionResult(value.result.clone()));
-        }
-        None
+        unimplemented!("Implement latest reference pattern from Tucana 0.0.39")
     }
 
     pub fn is_end(&self) -> bool {

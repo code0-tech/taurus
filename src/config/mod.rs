@@ -1,4 +1,6 @@
-use code0_flow::flow_config::{env_with_default, environment::Environment, mode::Mode};
+use code0_flow::flow_config::env_with_default;
+use code0_flow::flow_config::environment::Environment;
+use code0_flow::flow_config::mode::Mode;
 
 /// Struct for all relevant `Taurus` startup configurations
 pub struct Config {

@@ -1,3 +1,6 @@
+pub mod context;
+pub mod signal;
+
 use crate::error::RuntimeError;
 use std::{
     collections::{HashMap, VecDeque},
@@ -23,10 +26,7 @@ pub struct ContextEntry {
 
 impl ContextEntry {
     pub fn new(result: NodeResult, parameter: Vec<Value>) -> Self {
-        ContextEntry {
-            result: result,
-            parameter: parameter,
-        }
+        ContextEntry { result, parameter }
     }
 }
 
@@ -48,6 +48,12 @@ pub struct Context {
     layers: HashMap<ContextReference, ContextEntry>,
     /// Context Snapshot of Past Context
     context_history: VecDeque<(i32, i32)>,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Context {

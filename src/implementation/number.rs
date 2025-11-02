@@ -2,6 +2,7 @@ use std::f64;
 
 use tucana::shared::{Value, value::Kind};
 
+use crate::context::signal::Signal;
 use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 
 pub fn collect_number_functions() -> Vec<(&'static str, HandlerFn)> {
@@ -47,7 +48,7 @@ pub fn collect_number_functions() -> Vec<(&'static str, HandlerFn)> {
     ]
 }
 
-fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn add(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -57,7 +58,7 @@ fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -66,12 +67,12 @@ fn add(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs + rhs)),
     })
 }
 
-fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn multiply(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -81,7 +82,7 @@ fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -90,12 +91,12 @@ fn multiply(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs * rhs)),
     })
 }
 
-fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn substract(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -105,7 +106,7 @@ fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -114,12 +115,12 @@ fn substract(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs - rhs)),
     })
 }
 
-fn divide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn divide(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -129,7 +130,7 @@ fn divide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -139,18 +140,18 @@ fn divide(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     };
 
     if rhs == &0.0 {
-        return Err(RuntimeError::simple_str(
+        return Signal::Failure(RuntimeError::simple_str(
             "DivisionByZero",
             "You cannot divide by zero",
         ));
     }
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs / rhs)),
     })
 }
 
-fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn modulo(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -160,7 +161,7 @@ fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -170,54 +171,54 @@ fn modulo(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
     };
 
     if rhs == &0.0 {
-        return Err(RuntimeError::simple_str(
+        return Signal::Failure(RuntimeError::simple_str(
             "DivisionByZero",
             "You cannot divide by zero",
         ));
     }
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs % rhs)),
     })
 }
 
-fn abs(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn abs(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected a number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.abs())),
     })
 }
 
-fn is_positive(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn is_positive(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected a number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(!value.is_sign_negative())),
     })
 }
 
-fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn is_greater(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -227,7 +228,7 @@ fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -236,12 +237,12 @@ fn is_greater(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs > rhs)),
     })
 }
 
-fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn is_less(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -251,7 +252,7 @@ fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -260,48 +261,48 @@ fn is_less(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> 
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs < rhs)),
     })
 }
 
-fn is_zero(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn is_zero(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected a number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(value == &0.0)),
     })
 }
 
-fn square(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn square(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected a number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.powf(2.0))),
     })
 }
 
-fn exponential(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn exponential(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(base)),
@@ -311,7 +312,7 @@ fn exponential(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -320,30 +321,30 @@ fn exponential(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErr
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(base.powf(exponent.clone()))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(base.powf(*exponent))),
     })
 }
 
-fn pi(_values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    Ok(Value {
+fn pi(_values: &[Value], _ctx: &mut Context) -> Signal {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(f64::consts::PI)),
     })
 }
 
-fn euler(_values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    Ok(Value {
+fn euler(_values: &[Value], _ctx: &mut Context) -> Signal {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(f64::consts::E)),
     })
 }
 
-fn infinity(_values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
-    Ok(Value {
+fn infinity(_values: &[Value], _ctx: &mut Context) -> Signal {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(f64::INFINITY)),
     })
 }
 
-fn round_up(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn round_up(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
@@ -353,7 +354,7 @@ fn round_up(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -362,14 +363,14 @@ fn round_up(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         ));
     };
 
-    let factor = 10_f64.powi(decimal_places.clone() as i32);
+    let factor = 10_f64.powi(*decimal_places as i32);
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue((value * factor).ceil() / factor)),
     })
 }
 
-fn round_down(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn round_down(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
@@ -379,7 +380,7 @@ fn round_down(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -388,14 +389,14 @@ fn round_down(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeErro
         ));
     };
 
-    let factor = 10_f64.powi(decimal_places.clone() as i32);
+    let factor = 10_f64.powi(*decimal_places as i32);
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue((value * factor).floor() / factor)),
     })
 }
 
-fn round(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn round(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
@@ -405,7 +406,7 @@ fn round(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -414,32 +415,32 @@ fn round(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    let factor = 10_f64.powi(decimal_places.clone() as i32);
+    let factor = 10_f64.powi(*decimal_places as i32);
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue((value * factor).round() / factor)),
     })
 }
 
-fn square_root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn square_root(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.sqrt())),
     })
 }
 
-fn root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn root(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
@@ -449,7 +450,7 @@ fn root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -458,12 +459,12 @@ fn root(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(value.powf(root.clone()))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(value.powf(*root))),
     })
 }
 
-fn log(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn log(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
@@ -473,7 +474,7 @@ fn log(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -482,37 +483,37 @@ fn log(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(value.log(log.clone()))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(value.log(*log))),
     })
 }
 
-fn ln(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn ln(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.ln())),
     })
 }
 
-fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn from_text(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StringValue(string_value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one string as argument but received {:?}", values),
         ));
@@ -521,37 +522,37 @@ fn from_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError
     let value: f64 = match string_value.parse() {
         Ok(result) => result,
         Err(_) => {
-            return Err(RuntimeError::simple(
+            return Signal::Failure(RuntimeError::simple(
                 "InvalidArgumentRuntimeError",
                 format!("Failed to parse string as number: {}", string_value),
             ));
         }
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value)),
     })
 }
 
-fn as_text(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn as_text(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_string())),
     })
 }
 
-fn min(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn min(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -561,7 +562,7 @@ fn min(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -570,12 +571,12 @@ fn min(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(lhs.min(rhs.clone()))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(lhs.min(*rhs))),
     })
 }
 
-fn max(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn max(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -585,7 +586,7 @@ fn max(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -594,30 +595,30 @@ fn max(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(lhs.max(rhs.clone()))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(lhs.max(*rhs))),
     })
 }
 
-fn negate(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn negate(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(-value)),
     })
 }
 
-fn random(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn random(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(min)),
@@ -627,7 +628,7 @@ fn random(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -636,157 +637,155 @@ fn random(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(rand::random_range(
-            min.clone()..max.clone(),
-        ))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(rand::random_range(*min..*max))),
     })
 }
 
-fn sin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn sin(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.sin())),
     })
 }
 
-fn cos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn cos(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.cos())),
     })
 }
 
-fn tan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn tan(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.tan())),
     })
 }
 
-fn arcsin(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn arcsin(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.asin())),
     })
 }
 
-fn arccos(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn arccos(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.acos())),
     })
 }
 
-fn arctan(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn arctan(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.atan())),
     })
 }
-fn sinh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn sinh(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.sinh())),
     })
 }
 
-fn cosh(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn cosh(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Expected one number as argument but received {:?}", values),
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.cosh())),
     })
 }
 
-fn clamp(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn clamp(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(value)),
@@ -799,7 +798,7 @@ fn clamp(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected three numbers as arguments but received {:?}",
@@ -808,12 +807,12 @@ fn clamp(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
         ));
     };
 
-    Ok(Value {
-        kind: Some(Kind::NumberValue(value.clamp(min.clone(), max.clone()))),
+    Signal::Success(Value {
+        kind: Some(Kind::NumberValue(value.clamp(*min, *max))),
     })
 }
 
-fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError> {
+fn is_equal(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::NumberValue(lhs)),
@@ -823,7 +822,7 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         },
     ] = values
     else {
-        return Err(RuntimeError::simple(
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
                 "Expected two numbers as arguments but received {:?}",
@@ -832,7 +831,7 @@ fn is_equal(values: &[Value], _ctx: &mut Context) -> Result<Value, RuntimeError>
         ));
     };
 
-    Ok(Value {
+    Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
     })
 }
@@ -873,7 +872,12 @@ mod tests {
     fn test_add_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(5.0), create_number_value(3.0)];
-        let result = add(&values, &mut ctx).unwrap();
+        let signal = add(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
 
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 8.0),
@@ -888,25 +892,29 @@ mod tests {
         // Test with wrong number of parameters
         let values = vec![create_number_value(5.0)];
         let result = add(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong value types
         let values = vec![create_string_value("hello"), create_number_value(3.0)];
         let result = add(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with invalid values
         let values = vec![create_invalid_value(), create_number_value(3.0)];
         let result = add(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_multiply_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(4.0), create_number_value(2.5)];
-        let result = multiply(&values, &mut ctx).unwrap();
+        let signal = multiply(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 10.0),
             _ => panic!("Expected NumberValue"),
@@ -918,15 +926,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(true), create_number_value(3.0)];
         let result = multiply(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_substract_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(10.0), create_number_value(4.0)];
-        let result = substract(&values, &mut ctx).unwrap();
+        let signal = substract(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 6.0),
             _ => panic!("Expected NumberValue"),
@@ -938,15 +950,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(5.0)];
         let result = substract(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_divide_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(15.0), create_number_value(3.0)];
-        let result = divide(&values, &mut ctx).unwrap();
+        let signal = divide(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 5.0),
             _ => panic!("Expected NumberValue"),
@@ -958,7 +974,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(10.0), create_number_value(0.0)];
         let result = divide(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -969,15 +985,19 @@ mod tests {
             create_number_value(2.0),
         ];
         let result = divide(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_modulo_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(10.0), create_number_value(3.0)];
-        let result = modulo(&values, &mut ctx).unwrap();
+        let signal = modulo(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 1.0),
             _ => panic!("Expected NumberValue"),
@@ -989,7 +1009,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(10.0), create_number_value(0.0)];
         let result = modulo(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -997,7 +1017,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_invalid_value(), create_number_value(3.0)];
         let result = modulo(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1006,7 +1026,12 @@ mod tests {
 
         // Test positive number
         let values = vec![create_number_value(5.0)];
-        let result = abs(&values, &mut ctx).unwrap();
+        let signal = abs(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 5.0),
             _ => panic!("Expected NumberValue"),
@@ -1014,7 +1039,12 @@ mod tests {
 
         // Test negative number
         let values = vec![create_number_value(-7.5)];
-        let result = abs(&values, &mut ctx).unwrap();
+        let signal = abs(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 7.5),
             _ => panic!("Expected NumberValue"),
@@ -1026,7 +1056,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("not_a_number")];
         let result = abs(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1035,7 +1065,12 @@ mod tests {
 
         // Test positive number
         let values = vec![create_number_value(5.0)];
-        let result = is_positive(&values, &mut ctx).unwrap();
+        let signal = is_positive(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
             _ => panic!("Expected BoolValue"),
@@ -1043,7 +1078,12 @@ mod tests {
 
         // Test negative number
         let values = vec![create_number_value(-5.0)];
-        let result = is_positive(&values, &mut ctx).unwrap();
+        let signal = is_positive(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
             _ => panic!("Expected BoolValue"),
@@ -1051,7 +1091,12 @@ mod tests {
 
         // Test zero
         let values = vec![create_number_value(0.0)];
-        let result = is_positive(&values, &mut ctx).unwrap();
+        let signal = is_positive(&values, &mut ctx);
+
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
             _ => panic!("Expected BoolValue"),
@@ -1063,7 +1108,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(true)];
         let result = is_positive(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1072,7 +1117,11 @@ mod tests {
 
         // Test greater
         let values = vec![create_number_value(10.0), create_number_value(5.0)];
-        let result = is_greater(&values, &mut ctx).unwrap();
+        let signal = is_greater(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
             _ => panic!("Expected BoolValue"),
@@ -1080,7 +1129,11 @@ mod tests {
 
         // Test not greater
         let values = vec![create_number_value(3.0), create_number_value(7.0)];
-        let result = is_greater(&values, &mut ctx).unwrap();
+        let signal = is_greater(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
             _ => panic!("Expected BoolValue"),
@@ -1095,7 +1148,7 @@ mod tests {
             create_string_value("not_a_number"),
         ];
         let result = is_greater(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1104,7 +1157,11 @@ mod tests {
 
         // Test less
         let values = vec![create_number_value(3.0), create_number_value(7.0)];
-        let result = is_less(&values, &mut ctx).unwrap();
+        let signal = is_less(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
             _ => panic!("Expected BoolValue"),
@@ -1112,7 +1169,11 @@ mod tests {
 
         // Test not less
         let values = vec![create_number_value(10.0), create_number_value(5.0)];
-        let result = is_less(&values, &mut ctx).unwrap();
+        let signal = is_less(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
             _ => panic!("Expected BoolValue"),
@@ -1124,7 +1185,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_invalid_value(), create_number_value(5.0)];
         let result = is_less(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1133,7 +1194,11 @@ mod tests {
 
         // Test zero
         let values = vec![create_number_value(0.0)];
-        let result = is_zero(&values, &mut ctx).unwrap();
+        let signal = is_zero(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
             _ => panic!("Expected BoolValue"),
@@ -1141,7 +1206,11 @@ mod tests {
 
         // Test non-zero
         let values = vec![create_number_value(5.0)];
-        let result = is_zero(&values, &mut ctx).unwrap();
+        let signal = is_zero(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
             _ => panic!("Expected BoolValue"),
@@ -1153,15 +1222,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("zero")];
         let result = is_zero(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_square_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(4.0)];
-        let result = square(&values, &mut ctx).unwrap();
+        let signal = square(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 16.0),
             _ => panic!("Expected NumberValue"),
@@ -1173,15 +1246,18 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(false)];
         let result = square(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_exponential_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(2.0), create_number_value(3.0)];
-        let result = exponential(&values, &mut ctx).unwrap();
-
+        let signal = exponential(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 8.0),
             _ => panic!("Expected NumberValue"),
@@ -1193,15 +1269,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(2.0)];
         let result = exponential(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_pi_success() {
         let mut ctx = Context::new();
         let values = vec![];
-        let result = pi(&values, &mut ctx).unwrap();
+        let signal = pi(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => {
                 assert!((val - std::f64::consts::PI).abs() < f64::EPSILON)
@@ -1214,8 +1294,12 @@ mod tests {
     fn test_euler_success() {
         let mut ctx = Context::new();
         let values = vec![];
-        let result = euler(&values, &mut ctx).unwrap();
+        let signal = euler(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => {
                 assert!((val - std::f64::consts::E).abs() < f64::EPSILON)
@@ -1228,8 +1312,12 @@ mod tests {
     fn test_infinity_success() {
         let mut ctx = Context::new();
         let values = vec![];
-        let result = infinity(&values, &mut ctx).unwrap();
+        let signal = infinity(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!(val.is_infinite() && val.is_sign_positive()),
             _ => panic!("Expected NumberValue"),
@@ -1240,8 +1328,12 @@ mod tests {
     fn test_round_up_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.14159), create_number_value(2.0)];
-        let result = round_up(&values, &mut ctx).unwrap();
+        let signal = round_up(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 3.15),
             _ => panic!("Expected NumberValue"),
@@ -1253,15 +1345,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("3.14"), create_number_value(2.0)];
         let result = round_up(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_round_down_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.14159), create_number_value(2.0)];
-        let result = round_down(&values, &mut ctx).unwrap();
+        let signal = round_down(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 3.14),
             _ => panic!("Expected NumberValue"),
@@ -1273,15 +1369,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.14), create_invalid_value()];
         let result = round_down(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_round_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.14159), create_number_value(2.0)];
-        let result = round(&values, &mut ctx).unwrap();
+        let signal = round(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 3.14),
             _ => panic!("Expected NumberValue"),
@@ -1293,15 +1393,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(true), create_number_value(2.0)];
         let result = round(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_square_root_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(16.0)];
-        let result = square_root(&values, &mut ctx).unwrap();
+        let signal = square_root(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 4.0),
             _ => panic!("Expected NumberValue"),
@@ -1313,15 +1417,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("sixteen")];
         let result = square_root(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_root_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(8.0), create_number_value(1.0 / 3.0)];
-        let result = root(&values, &mut ctx).unwrap();
+        let signal = root(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 2.0).abs() < 0.001),
             _ => panic!("Expected NumberValue"),
@@ -1333,15 +1441,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(8.0)];
         let result = root(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_log_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(100.0), create_number_value(10.0)];
-        let result = log(&values, &mut ctx).unwrap();
+        let signal = log(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 2.0).abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1353,15 +1465,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_invalid_value(), create_number_value(10.0)];
         let result = log(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_ln_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(std::f64::consts::E)];
-        let result = ln(&values, &mut ctx).unwrap();
+        let signal = ln(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 1.0).abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1373,15 +1489,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(true)];
         let result = ln(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_from_text_success() {
         let mut ctx = Context::new();
         let values = vec![create_string_value("42.5")];
-        let result = from_text(&values, &mut ctx).unwrap();
+        let signal = from_text(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 42.5),
             _ => panic!("Expected NumberValue"),
@@ -1395,20 +1515,23 @@ mod tests {
         // Test with invalid string
         let values = vec![create_string_value("not_a_number")];
         let result = from_text(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
 
         // Test with wrong type
         let values = vec![create_number_value(42.0)];
         let result = from_text(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_as_text_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(42.5)];
-        let result = as_text(&values, &mut ctx).unwrap();
-
+        let signal = as_text(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::StringValue(val)) => assert_eq!(val, "42.5"),
             _ => panic!("Expected StringValue"),
@@ -1420,15 +1543,18 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("already_text")];
         let result = as_text(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_min_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.0), create_number_value(7.0)];
-        let result = min(&values, &mut ctx).unwrap();
-
+        let signal = min(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 3.0),
             _ => panic!("Expected NumberValue"),
@@ -1440,15 +1566,18 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.0), create_bool_value(false)];
         let result = min(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_max_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(3.0), create_number_value(7.0)];
-        let result = max(&values, &mut ctx).unwrap();
-
+        let signal = max(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 7.0),
             _ => panic!("Expected NumberValue"),
@@ -1460,7 +1589,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("three"), create_number_value(7.0)];
         let result = max(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1469,7 +1598,11 @@ mod tests {
 
         // Test positive number
         let values = vec![create_number_value(5.0)];
-        let result = negate(&values, &mut ctx).unwrap();
+        let signal = negate(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, -5.0),
             _ => panic!("Expected NumberValue"),
@@ -1477,7 +1610,11 @@ mod tests {
 
         // Test negative number
         let values = vec![create_number_value(-3.0)];
-        let result = negate(&values, &mut ctx).unwrap();
+        let signal = negate(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 3.0),
             _ => panic!("Expected NumberValue"),
@@ -1489,15 +1626,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_invalid_value()];
         let result = negate(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_random_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(1.0), create_number_value(10.0)];
-        let result = random(&values, &mut ctx).unwrap();
+        let signal = random(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => {
                 assert!(val >= 1.0 && val < 10.0);
@@ -1511,15 +1652,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(1.0), create_string_value("ten")];
         let result = random(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_sin_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(std::f64::consts::PI / 2.0)];
-        let result = sin(&values, &mut ctx).unwrap();
+        let signal = sin(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 1.0).abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1531,15 +1676,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(true)];
         let result = sin(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_cos_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(0.0)];
-        let result = cos(&values, &mut ctx).unwrap();
+        let signal = cos(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 1.0).abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1551,15 +1700,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("zero")];
         let result = cos(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_tan_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(std::f64::consts::PI / 4.0)];
-        let result = tan(&values, &mut ctx).unwrap();
+        let signal = tan(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 1.0).abs() < 0.0001),
             _ => panic!("Expected NumberValue"),
@@ -1571,15 +1724,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_invalid_value()];
         let result = tan(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_arcsin_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(1.0)];
-        let result = arcsin(&values, &mut ctx).unwrap();
+        let signal = arcsin(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => {
                 assert!((val - std::f64::consts::PI / 2.0).abs() < f64::EPSILON)
@@ -1593,15 +1750,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(false)];
         let result = arcsin(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_arccos_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(1.0)];
-        let result = arccos(&values, &mut ctx).unwrap();
+        let signal = arccos(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!(val.abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1613,15 +1774,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("one")];
         let result = arccos(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_arctan_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(1.0)];
-        let result = arctan(&values, &mut ctx).unwrap();
+        let signal = arctan(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => {
                 assert!((val - std::f64::consts::PI / 4.0).abs() < f64::EPSILON)
@@ -1635,15 +1800,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_invalid_value()];
         let result = arctan(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_sinh_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(0.0)];
-        let result = sinh(&values, &mut ctx).unwrap();
+        let signal = sinh(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!(val.abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1655,15 +1824,19 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_bool_value(true)];
         let result = sinh(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
     fn test_cosh_success() {
         let mut ctx = Context::new();
         let values = vec![create_number_value(0.0)];
-        let result = cosh(&values, &mut ctx).unwrap();
+        let signal = cosh(&values, &mut ctx);
 
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert!((val - 1.0).abs() < f64::EPSILON),
             _ => panic!("Expected NumberValue"),
@@ -1675,7 +1848,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_string_value("zero")];
         let result = cosh(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1688,7 +1861,11 @@ mod tests {
             create_number_value(1.0),
             create_number_value(10.0),
         ];
-        let result = clamp(&values, &mut ctx).unwrap();
+        let signal = clamp(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 5.0),
             _ => panic!("Expected NumberValue"),
@@ -1700,7 +1877,11 @@ mod tests {
             create_number_value(1.0),
             create_number_value(10.0),
         ];
-        let result = clamp(&values, &mut ctx).unwrap();
+        let signal = clamp(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 1.0),
             _ => panic!("Expected NumberValue"),
@@ -1712,7 +1893,11 @@ mod tests {
             create_number_value(1.0),
             create_number_value(10.0),
         ];
-        let result = clamp(&values, &mut ctx).unwrap();
+        let signal = clamp(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::NumberValue(val)) => assert_eq!(val, 10.0),
             _ => panic!("Expected NumberValue"),
@@ -1724,7 +1909,7 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(5.0), create_string_value("one")];
         let result = clamp(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 
     #[test]
@@ -1733,7 +1918,11 @@ mod tests {
 
         // Test equal numbers
         let values = vec![create_number_value(5.0), create_number_value(5.0)];
-        let result = is_equal(&values, &mut ctx).unwrap();
+        let signal = is_equal(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, true),
             _ => panic!("Expected BoolValue"),
@@ -1741,7 +1930,11 @@ mod tests {
 
         // Test unequal numbers
         let values = vec![create_number_value(5.0), create_number_value(3.0)];
-        let result = is_equal(&values, &mut ctx).unwrap();
+        let signal = is_equal(&values, &mut ctx);
+        let result = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success!"),
+        };
         match result.kind {
             Some(Kind::BoolValue(val)) => assert_eq!(val, false),
             _ => panic!("Expected BoolValue"),
@@ -1753,6 +1946,6 @@ mod tests {
         let mut ctx = Context::new();
         let values = vec![create_number_value(5.0), create_bool_value(true)];
         let result = is_equal(&values, &mut ctx);
-        assert!(result.is_err());
+        assert_eq!(result, Signal::Failure(RuntimeError::default()));
     }
 }

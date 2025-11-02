@@ -14,15 +14,17 @@ pub struct Executor<'a> {
 type HandleNodeParameterFn = fn(&mut Executor, node_parameter: &NodeParameter) -> Signal;
 
 impl<'a> Executor<'a> {
- 
-    pub fn new(functions: &'a FunctionStore, nodes: HashMap<i64, NodeFunction>, context: Context) -> Self {
+    pub fn new(
+        functions: &'a FunctionStore,
+        nodes: HashMap<i64, NodeFunction>,
+        context: Context,
+    ) -> Self {
         Executor {
             functions,
             nodes,
-            context
+            context,
         }
     }
-
 
     pub fn execute(&mut self, starting_node_id: i64) -> Signal {
         let mut current_node_id = starting_node_id;
@@ -47,7 +49,7 @@ impl<'a> Executor<'a> {
                     }
                     Signal::Failure(error) => return Signal::Failure(error),
                     Signal::Stop => return Signal::Stop,
-                    Signal::Respond(value) => return Signal::Respond(value)
+                    Signal::Respond(value) => return Signal::Respond(value),
                 }
             }
 
@@ -91,16 +93,22 @@ impl<'a> Executor<'a> {
 
         let value = match &node_value.value {
             Some(v) => v,
-            None => return Signal::Failure(RuntimeError::simple_str("NodeValueNotFound", "An error occurred while executing a flow!")) 
+            None => {
+                return Signal::Failure(RuntimeError::simple_str(
+                    "NodeValueNotFound",
+                    "An error occurred while executing a flow!",
+                ));
+            }
         };
 
         match value {
-            tucana::shared::node_value::Value::LiteralValue(value) => return Signal::Success(value.clone()),
-            tucana::shared::node_value::Value::ReferenceValue(_reference_value) => todo!("implement reference values!"),
-            tucana::shared::node_value::Value::NodeFunctionId(id) => {
-                return Executor::execute(self, *id)
-            },
+            tucana::shared::node_value::Value::LiteralValue(value) => {
+                Signal::Success(value.clone())
+            }
+            tucana::shared::node_value::Value::ReferenceValue(_reference_value) => {
+                todo!("implement reference values!")
+            }
+            tucana::shared::node_value::Value::NodeFunctionId(id) => Executor::execute(self, *id),
         }
     }
 }
-

@@ -1,5 +1,5 @@
-use tucana::shared::Value;
 use crate::error::RuntimeError;
+use tucana::shared::Value;
 
 #[derive(Debug)]
 pub enum Signal {
@@ -15,12 +15,12 @@ pub enum Signal {
     // - will break the current context and return the value to the upper node
     Return(Value),
     // Will be signaled if the `respond` function has been executed
-    // - will stop the execution of the flow completly 
+    // - will stop the execution of the flow completly
     // - will return the value to the adapter
     Respond(Value),
     // Will be signaled if the `stop` function has been executed
-    // - will stop the execution of the flow completly 
-    Stop
+    // - will stop the execution of the flow completly
+    Stop,
 }
 
 impl PartialEq for Signal {

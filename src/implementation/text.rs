@@ -109,10 +109,10 @@ fn capitalize(values: &[Value], _ctx: &mut Context) -> Signal {
             }
 
             if word.len() == 1 {
-                return String::from(word.to_uppercase());
+                return word.to_uppercase();
             }
 
-            let first = word.chars().nth(0);
+            let first = word.chars().next();
 
             if first.is_some() {
                 let first = first.unwrap();
@@ -262,8 +262,8 @@ fn at(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     }
 
-    let usize_index = index.clone() as usize;
-    let char = value.chars().into_iter().nth(usize_index);
+    let usize_index = *index as usize;
+    let char = value.chars().nth(usize_index);
 
     match char {
         Some(c) => Signal::Success(Value {
@@ -368,7 +368,7 @@ fn insert(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let usize_position = position.clone() as usize;
+    let usize_position = *position as usize;
     let mut new_value = value.clone();
     new_value.insert_str(usize_position, text.as_str());
 
@@ -420,12 +420,12 @@ fn remove(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let chars = value.chars().into_iter().collect::<Vec<char>>();
+    let chars = value.chars().collect::<Vec<char>>();
 
     let new = chars
         .into_iter()
         .enumerate()
-        .filter(|&(i, _)| i < from.clone() as usize || i >= to.clone() as usize)
+        .filter(|&(i, _)| i < *from as usize || i >= *to as usize)
         .map(|e| e.1)
         .collect::<String>();
 
@@ -799,8 +799,8 @@ fn from_ascii(values: &[Value], _ctx: &mut Context) -> Signal {
                 kind: Some(Kind::NumberValue(number)),
             } = number_value
             {
-                if number >= &0.0 && number <= &127.0 {
-                    Some(number.clone() as u8 as char)
+                if (&0.0..=&127.0).contains(&number) {
+                    Some(*number as u8 as char)
                 } else {
                     None
                 }

@@ -1,7 +1,7 @@
 use tucana::shared::Value;
 
-use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 use crate::context::signal::Signal;
+use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
 
 pub fn collect_control_functions() -> Vec<(&'static str, HandlerFn)> {
     vec![

@@ -27,7 +27,7 @@ fn as_number(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.clone() as i64 as f64)),
+        kind: Some(Kind::NumberValue(*value as i64 as f64)),
     })
 }
 

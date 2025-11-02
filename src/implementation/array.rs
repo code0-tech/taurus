@@ -54,7 +54,7 @@ fn at(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let item = array.values[index.clone() as usize].clone();
+    let item = array.values[*index as usize].clone();
 
     Signal::Success(item)
 }
@@ -709,7 +709,7 @@ fn min(values: &[Value], _ctx: &mut Context) -> Signal {
 
     match min {
         Some(min) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(min.clone())),
+            kind: Some(Kind::NumberValue(*min)),
         }),
         None => Signal::Failure(RuntimeError::simple(
             "ArrayEmptyRuntimeError",
@@ -748,7 +748,7 @@ fn max(values: &[Value], _ctx: &mut Context) -> Signal {
 
     match max {
         Some(max) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(max.clone())),
+            kind: Some(Kind::NumberValue(*max)),
         }),
         None => Signal::Failure(RuntimeError::simple(
             "ArrayEmptyRuntimeError",
@@ -817,7 +817,7 @@ fn join(values: &[Value], _ctx: &mut Context) -> Signal {
         }
     });
 
-    let joined = collector.join(&separator);
+    let joined = collector.join(separator);
 
     Signal::Success(Value {
         kind: Some(Kind::StringValue(joined)),

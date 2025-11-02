@@ -3,10 +3,10 @@ use crate::registry::HandlerFn;
 mod array;
 mod boolean;
 mod control;
+mod http;
 mod number;
 mod object;
 mod text;
-mod http;
 
 pub fn collect() -> Vec<(&'static str, HandlerFn)> {
     let mut result = vec![];

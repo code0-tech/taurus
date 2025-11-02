@@ -152,7 +152,7 @@ fn create_response(values: &[Value], _ctx: &mut Context) -> Signal {
     fields.insert(
         "status_code".to_string(),
         Value {
-            kind: Some(Kind::NumberValue(http_status_code.clone())),
+            kind: Some(Kind::NumberValue(*http_status_code)),
         },
     );
 
@@ -168,4 +168,3 @@ fn create_response(values: &[Value], _ctx: &mut Context) -> Signal {
         kind: Some(Kind::StructValue(Struct { fields })),
     })
 }
-

@@ -1,13 +1,19 @@
-use crate::{context::Context};
+use crate::context::Context;
+use crate::context::signal::Signal;
 use std::collections::HashMap;
 use tucana::shared::Value;
-use crate::context::signal::Signal;
 
 pub type HandlerFn = fn(&[Value], &mut Context) -> Signal;
 
 /// Holds all registered handlers.
 pub struct FunctionStore {
     functions: HashMap<String, HandlerFn>,
+}
+
+impl Default for FunctionStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FunctionStore {

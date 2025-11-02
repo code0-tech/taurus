@@ -20,25 +20,16 @@ use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
 
-fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Option<Value> {
+fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
     let context = Context::new();
 
     let node_functions: HashMap<i64, NodeFunction> = flow
         .node_functions
         .into_iter()
-        .map(|node| return (node.database_id, node))
+        .map(|node| (node.database_id, node))
         .collect();
 
-    let mut executor = Executor::new(store, node_functions, context);
-    match executor.execute(flow.starting_node_id) {
-        Signal::Success(v) => Some(v.clone()),
-        Signal::Respond(v) => Some(v.clone()),
-        Signal::Failure(error ) => {
-            log::error!("{:?}", error);
-            None
-        }
-        _ => None,
-    }
+    Executor::new(store, node_functions, context).execute(flow.starting_node_id)
 }
 
 #[tokio::main]
@@ -80,7 +71,7 @@ async fn main() {
         println!("Health server started at {}", address);
     }
 
-    let _ = match client
+    match client
         .queue_subscribe(String::from("execution.*"), "taurus".into())
         .await
     {
@@ -97,16 +88,13 @@ async fn main() {
                 };
 
                 let value = match handle_message(flow, &store) {
-                    None => {
-                        log::error!("Failed to handle message");
-                        Value {
-                            kind: Some(Kind::NullValue(0)),
-                        }
-                    }
-                    Some(v) => {
-                        log::info!("Handled message successfully");
-                        v
-                    }
+                    Signal::Failure(error) => error.as_value(),
+                    Signal::Success(v) => v,
+                    Signal::Return(v) => v,
+                    Signal::Respond(v) => v,
+                    Signal::Stop => Value {
+                        kind: Some(Kind::NullValue(0)),
+                    },
                 };
 
                 // Send a response to the reply subject

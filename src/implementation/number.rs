@@ -322,7 +322,7 @@ fn exponential(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(base.powf(exponent.clone()))),
+        kind: Some(Kind::NumberValue(base.powf(*exponent))),
     })
 }
 
@@ -363,7 +363,7 @@ fn round_up(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let factor = 10_f64.powi(decimal_places.clone() as i32);
+    let factor = 10_f64.powi(*decimal_places as i32);
 
     Signal::Success(Value {
         kind: Some(Kind::NumberValue((value * factor).ceil() / factor)),
@@ -389,7 +389,7 @@ fn round_down(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let factor = 10_f64.powi(decimal_places.clone() as i32);
+    let factor = 10_f64.powi(*decimal_places as i32);
 
     Signal::Success(Value {
         kind: Some(Kind::NumberValue((value * factor).floor() / factor)),
@@ -415,7 +415,7 @@ fn round(values: &[Value], _ctx: &mut Context) -> Signal {
         ));
     };
 
-    let factor = 10_f64.powi(decimal_places.clone() as i32);
+    let factor = 10_f64.powi(*decimal_places as i32);
 
     Signal::Success(Value {
         kind: Some(Kind::NumberValue((value * factor).round() / factor)),
@@ -460,7 +460,7 @@ fn root(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.powf(root.clone()))),
+        kind: Some(Kind::NumberValue(value.powf(*root))),
     })
 }
 
@@ -484,7 +484,7 @@ fn log(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.log(log.clone()))),
+        kind: Some(Kind::NumberValue(value.log(*log))),
     })
 }
 
@@ -572,7 +572,7 @@ fn min(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs.min(rhs.clone()))),
+        kind: Some(Kind::NumberValue(lhs.min(*rhs))),
     })
 }
 
@@ -596,7 +596,7 @@ fn max(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs.max(rhs.clone()))),
+        kind: Some(Kind::NumberValue(lhs.max(*rhs))),
     })
 }
 
@@ -638,9 +638,7 @@ fn random(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(rand::random_range(
-            min.clone()..max.clone(),
-        ))),
+        kind: Some(Kind::NumberValue(rand::random_range(*min..*max))),
     })
 }
 
@@ -810,7 +808,7 @@ fn clamp(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.clamp(min.clone(), max.clone()))),
+        kind: Some(Kind::NumberValue(value.clamp(*min, *max))),
     })
 }
 

@@ -106,7 +106,7 @@ impl<'a> Executor<'a> {
                 Signal::Success(value.clone())
             }
             tucana::shared::node_value::Value::ReferenceValue(_reference_value) => {
-                todo!("implement reference values!")
+                unimplemented!("implement reference values!")
             }
             tucana::shared::node_value::Value::NodeFunctionId(id) => Executor::execute(self, *id),
         }

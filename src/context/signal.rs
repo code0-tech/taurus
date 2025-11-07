@@ -6,20 +6,20 @@ pub enum Signal {
     // Will be signaled if a function has been executed successfully
     Success(Value),
     // Will be signaled if
-    // - a function recieves wrong parameter
+    // - a function receives wrong parameter
     // - a function throws an error
-    // - taurus itself throwns an error
-    // - will stop the execution of the flow completly
+    // - taurus itself throws an error
+    // - will stop the execution of the flow completely
     Failure(RuntimeError),
     // Will be signaled if the `return` function has been executed
     // - will break the current context and return the value to the upper node
     Return(Value),
     // Will be signaled if the `respond` function has been executed
-    // - will stop the execution of the flow completly
+    // - will stop the execution of the flow completely
     // - will return the value to the adapter
     Respond(Value),
     // Will be signaled if the `stop` function has been executed
-    // - will stop the execution of the flow completly
+    // - will stop the execution of the flow completely
     Stop,
 }
 

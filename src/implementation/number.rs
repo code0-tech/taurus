@@ -3,9 +3,9 @@ use std::f64;
 use tucana::shared::{Value, value::Kind};
 
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
+use crate::{context::Context, error::RuntimeError};
 
-pub fn collect_number_functions() -> Vec<(&'static str, HandlerFn)> {
+pub fn collect_number_functions() -> Vec<(&'static str, )> {
     vec![
         ("std::number::add", add),
         ("std::number::multiply", multiply),

@@ -31,7 +31,7 @@ fn r#if(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StringValue(text)),
-        },
+        }
     ] = values
     else {
         return Signal::Failure(RuntimeError::simple(
@@ -51,9 +51,11 @@ fn r#if(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     if bool {
-        unimplemented!()
+    //    Signal::Skip(vec![0])
     } else {
-        unimplemented!()
+   //     Signal::Return(Value {
+   //         kind: Some(Kind::NullValue(0)),
+   //     })
     }
 }
 
@@ -61,7 +63,7 @@ fn if_else(values: &[Value], _ctx: &mut Context) -> Signal {
     let [
         Value {
             kind: Some(Kind::StringValue(text)),
-        },
+        }
     ] = values
     else {
         return Signal::Failure(RuntimeError::simple(
@@ -81,8 +83,8 @@ fn if_else(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     if bool {
-        unimplemented!()
+    //    Signal::Skip(vec![1])
     } else {
-        unimplemented!()
+   //     Signal::Skip(vec![0])
     }
 }

@@ -1,31 +1,22 @@
 use crate::context::Context;
 use crate::context::signal::Signal;
 use crate::error::RuntimeError;
-use crate::registry::HandlerFn;
 use tucana::shared::value::Kind;
 use tucana::shared::{Struct, Value};
+use crate::context::argument::Argument;
+use crate::context::macros::args;
+use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 
-pub fn collect_http_functions() -> Vec<(&'static str, HandlerFn)> {
+pub fn collect_http_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
-        ("http::request::create", create_request),
-        ("http::response::create", create_response),
-        ("http::control::respond", respond),
+        ("http::request::create", HandlerFn::eager(create_request, 1)),
+        ("http::response::create", HandlerFn::eager(create_response, 4)),
+        ("http::control::respond", HandlerFn::eager(respond, 3)),
     ]
 }
 
-fn respond(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::StructValue(struct_val)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected exactly one response struct, got {:?}", values),
-        ));
-    };
-
+fn respond(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => struct_val: Struct);
     let fields = &struct_val.fields;
 
     let Some(headers_val) = fields.get("headers") else {
@@ -75,29 +66,8 @@ fn respond(values: &[Value], _ctx: &mut Context) -> Signal {
     })
 }
 
-fn create_request(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::StringValue(http_method)),
-        },
-        Value {
-            kind: Some(Kind::StructValue(headers)),
-        },
-        Value {
-            kind: Some(Kind::StringValue(http_url)),
-        },
-        payload,
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected [method, headers, url, payload] but received {:?}",
-                values
-            ),
-        ));
-    };
-
+fn create_request(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
     fields.insert(
@@ -127,32 +97,14 @@ fn create_request(values: &[Value], _ctx: &mut Context) -> Signal {
     })
 }
 
-fn create_response(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::NumberValue(http_status_code)),
-        },
-        Value {
-            kind: Some(Kind::StructValue(headers)),
-        },
-        payload,
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected [http_status_code, headers, payload] but received {:?}",
-                values
-            ),
-        ));
-    };
-
+fn create_response(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => http_status_code: f64, headers: Struct, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
     fields.insert(
         "status_code".to_string(),
         Value {
-            kind: Some(Kind::NumberValue(*http_status_code)),
+            kind: Some(Kind::NumberValue(http_status_code)),
         },
     );
 

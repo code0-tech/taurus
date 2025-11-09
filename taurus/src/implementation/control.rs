@@ -1,42 +1,48 @@
+use crate::context::Context;
+use crate::context::argument::Argument;
+use crate::context::argument::ParameterNode::{Eager, Lazy};
+use crate::context::macros::args;
+use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
+use crate::error::RuntimeError;
 use tucana::shared::Value;
 use tucana::shared::value::Kind;
 
-pub fn collect_control_functions() -> Vec<(&'static str, HandlerFn)> {
+pub fn collect_control_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
-        ("std::control::stop", stop),
-        ("std::control::return", r#return),
-        ("std::control::if", r#if),
-        ("std::control::if_else", if_else),
+        ("std::control::stop", HandlerFn::eager(stop, 0)),
+        ("std::control::return", HandlerFn::eager(r#return, 1)),
+        (
+            "std::control::if",
+            HandlerFn::into_function_entry(r#if, vec![Eager, Lazy]),
+        ),
+        (
+            "std::control::if_else",
+            HandlerFn::into_function_entry(if_else, vec![Eager, Lazy, Lazy]),
+        ),
     ]
 }
 
-fn stop(_values: &[Value], _ctx: &mut Context) -> Signal {
+fn stop(_args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
     Signal::Stop
 }
 
-fn r#return(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [Value { kind }] = values else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected one generic value but received {:?}", values),
-        ));
-    };
-
-    Signal::Return(Value { kind: kind.clone() })
+fn r#return(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => value: Value);
+    Signal::Return(value)
 }
 
-fn r#if(values: &[Value], _ctx: &mut Context) -> Signal {
+fn r#if(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
     let [
-        Value {
+        Argument::Eval(Value {
             kind: Some(Kind::StringValue(text)),
-        }
-    ] = values
+        }),
+        Argument::Thunk(if_pointer),
+    ] = args
     else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!("Expected a string value but received {:?}", values),
+            format!("Expected a string value but received {:?}", args),
         ));
     };
 
@@ -51,24 +57,26 @@ fn r#if(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     if bool {
-    //    Signal::Skip(vec![0])
+        _run(*if_pointer)
     } else {
-   //     Signal::Return(Value {
-   //         kind: Some(Kind::NullValue(0)),
-   //     })
+        Signal::Return(Value {
+            kind: Some(Kind::NullValue(0)),
+        })
     }
 }
 
-fn if_else(values: &[Value], _ctx: &mut Context) -> Signal {
+fn if_else(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
     let [
-        Value {
+        Argument::Eval(Value {
             kind: Some(Kind::StringValue(text)),
-        }
-    ] = values
+        }),
+        Argument::Thunk(if_pointer),
+        Argument::Thunk(else_pointer),
+    ] = args
     else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!("Expected a string value but received {:?}", values),
+            format!("Expected a string value but received {:?}", args),
         ));
     };
 
@@ -83,8 +91,8 @@ fn if_else(values: &[Value], _ctx: &mut Context) -> Signal {
     };
 
     if bool {
-    //    Signal::Skip(vec![1])
+        _run(*if_pointer)
     } else {
-   //     Signal::Skip(vec![0])
+        _run(*else_pointer)
     }
 }

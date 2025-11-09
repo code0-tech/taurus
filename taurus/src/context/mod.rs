@@ -3,6 +3,7 @@ pub mod signal;
 pub mod argument;
 pub mod executor;
 pub mod registry;
+pub mod macros;
 
 use crate::error::RuntimeError;
 use std::{

@@ -1,287 +1,234 @@
 use std::cmp::Ordering;
 
-use tucana::shared::{Value, value::Kind};
+use tucana::shared::{value::Kind, ListValue, Value};
 
+use crate::context::argument::Argument;
+use crate::context::macros::args;
+use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError, };
-use crate::context::registry::HandlerFn;
+use crate::{context::Context, error::RuntimeError};
 
-pub fn collect_array_functions() -> Vec<(&'static str, HandlerFn)> {
+pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
-        ("std::array::at", at),
-        ("std::array::concat", concat),
-        ("std::array::filter", filter),
-        ("std::array::find", find),
-        ("std::array::find_last", find_last),
-        ("std::array::find_index", find_index),
-        ("std::array::first", first),
-        ("std::array::last", last),
-        ("std::array::for_each", for_each),
-        ("std::array::map", map),
-        ("std::array::push", push),
-        ("std::array::pop", pop),
-        ("std::array::remove", remove),
-        ("std::array::is_empty", is_empty),
-        ("std::array::size", size),
-        ("std::array::index_of", index_of),
-        ("std::array::to_unique", to_unique),
-        ("std::array::sort", sort),
-        ("std::array::sort_reverse", sort_reverse),
-        ("std::array::reverse", reverse),
-        ("std::array::flat", flat),
-        ("std::array::min", min),
-        ("std::array::max", max),
-        ("std::array::sum", sum),
-        ("std::array::join", join),
+        ("std::array::at", HandlerFn::eager(at, 2)),
+        ("std::array::concat", HandlerFn::eager(concat, 2)),
+        ("std::array::filter", HandlerFn::eager(filter, 2)),
+        ("std::array::find", HandlerFn::eager(find, 2)),
+        ("std::array::find_last", HandlerFn::eager(find_last, 2)),
+        ("std::array::find_index", HandlerFn::eager(find_index, 2)),
+        ("std::array::first", HandlerFn::eager(first, 1)),
+        ("std::array::last", HandlerFn::eager(last, 1)),
+        ("std::array::for_each", HandlerFn::eager(for_each, 0)),
+        ("std::array::map", HandlerFn::eager(map, 2)),
+        ("std::array::push", HandlerFn::eager(push, 2)),
+        ("std::array::pop", HandlerFn::eager(pop, 1)),
+        ("std::array::remove", HandlerFn::eager(remove, 2)),
+        ("std::array::is_empty", HandlerFn::eager(is_empty, 1)),
+        ("std::array::size", HandlerFn::eager(size, 1)),
+        ("std::array::index_of", HandlerFn::eager(index_of, 2)),
+        ("std::array::to_unique", HandlerFn::eager(to_unique, 1)),
+        ("std::array::sort", HandlerFn::eager(sort, 2)),
+        ("std::array::sort_reverse", HandlerFn::eager(sort_reverse, 2)),
+        ("std::array::reverse", HandlerFn::eager(reverse, 1)),
+        ("std::array::flat", HandlerFn::eager(flat, 1)),
+        ("std::array::min", HandlerFn::eager(min, 1)),
+        ("std::array::max", HandlerFn::eager(max, 1)),
+        ("std::array::sum", HandlerFn::eager(sum, 1)),
+        ("std::array::join", HandlerFn::eager(join, 2)),
     ]
 }
 
-fn at(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::NumberValue(index)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected a list and a number as arguments but received {:?}",
-                values
-            ),
+fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    // array, index
+    args!(args => array: ListValue, index: f64);
+
+    if index < 0.0 {
+        return Signal::Failure(RuntimeError::simple_str(
+            "IndexOutOfBoundsRuntimeError",
+            "Negative index",
         ));
-    };
-
-    let item = array.values[*index as usize].clone();
-
-    Signal::Success(item)
+    }
+    let i = index as usize;
+    match array.values.get(i) {
+        Some(item) => Signal::Success(item.clone()),
+        None => Signal::Failure(RuntimeError::simple(
+            "IndexOutOfBoundsRuntimeError",
+            format!("Index {} out of bounds (len={})", i, array.values.len()),
+        )),
+    }
 }
 
-fn concat(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(lhs)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(rhs)),
-        },
-    ] = values
-    else {
+fn concat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => lhs_v: Value, rhs_v: Value);
+
+    let Kind::ListValue(lhs) = lhs_v.kind.clone().ok_or_else(|| ()).unwrap_or_else(|_| Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
+            format!("Expected two arrays as arguments but received lhs={:?}", lhs_v),
+        ));
+    };
+    let Kind::ListValue(rhs) = rhs_v.kind.clone().ok_or_else(|| ()).unwrap_or_else(|_| Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!("Expected two arrays as arguments but received rhs={:?}", rhs_v),
         ));
     };
 
     let mut result = lhs.values.clone();
-    result.extend(rhs.values.clone());
+    result.extend(rhs.values.iter().cloned());
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: result,
-        })),
+        kind: Some(Kind::ListValue(ListValue { values: result })),
     })
 }
 
-fn filter(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(resolved_predicate)),
-        },
-    ] = values
-    else {
+fn filter(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, predicate_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
+            "Expected first argument to be an array".to_string(),
+        ));
+    };
+    let Kind::ListValue(resolved_predicate) = predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            "Expected second argument to be an array of booleans".to_string(),
         ));
     };
 
-    let mut predicate_collector = vec![];
-    resolved_predicate.values.iter().for_each(|v| {
-        if let Value {
-            kind: Some(Kind::BoolValue(pred)),
-        } = v.clone()
-        {
-            predicate_collector.push(pred);
+    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
+    for v in &resolved_predicate.values {
+        if let Some(Kind::BoolValue(b)) = v.kind {
+            preds.push(b);
         }
-    });
+    }
 
-    let mut index = 0;
+    let mut i = 0usize;
     let new_array = array
         .values
-        .clone()
-        .into_iter()
+        .iter()
         .filter(|_| {
-            let predicate = predicate_collector[index];
-            index += 1;
-            predicate
+            let keep = *preds.get(i).unwrap_or(&false);
+            i += 1;
+            keep
         })
+        .cloned()
         .collect::<Vec<Value>>();
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: new_array,
-        })),
+        kind: Some(Kind::ListValue(ListValue { values: new_array })),
     })
 }
 
-fn find(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(resolved_predicate)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
-        ));
+fn find(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, predicate_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected first argument to be an array"));
+    };
+    let Kind::ListValue(resolved_predicate) = predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected second argument to be an array of booleans"));
     };
 
-    let mut predicate_collector = vec![];
-    resolved_predicate.values.iter().for_each(|v| {
-        if let Value {
-            kind: Some(Kind::BoolValue(pred)),
-        } = v.clone()
-        {
-            predicate_collector.push(pred);
+    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
+    for v in &resolved_predicate.values {
+        if let Some(Kind::BoolValue(b)) = v.kind {
+            preds.push(b);
         }
-    });
+    }
 
-    let mut index = 0;
-    let item = array.values.clone().into_iter().find(|_| {
-        let predicate = predicate_collector[index];
-        index += 1;
-        predicate
+    let mut i = 0usize;
+    let item = array.values.iter().cloned().find(|_| {
+        let keep = *preds.get(i).unwrap_or(&false);
+        i += 1;
+        keep
     });
 
     match item {
-        Some(item) => Signal::Success(item),
-        None => Signal::Failure(RuntimeError::simple(
+        Some(v) => Signal::Success(v),
+        None => Signal::Failure(RuntimeError::simple_str(
             "NotFoundError",
-            "No item found that satisfies the predicate".to_string(),
+            "No item found that satisfies the predicate",
         )),
     }
 }
 
-fn find_last(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(resolved_predicate)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
-        ));
+fn find_last(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, predicate_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected first argument to be an array"));
+    };
+    let Kind::ListValue(resolved_predicate) = predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected second argument to be an array of booleans"));
     };
 
-    let mut predicate_collector = vec![];
-    resolved_predicate.values.iter().for_each(|v| {
-        if let Value {
-            kind: Some(Kind::BoolValue(pred)),
-        } = v.clone()
-        {
-            predicate_collector.push(pred);
+    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
+    for v in &resolved_predicate.values {
+        if let Some(Kind::BoolValue(b)) = v.kind {
+            preds.push(b);
         }
-    });
+    }
 
-    let mut index = 0;
-    let mut new_array = array.values.clone();
-    new_array.reverse();
+    let mut i = 0usize;
+    let mut reversed = array.values.clone();
+    reversed.reverse();
 
-    let item = new_array.into_iter().find(|_| {
-        let predicate = predicate_collector[index];
-        index += 1;
-        predicate
+    let item = reversed.into_iter().find(|_| {
+        let keep = *preds.get(i).unwrap_or(&false);
+        i += 1;
+        keep
     });
 
     match item {
-        Some(item) => Signal::Success(item),
-        None => Signal::Failure(RuntimeError::simple(
+        Some(v) => Signal::Success(v),
+        None => Signal::Failure(RuntimeError::simple_str(
             "NotFoundError",
-            "No item found that satisfies the predicate".to_string(),
+            "No item found that satisfies the predicate",
         )),
     }
 }
 
-fn find_index(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(resolved_predicate)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
-        ));
+fn find_index(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, predicate_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected first argument to be an array"));
+    };
+    let Kind::ListValue(resolved_predicate) = predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected second argument to be an array of booleans"));
     };
 
-    let mut predicate_collector = vec![];
-    resolved_predicate.values.iter().for_each(|v| {
-        if let Value {
-            kind: Some(Kind::BoolValue(pred)),
-        } = v.clone()
-        {
-            predicate_collector.push(pred);
+    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
+    for v in &resolved_predicate.values {
+        if let Some(Kind::BoolValue(b)) = v.kind {
+            preds.push(b);
         }
+    }
+
+    let mut idx = 0usize;
+    let found = array.values.iter().find(|_| {
+        let keep = *preds.get(idx).unwrap_or(&false);
+        if !keep {
+            idx += 1;
+        }
+        keep
     });
 
-    let mut index = 0;
-    let new_array = array.values.clone();
-
-    let item = new_array.into_iter().find(|_| {
-        let predicate = predicate_collector[index];
-
-        if !predicate {
-            index += 1;
-        }
-        predicate
-    });
-
-    match item {
+    match found {
         Some(_) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(index as f64)),
+            kind: Some(Kind::NumberValue(idx as f64)),
         }),
-        None => Signal::Failure(RuntimeError::simple(
+        None => Signal::Failure(RuntimeError::simple_str(
             "NotFoundError",
-            "No item found that satisfies the predicate".to_string(),
+            "No item found that satisfies the predicate",
         )),
     }
 }
 
-fn first(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
-        ));
-    };
+fn first(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array: ListValue);
 
     match array.values.first() {
-        Some(item) => Signal::Success(item.clone()),
+        Some(v) => Signal::Success(v.clone()),
         None => Signal::Failure(RuntimeError::simple_str(
             "ArrayEmptyRuntimeError",
             "This array is empty",
@@ -289,21 +236,10 @@ fn first(values: &[Value], _ctx: &mut Context) -> Signal {
     }
 }
 
-fn last(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
-        ));
-    };
-
+fn last(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array: ListValue);
     match array.values.last() {
-        Some(item) => Signal::Success(item.clone()),
+        Some(v) => Signal::Success(v.clone()),
         None => Signal::Failure(RuntimeError::simple_str(
             "ArrayEmptyRuntimeError",
             "This array is empty",
@@ -311,1367 +247,637 @@ fn last(values: &[Value], _ctx: &mut Context) -> Signal {
     }
 }
 
-/*
- * for_each has no implementation
- *
- * Reason:
- * The definition itself takes in an array and a node
- * The node itself will be executed on the arrays elements
- * If the node is (CONSUMER) resolved it goes in this function --> therefor all code is already executed
- */
-fn for_each(_values: &[Value], _ctx: &mut Context) -> Signal {
+/// for_each has no implementation
+///
+/// Reason:
+/// The definition itself takes in an array and a node
+/// The node itself will be executed on the arrays elements
+/// If the node is (CONSUMER) resolved it goes in this function --> therefor all code is already executed
+fn for_each(_args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    // Already executed by the engine (consumer); return Null
     Signal::Success(Value {
         kind: Some(Kind::NullValue(0)),
     })
 }
 
-/*
- * Same as for_each
- *
- * Reason:
- * The definition itself takes in an array and a node
- * The node itself will be executed on the arrays elements
- * If the node is (TRANSFORM) resolved it goes in this function --> therefor all code is already executed
- * The TRANSFORM node is gives a new item as a result
- */
-fn map(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(_array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(transform_result)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn map(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    // (array, transformed_results[])
+    args!(args => _array_v: Value, transform_v: Value);
+    let Kind::ListValue(transform_result) = transform_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
+            "Expected transform result to be an array",
         ));
     };
-
     Signal::Success(Value {
         kind: Some(Kind::ListValue(transform_result.clone())),
     })
 }
 
-fn push(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        item,
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn push(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, item: Value);
+    let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected first argument to be an array",
         ));
     };
-
-    let mut new_array = array.clone();
-    new_array.values.push(item.clone());
+    array.values.push(item);
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(new_array)),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 
-fn pop(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn pop(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value);
+    let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected an array as an argument",
         ));
     };
-
-    let mut new_array = array.clone();
-    new_array.values.pop();
+    array.values.pop();
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(new_array)),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 
-fn remove(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        item,
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, item: Value);
+    let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected first argument to be an array",
         ));
     };
 
-    let mut new_array = array.clone();
-    let item_clone = item.clone();
-    let index = match new_array.values.iter().position(|x| *x == item_clone) {
-        Some(index) => index,
-        None => {
-            return Signal::Failure(RuntimeError::simple(
-                "ValueNotFoundRuntimeError",
-                format!("Item {:?} not found in array", item_clone),
-            ));
-        }
-    };
-
-    new_array.values.remove(index);
-
-    Signal::Success(Value {
-        kind: Some(Kind::ListValue(new_array)),
-    })
+    if let Some(index) = array.values.iter().position(|x| *x == item) {
+        array.values.remove(index);
+        Signal::Success(Value {
+            kind: Some(Kind::ListValue(array)),
+        })
+    } else {
+        Signal::Failure(RuntimeError::simple(
+            "ValueNotFoundRuntimeError",
+            format!("Item {:?} not found in array", item),
+        ))
+    }
 }
 
-fn is_empty(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn is_empty(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected an array as an argument",
         ));
     };
-
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(array.values.is_empty())),
     })
 }
 
-fn size(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected an array as an argument",
         ));
     };
-
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(array.values.len() as f64)),
     })
 }
 
-fn index_of(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        item,
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn index_of(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, item: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!(
-                "Expected two numbers as arguments but received {:?}",
-                values
-            ),
+            "Expected first argument to be an array",
         ));
     };
 
-    let new_array = array.clone();
-    let item_clone = item.clone();
-    let index = match new_array.values.iter().position(|x| *x == item_clone) {
-        Some(index) => index,
-        None => {
-            return Signal::Failure(RuntimeError::simple(
-                "ValueNotFoundRuntimeError",
-                format!("Item {:?} not found in array", item_clone),
-            ));
-        }
-    };
-
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(index as f64)),
-    })
+    match array.values.iter().position(|x| *x == item) {
+        Some(i) => Signal::Success(Value {
+            kind: Some(Kind::NumberValue(i as f64)),
+        }),
+        None => Signal::Failure(RuntimeError::simple(
+            "ValueNotFoundRuntimeError",
+            format!("Item {:?} not found in array", item),
+        )),
+    }
 }
 
-fn to_unique(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn to_unique(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected an array as an argument",
         ));
     };
 
-    let mut unique_values = Vec::new();
-
-    for value in &array.values {
-        if !unique_values.contains(value) {
-            unique_values.push(value.clone());
+    let mut unique = Vec::<Value>::new();
+    for v in &array.values {
+        if !unique.contains(v) {
+            unique.push(v.clone());
         }
     }
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: unique_values,
-        })),
+        kind: Some(Kind::ListValue(ListValue { values: unique })),
     })
 }
 
-fn sort(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(resolved_comparator)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
-        ));
+fn sort(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    // array, resolved comparator yields -1/0/1 sequence
+    args!(args => array_v: Value, cmp_v: Value);
+    let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected first argument to be an array"));
+    };
+    let Kind::ListValue(cmp_vals) = cmp_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected second argument to be an array of numbers"));
     };
 
-    let mut comparate_collector = vec![];
-    resolved_comparator.values.iter().for_each(|v| {
-        if let Value {
-            kind: Some(Kind::NumberValue(comp)),
-        } = v.clone()
-        {
-            comparate_collector.push(comp);
+    let mut comps: Vec<f64> = Vec::new();
+    for v in &cmp_vals.values {
+        if let Some(Kind::NumberValue(n)) = v.kind {
+            comps.push(n);
         }
-    });
+    }
 
-    let mut index = 0;
-    let mut new_array = array.values.clone();
-    new_array.sort_by(|_, _| {
-        let comp = comparate_collector[index];
-        index += 1;
+    let mut i = 0usize;
+    arr.values.sort_by(|_, _| {
+        let comp = *comps.get(i).unwrap_or(&0.0);
+        i += 1;
         match comp {
-            -1.0 => Ordering::Less,
+            n if n < 0.0 => Ordering::Less,
             0.0 => Ordering::Equal,
             _ => Ordering::Greater,
         }
     });
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: new_array,
-        })),
+        kind: Some(Kind::ListValue(arr)),
     })
 }
 
-fn sort_reverse(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::ListValue(resolved_comparator)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!("Expected two arrays as arguments but received {:?}", values),
-        ));
+fn sort_reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value, cmp_v: Value);
+    let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected first argument to be an array"));
+    };
+    let Kind::ListValue(cmp_vals) = cmp_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str("InvalidArgumentRuntimeError", "Expected second argument to be an array of numbers"));
     };
 
-    let mut comparate_collector = vec![];
-    resolved_comparator.values.iter().for_each(|v| {
-        if let Value {
-            kind: Some(Kind::NumberValue(comp)),
-        } = v.clone()
-        {
-            comparate_collector.push(comp);
+    let mut comps: Vec<f64> = Vec::new();
+    for v in &cmp_vals.values {
+        if let Some(Kind::NumberValue(n)) = v.kind {
+            comps.push(n);
         }
-    });
+    }
 
-    let mut index = 0;
-    let mut new_array = array.values.clone();
-    new_array.reverse();
+    arr.values.reverse(); // keep behavior consistent with original
 
-    new_array.sort_by(|_, _| {
-        let comp = comparate_collector[index];
-        index += 1;
+    let mut i = 0usize;
+    arr.values.sort_by(|_, _| {
+        let comp = *comps.get(i).unwrap_or(&0.0);
+        i += 1;
         match comp {
-            -1.0 => Ordering::Less,
+            n if n < 0.0 => Ordering::Less,
             0.0 => Ordering::Equal,
             _ => Ordering::Greater,
         }
     });
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: new_array,
-        })),
+        kind: Some(Kind::ListValue(arr)),
     })
 }
 
-fn reverse(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value);
+    let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected an array as an argument",
         ));
     };
-
-    let mut new_array = array.values.clone();
-    new_array.reverse();
-
+    array.values.reverse();
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: new_array,
-        })),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 
-fn flat(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
+fn flat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array_v: Value);
+    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            format!("Expected an array as an argument but received {:?}", values),
+            "Expected an array as an argument",
         ));
     };
 
-    let mut flattable_array: Vec<Vec<Value>> = Vec::new();
-
+    let mut out: Vec<Value> = Vec::new();
     for item in &array.values {
-        if let Value {
-            kind: Some(Kind::ListValue(sub_array)),
-        } = item
-        {
-            flattable_array.push(sub_array.values.clone());
-        } else {
-            flattable_array.push(vec![item.clone()]);
+        match &item.kind {
+            Some(Kind::ListValue(sub)) => out.extend(sub.values.iter().cloned()),
+            _ => out.push(item.clone()),
         }
     }
 
-    let flattend = flattable_array
-        .into_iter()
-        .flatten()
-        .collect::<Vec<Value>>();
-
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(tucana::shared::ListValue {
-            values: flattend,
-        })),
+        kind: Some(Kind::ListValue(ListValue { values: out })),
     })
 }
 
-fn min(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected an array of numbers as an argument but received {:?}",
-                values
-            ),
-        ));
-    };
+fn min(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array: ListValue);
 
-    let mut new_array = vec![];
-    array.values.clone().into_iter().for_each(|a| {
-        if let Value {
-            kind: Some(Kind::NumberValue(number)),
-        } = a
-        {
-            new_array.push(number);
+    let mut nums: Vec<f64> = Vec::new();
+    for v in &array.values {
+        if let Some(Kind::NumberValue(n)) = v.kind {
+            nums.push(n);
         }
-    });
+    }
 
-    let min = new_array.iter().min_by(|a, b| a.total_cmp(b));
-
-    match min {
-        Some(min) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(*min)),
+    match nums.iter().min_by(|a, b| a.total_cmp(b)) {
+        Some(m) => Signal::Success(Value {
+            kind: Some(Kind::NumberValue(*m)),
         }),
-        None => Signal::Failure(RuntimeError::simple(
-            "ArrayEmptyRuntimeError",
-            "Array is empty".to_string(),
-        )),
+        None => Signal::Failure(RuntimeError::simple_str("ArrayEmptyRuntimeError", "Array is empty")),
     }
 }
 
-fn max(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected an array of numbers as an argument but received {:?}",
-                values
-            ),
-        ));
-    };
+fn max(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array: ListValue);
 
-    let mut new_array = vec![];
-    array.values.clone().into_iter().for_each(|a| {
-        if let Value {
-            kind: Some(Kind::NumberValue(number)),
-        } = a
-        {
-            new_array.push(number);
+    let mut nums: Vec<f64> = Vec::new();
+    for v in &array.values {
+        if let Some(Kind::NumberValue(n)) = v.kind {
+            nums.push(n);
         }
-    });
+    }
 
-    let max = new_array.iter().max_by(|a, b| a.total_cmp(b));
-
-    match max {
-        Some(max) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(*max)),
+    match nums.iter().max_by(|a, b| a.total_cmp(b)) {
+        Some(m) => Signal::Success(Value {
+            kind: Some(Kind::NumberValue(*m)),
         }),
-        None => Signal::Failure(RuntimeError::simple(
-            "ArrayEmptyRuntimeError",
-            "Array is empty".to_string(),
-        )),
+        None => Signal::Failure(RuntimeError::simple_str("ArrayEmptyRuntimeError", "Array is empty")),
     }
 }
 
-fn sum(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected an array of numbers as an argument but received {:?}",
-                values
-            ),
-        ));
-    };
+fn sum(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array: ListValue);
 
-    let mut sum = 0.0;
-    array.values.clone().into_iter().for_each(|a| {
-        if let Value {
-            kind: Some(Kind::NumberValue(number)),
-        } = a
-        {
-            sum += number;
+    let mut s = 0.0;
+    for v in &array.values {
+        if let Some(Kind::NumberValue(n)) = v.kind {
+            s += n;
         }
-    });
+    }
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(sum)),
+        kind: Some(Kind::NumberValue(s)),
     })
 }
 
-fn join(values: &[Value], _ctx: &mut Context) -> Signal {
-    let [
-        Value {
-            kind: Some(Kind::ListValue(array)),
-        },
-        Value {
-            kind: Some(Kind::StringValue(separator)),
-        },
-    ] = values
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            format!(
-                "Expected array of text and a text as arguments but received {:?}",
-                values
-            ),
-        ));
-    };
+fn join(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+    args!(args => array: ListValue, separator: String);
 
-    let mut collector = vec![];
-    array.values.clone().into_iter().for_each(|a| {
-        if let Value {
-            kind: Some(Kind::StringValue(string)),
-        } = a
-        {
-            collector.push(string);
+    let mut parts: Vec<String> = Vec::new();
+    for v in &array.values {
+        if let Some(Kind::StringValue(s)) = &v.kind {
+            parts.push(s.clone());
         }
-    });
-
-    let joined = collector.join(separator);
+    }
 
     Signal::Success(Value {
-        kind: Some(Kind::StringValue(joined)),
+        kind: Some(Kind::StringValue(parts.join(&separator))),
     })
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::context::Context;
-    use tucana::shared::{ListValue, Value, value::Kind};
+    use tucana::shared::{value::Kind, ListValue, Value};
 
-    // Helper function to create a number value
-    fn create_number_value(num: f64) -> Value {
-        Value {
-            kind: Some(Kind::NumberValue(num)),
+    // --- helpers -------------------------------------------------------------
+    fn a_val(v: Value) -> Argument { Argument::Eval(v) }
+    fn v_num(n: f64) -> Value { Value { kind: Some(Kind::NumberValue(n)) } }
+    fn v_str(s: &str) -> Value { Value { kind: Some(Kind::StringValue(s.to_string())) } }
+    fn v_bool(b: bool) -> Value { Value { kind: Some(Kind::BoolValue(b)) } }
+    fn v_list(values: Vec<Value>) -> Value { Value { kind: Some(Kind::ListValue(ListValue { values })) } }
+
+    fn expect_num(sig: Signal) -> f64 {
+        match sig {
+            Signal::Success(Value { kind: Some(Kind::NumberValue(n)) }) => n,
+            x => panic!("Expected NumberValue, got {:?}", x),
+        }
+    }
+    fn expect_str(sig: Signal) -> String {
+        match sig {
+            Signal::Success(Value { kind: Some(Kind::StringValue(s)) }) => s,
+            x => panic!("Expected StringValue, got {:?}", x),
+        }
+    }
+    fn expect_list(sig: Signal) -> Vec<Value> {
+        match sig {
+            Signal::Success(Value { kind: Some(Kind::ListValue(ListValue { values })) }) => values,
+            x => panic!("Expected ListValue, got {:?}", x),
+        }
+    }
+    fn expect_bool(sig: Signal) -> bool {
+        match sig {
+            Signal::Success(Value { kind: Some(Kind::BoolValue(b)) }) => b,
+            x => panic!("Expected BoolValue, got {:?}", x),
         }
     }
 
-    // Helper function to create a string value
-    fn create_string_value(s: &str) -> Value {
-        Value {
-            kind: Some(Kind::StringValue(s.to_string())),
-        }
+    fn dummy_run(_: i64) -> Signal {
+        Signal::Success(Value { kind: Some(Kind::NullValue(0)) })
     }
 
-    // Helper function to create a bool value
-    fn create_bool_value(b: bool) -> Value {
-        Value {
-            kind: Some(Kind::BoolValue(b)),
-        }
-    }
-
-    // Helper function to create an array value
-    fn create_array_value(values: Vec<Value>) -> Value {
-        Value {
-            kind: Some(Kind::ListValue(ListValue { values })),
-        }
-    }
-
+    // --- at ------------------------------------------------------------------
     #[test]
     fn test_at_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_num(10.0), v_num(20.0), v_num(30.0)]);
 
-        let array = create_array_value(vec![
-            create_number_value(10.0),
-            create_number_value(20.0),
-            create_number_value(30.0),
-        ]);
-
-        // Test getting first element
-        let values = vec![array.clone(), create_number_value(0.0)];
-        let result = at(&values, &mut ctx);
-        match result {
-            Signal::Success(v) => match v.kind {
-                Some(Kind::NumberValue(val)) => assert_eq!(val, 10.0),
-                _ => panic!("Expected NumberValue"),
-            },
-            _ => panic!("Expected NumberValue"),
-        }
-
-        // Test getting second element
-        let values = vec![array.clone(), create_number_value(1.0)];
-        let signal = at(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 20.0),
-            _ => panic!("Expected NumberValue"),
-        }
-
-        // Test getting third element
-        let values = vec![array, create_number_value(2.0)];
-        let signal = at(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 30.0),
-            _ => panic!("Expected NumberValue"),
-        }
+        assert_eq!(expect_num(at(&[a_val(arr.clone()), a_val(v_num(0.0))], &mut ctx, &mut run)), 10.0);
+        assert_eq!(expect_num(at(&[a_val(arr.clone()), a_val(v_num(1.0))], &mut ctx, &mut run)), 20.0);
+        assert_eq!(expect_num(at(&[a_val(arr), a_val(v_num(2.0))], &mut ctx, &mut run)), 30.0);
     }
 
     #[test]
     fn test_at_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_number_value(1.0)]);
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_num(1.0)]);
 
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = at(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), create_number_value(0.0)];
-        let result = at(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-
-        // Test with wrong type for second parameter
-        let values = vec![array, create_string_value("not_number")];
-        let result = at(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        // wrong arg count
+        match at(&[a_val(arr.clone())], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        // wrong type first arg
+        match at(&[a_val(v_str("not_array")), a_val(v_num(0.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        // wrong type second arg
+        match at(&[a_val(arr.clone()), a_val(v_str("x"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        // oob / negative
+        match at(&[a_val(arr.clone()), a_val(v_num(9.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match at(&[a_val(arr), a_val(v_num(-1.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
+    // --- concat --------------------------------------------------------------
     #[test]
     fn test_concat_success() {
-        let mut ctx = Context::new();
-
-        let array1 = create_array_value(vec![create_number_value(1.0), create_number_value(2.0)]);
-        let array2 = create_array_value(vec![create_number_value(3.0), create_number_value(4.0)]);
-
-        let values = vec![array1, array2];
-        let signal = concat(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::ListValue(list)) => {
-                assert_eq!(list.values.len(), 4);
-
-                // Check each element
-                match &list.values[0].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 1.0),
-                    _ => panic!("Expected NumberValue at index 0"),
-                }
-                match &list.values[1].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 2.0),
-                    _ => panic!("Expected NumberValue at index 1"),
-                }
-                match &list.values[2].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 3.0),
-                    _ => panic!("Expected NumberValue at index 2"),
-                }
-                match &list.values[3].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 4.0),
-                    _ => panic!("Expected NumberValue at index 3"),
-                }
-            }
-            _ => panic!("Expected ListValue"),
-        }
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let a = v_list(vec![v_num(1.0), v_num(2.0)]);
+        let b = v_list(vec![v_num(3.0), v_num(4.0)]);
+        let out = expect_list(concat(&[a_val(a), a_val(b)], &mut ctx, &mut run));
+        assert_eq!(out.len(), 4);
+        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
+        assert_eq!(out[3].kind, Some(Kind::NumberValue(4.0)));
     }
 
     #[test]
     fn test_concat_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_number_value(1.0)]);
-
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = concat(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), array.clone()];
-        let result = concat(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-
-        // Test with wrong type for second parameter
-        let values = vec![array, create_number_value(42.0)];
-        let result = concat(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_num(1.0)]);
+        match concat(&[a_val(arr.clone())], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match concat(&[a_val(v_str("not_array")), a_val(arr.clone())], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match concat(&[a_val(arr), a_val(v_num(42.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
+    // --- filter / find / find_last / find_index ------------------------------
     #[test]
     fn test_filter_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(1.0),
-            create_number_value(2.0),
-            create_number_value(3.0),
-        ]);
-        let predicate = create_array_value(vec![
-            create_bool_value(true),
-            create_bool_value(false),
-            create_bool_value(true),
-        ]);
-
-        let values = vec![array, predicate];
-        let signal = filter(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::ListValue(list)) => {
-                assert_eq!(list.values.len(), 2);
-
-                match &list.values[0].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 1.0),
-                    _ => panic!("Expected NumberValue at index 0"),
-                }
-                match &list.values[1].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 3.0),
-                    _ => panic!("Expected NumberValue at index 1"),
-                }
-            }
-            _ => panic!("Expected ListValue"),
-        }
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let array = v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]);
+        let predicate = v_list(vec![v_bool(true), v_bool(false), v_bool(true)]);
+        let out = expect_list(filter(&[a_val(array), a_val(predicate)], &mut ctx, &mut run));
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
+        assert_eq!(out[1].kind, Some(Kind::NumberValue(3.0)));
     }
 
     #[test]
     fn test_filter_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_number_value(1.0)]);
-        let predicate = create_array_value(vec![create_bool_value(true)]);
-
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = filter(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), predicate.clone()];
-        let result = filter(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for second parameter
-        let values = vec![array, create_number_value(42.0)];
-        let result = filter(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let array = v_list(vec![v_num(1.0)]);
+        let predicate = v_list(vec![v_bool(true)]);
+        match filter(&[a_val(array.clone())], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match filter(&[a_val(v_str("not_array")), a_val(predicate.clone())], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match filter(&[a_val(array), a_val(v_num(1.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
+    // --- first / last --------------------------------------------------------
     #[test]
     fn test_first_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_string_value("first"),
-            create_string_value("second"),
-            create_string_value("third"),
-        ]);
-
-        let values = vec![array];
-        let signal = first(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::StringValue(val)) => assert_eq!(val, "first"),
-            _ => panic!("Expected StringValue"),
-        }
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_str("first"), v_str("second"), v_str("third")]);
+        assert_eq!(expect_str(first(&[a_val(arr)], &mut ctx, &mut run)), "first");
     }
 
     #[test]
     fn test_first_error() {
-        let mut ctx = Context::new();
-
-        // Test with empty array
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let result = first(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = first(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong number of parameters
-        let values = vec![];
-        let result = first(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match first(&[a_val(v_list(vec![]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match first(&[a_val(v_str("not_array"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match first(&[], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
     #[test]
     fn test_last_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_string_value("first"),
-            create_string_value("second"),
-            create_string_value("last"),
-        ]);
-
-        let values = vec![array];
-        let signal = last(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::StringValue(val)) => assert_eq!(val, "last"),
-            _ => panic!("Expected StringValue"),
-        }
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_str("first"), v_str("second"), v_str("last")]);
+        assert_eq!(expect_str(last(&[a_val(arr)], &mut ctx, &mut run)), "last");
     }
 
     #[test]
     fn test_last_error() {
-        let mut ctx = Context::new();
-
-        // Test with empty array
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let result = last(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = last(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match last(&[a_val(v_list(vec![]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match last(&[a_val(v_str("not_array"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
+    // --- for_each / map ------------------------------------------------------
+    #[test]
+    fn test_for_each_and_map() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match for_each(&[], &mut ctx, &mut run) {
+            Signal::Success(Value { kind: Some(Kind::NullValue(_)) }) => {},
+            x => panic!("expected NullValue, got {:?}", x),
+        }
+        let transformed = v_list(vec![v_str("X"), v_str("Y")]);
+        let out = expect_list(map(&[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_val(transformed.clone())], &mut ctx, &mut run));
+        let expected = match transformed.kind { Some(Kind::ListValue(ListValue { values })) => values, _ => unreachable!() };
+        assert_eq!(out, expected);
+    }
+
+    // --- push / pop / remove -------------------------------------------------
     #[test]
     fn test_push_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![create_number_value(1.0), create_number_value(2.0)]);
-        let new_element = create_number_value(3.0);
-
-        let values = vec![array, new_element];
-        let signal = push(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::ListValue(list)) => {
-                assert_eq!(list.values.len(), 3);
-
-                match &list.values[2].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 3.0),
-                    _ => panic!("Expected NumberValue at last index"),
-                }
-            }
-            _ => panic!("Expected ListValue"),
-        }
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let out = expect_list(push(&[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_val(v_num(3.0))], &mut ctx, &mut run));
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[2].kind, Some(Kind::NumberValue(3.0)));
     }
 
     #[test]
     fn test_push_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_number_value(1.0)]);
-
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = push(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), create_number_value(42.0)];
-        let result = push(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match push(&[a_val(v_list(vec![v_num(1.0)]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match push(&[a_val(v_str("nope")), a_val(v_num(1.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
     #[test]
     fn test_pop_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(1.0),
-            create_number_value(2.0),
-            create_number_value(3.0),
-        ]);
-
-        let values = vec![array];
-        let signal = pop(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::ListValue(list)) => {
-                assert_eq!(list.values.len(), 2);
-
-                // Check that the last element was removed
-                match &list.values[0].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 1.0),
-                    _ => panic!("Expected NumberValue at index 0"),
-                }
-                match &list.values[1].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 2.0),
-                    _ => panic!("Expected NumberValue at index 1"),
-                }
-            }
-            _ => panic!("Expected ListValue"),
-        }
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let out = expect_list(pop(&[a_val(v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]))], &mut ctx, &mut run));
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
+        assert_eq!(out[1].kind, Some(Kind::NumberValue(2.0)));
     }
 
     #[test]
     fn test_pop_error() {
-        let mut ctx = Context::new();
-
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = pop(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong number of parameters
-        let values = vec![];
-        let result = pop(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match pop(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match pop(&[], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
     #[test]
-    fn test_is_empty_success() {
-        let mut ctx = Context::new();
+    fn test_remove_success_and_error() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        // success
+        let arr = v_list(vec![v_str("first"), v_str("second"), v_str("third")]);
+        let out = expect_list(remove(&[a_val(arr), a_val(v_str("second"))], &mut ctx, &mut run));
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].kind, Some(Kind::StringValue("first".into())));
+        assert_eq!(out[1].kind, Some(Kind::StringValue("third".into())));
+        // errors
+        match remove(&[a_val(v_list(vec![v_num(1.0)]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match remove(&[a_val(v_str("nope")), a_val(v_num(0.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match remove(&[a_val(v_list(vec![v_num(1.0)])), a_val(v_num(999.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+    }
 
-        // Test with empty array
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let signal = is_empty(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::BoolValue(val)) => assert_eq!(val, true),
-            _ => panic!("Expected BoolValue"),
-        }
-
-        // Test with non-empty array
-        let non_empty_array = create_array_value(vec![create_number_value(1.0)]);
-        let values = vec![non_empty_array];
-        let signal = is_empty(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::BoolValue(val)) => assert_eq!(val, false),
-            _ => panic!("Expected BoolValue"),
-        }
+    // --- is_empty / size -----------------------------------------------------
+    #[test]
+    fn test_is_empty_and_size() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        assert!(expect_bool(is_empty(&[a_val(v_list(vec![]))], &mut ctx, &mut run)));
+        assert!(!expect_bool(is_empty(&[a_val(v_list(vec![v_num(1.0)]))], &mut ctx, &mut run)));
+        assert_eq!(expect_num(size(&[a_val(v_list(vec![]))], &mut ctx, &mut run)), 0.0);
+        assert_eq!(expect_num(size(&[a_val(v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]))], &mut ctx, &mut run)), 3.0);
     }
 
     #[test]
-    fn test_is_empty_error() {
-        let mut ctx = Context::new();
-
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = is_empty(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong number of parameters
-        let values = vec![];
-        let result = is_empty(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+    fn test_is_empty_error_and_size_error() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match is_empty(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match is_empty(&[], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match size(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match size(&[], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
+    // --- index_of / to_unique ------------------------------------------------
     #[test]
-    fn test_size_success() {
-        let mut ctx = Context::new();
+    fn test_index_of_and_to_unique() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_num(10.0), v_num(42.0), v_num(30.0), v_num(42.0)]);
+        assert_eq!(expect_num(index_of(&[a_val(arr.clone()), a_val(v_num(42.0))], &mut ctx, &mut run)), 1.0);
+        match index_of(&[a_val(arr.clone()), a_val(v_num(999.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
 
-        // Test with empty array
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let signal = size(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 0.0),
-            _ => panic!("Expected NumberValue"),
-        }
-
-        // Test with array of 3 elements
-        let array = create_array_value(vec![
-            create_number_value(1.0),
-            create_number_value(2.0),
-            create_number_value(3.0),
-        ]);
-        let values = vec![array];
-        let signal = size(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 3.0),
-            _ => panic!("Expected NumberValue"),
-        }
-    }
-
-    #[test]
-    fn test_size_error() {
-        let mut ctx = Context::new();
-
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = size(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong number of parameters
-        let values = vec![];
-        let result = size(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-    }
-
-    #[test]
-    fn test_reverse_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(1.0),
-            create_number_value(2.0),
-            create_number_value(3.0),
-        ]);
-
-        let values = vec![array];
-        let signal = reverse(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::ListValue(list)) => {
-                assert_eq!(list.values.len(), 3);
-
-                // Check that elements are reversed
-                match &list.values[0].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 3.0),
-                    _ => panic!("Expected NumberValue at index 0"),
-                }
-                match &list.values[1].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 2.0),
-                    _ => panic!("Expected NumberValue at index 1"),
-                }
-                match &list.values[2].kind {
-                    Some(Kind::NumberValue(val)) => assert_eq!(*val, 1.0),
-                    _ => panic!("Expected NumberValue at index 2"),
-                }
-            }
-            _ => panic!("Expected ListValue"),
-        }
-    }
-
-    #[test]
-    fn test_reverse_error() {
-        let mut ctx = Context::new();
-
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = reverse(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong number of parameters
-        let values = vec![];
-        let result = reverse(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-    }
-
-    #[test]
-    fn test_sum_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(1.5),
-            create_number_value(2.5),
-            create_number_value(3.0),
-        ]);
-
-        let values = vec![array];
-        let signal = sum(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 7.0),
-            _ => panic!("Expected NumberValue"),
-        }
-    }
-
-    #[test]
-    fn test_sum_empty_array() {
-        let mut ctx = Context::new();
-
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let signal = sum(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 0.0),
-            _ => panic!("Expected NumberValue"),
-        }
-    }
-
-    #[test]
-    fn test_sum_error() {
-        let mut ctx = Context::new();
-
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = sum(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong number of parameters
-        let values = vec![];
-        let result = sum(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-    }
-
-    #[test]
-    fn test_join_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_string_value("hello"),
-            create_string_value("world"),
-            create_string_value("test"),
-        ]);
-        let separator = create_string_value(", ");
-
-        let values = vec![array, separator];
-        let signal = join(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::StringValue(val)) => assert_eq!(val, "hello, world, test"),
-            _ => panic!("Expected StringValue"),
-        }
-    }
-
-    #[test]
-    fn test_join_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_string_value("hello")]);
-
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = join(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), create_string_value(",")];
-        let result = join(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for second parameter
-        let values = vec![array, create_number_value(42.0)];
-        let result = join(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-    }
-
-    #[test]
-    fn test_min_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(5.0),
-            create_number_value(1.0),
-            create_number_value(3.0),
-            create_number_value(2.0),
-        ]);
-
-        let values = vec![array];
-        let signal = min(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 1.0),
-            _ => panic!("Expected NumberValue"),
-        }
-    }
-
-    #[test]
-    fn test_min_error() {
-        let mut ctx = Context::new();
-
-        // Test with empty array
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let result = min(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = min(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-    }
-
-    #[test]
-    fn test_max_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(5.0),
-            create_number_value(1.0),
-            create_number_value(8.0),
-            create_number_value(2.0),
-        ]);
-
-        let values = vec![array];
-        let signal = max(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 8.0),
-            _ => panic!("Expected NumberValue"),
-        }
-    }
-
-    #[test]
-    fn test_max_error() {
-        let mut ctx = Context::new();
-
-        // Test with empty array
-        let empty_array = create_array_value(vec![]);
-        let values = vec![empty_array];
-        let result = max(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong parameter type
-        let values = vec![create_string_value("not_array")];
-        let result = max(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-    }
-
-    #[test]
-    fn test_index_of_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_number_value(10.0),
-            create_number_value(42.0),
-            create_number_value(30.0),
-            create_number_value(42.0), // duplicate
-        ]);
-        let search_element = create_number_value(42.0);
-
-        let values = vec![array, search_element];
-        let signal = index_of(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::NumberValue(val)) => assert_eq!(val, 1.0), // Should return first occurrence
-            _ => panic!("Expected NumberValue"),
-        }
-    }
-
-    #[test]
-    fn test_index_of_not_found() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_string_value("hello"),
-            create_string_value("world"),
-        ]);
-        let search_element = create_string_value("missing");
-
-        let values = vec![array, search_element];
-        let result = index_of(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        let uniq = expect_list(to_unique(&[a_val(arr)], &mut ctx, &mut run));
+        assert_eq!(uniq.len(), 3);
+        assert_eq!(uniq[0].kind, Some(Kind::NumberValue(10.0)));
+        assert_eq!(uniq[1].kind, Some(Kind::NumberValue(42.0)));
+        assert_eq!(uniq[2].kind, Some(Kind::NumberValue(30.0)));
     }
 
     #[test]
     fn test_index_of_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_number_value(1.0)]);
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        match index_of(&[a_val(v_list(vec![v_num(1.0)]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match index_of(&[a_val(v_str("nope")), a_val(v_num(1.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+    }
 
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = index_of(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), create_number_value(42.0)];
-        let result = index_of(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+    // --- sort / sort_reverse -------------------------------------------------
+    #[test]
+    fn test_sort_and_sort_reverse() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+
+        // We don't rely on actual values; ordering is driven by the comparator sequence.
+        let arr = v_list(vec![v_str("a"), v_str("b"), v_str("c"), v_str("d")]);
+        let comps = v_list(vec![v_num(-1.0), v_num(1.0), v_num(0.0), v_num(-1.0)]);
+        let out = expect_list(sort(&[a_val(arr.clone()), a_val(comps.clone())], &mut ctx, &mut run));
+        assert_eq!(out.len(), 4);
+
+        let out_r = expect_list(sort_reverse(&[a_val(arr), a_val(comps)], &mut ctx, &mut run));
+        assert_eq!(out_r.len(), 4);
+    }
+
+    // --- reverse / flat ------------------------------------------------------
+    #[test]
+    fn test_reverse_success_and_error() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let out = expect_list(reverse(&[a_val(v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]))], &mut ctx, &mut run));
+        assert_eq!(out[0].kind, Some(Kind::NumberValue(3.0)));
+        assert_eq!(out[2].kind, Some(Kind::NumberValue(1.0)));
+
+        match reverse(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match reverse(&[], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 
     #[test]
-    fn test_remove_success() {
-        let mut ctx = Context::new();
-
-        let array = create_array_value(vec![
-            create_string_value("first"),
-            create_string_value("second"),
-            create_string_value("third"),
+    fn test_flat_success() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let nested = v_list(vec![
+            v_num(1.0),
+            v_list(vec![v_num(2.0), v_num(3.0)]),
+            v_list(vec![]),
+            v_num(4.0),
         ]);
-        let item_to_remove = create_string_value("second"); // Remove middle element
-
-        let values = vec![array, item_to_remove];
-        let signal = remove(&values, &mut ctx);
-
-        let result = match signal {
-            Signal::Success(v) => v,
-            _ => panic!("Expected Success"),
-        };
-
-        match result.kind {
-            Some(Kind::ListValue(list)) => {
-                assert_eq!(list.values.len(), 2);
-
-                match &list.values[0].kind {
-                    Some(Kind::StringValue(val)) => assert_eq!(val, "first"),
-                    _ => panic!("Expected StringValue at index 0"),
-                }
-                match &list.values[1].kind {
-                    Some(Kind::StringValue(val)) => assert_eq!(val, "third"),
-                    _ => panic!("Expected StringValue at index 1"),
-                }
-            }
-            _ => panic!("Expected ListValue"),
-        }
+        let out = expect_list(flat(&[a_val(nested)], &mut ctx, &mut run));
+        assert_eq!(out.len(), 4);
+        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
+        assert_eq!(out[1].kind, Some(Kind::NumberValue(2.0)));
+        assert_eq!(out[2].kind, Some(Kind::NumberValue(3.0)));
+        assert_eq!(out[3].kind, Some(Kind::NumberValue(4.0)));
     }
 
+    // --- min / max / sum -----------------------------------------------------
     #[test]
-    fn test_remove_error() {
-        let mut ctx = Context::new();
-        let array = create_array_value(vec![create_number_value(1.0)]);
+    fn test_min_max_sum_success_and_error() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let nums = v_list(vec![v_num(5.0), v_num(1.0), v_num(8.0), v_num(2.0)]);
+        assert_eq!(expect_num(min(&[a_val(nums.clone())], &mut ctx, &mut run)), 1.0);
+        assert_eq!(expect_num(max(&[a_val(nums.clone())], &mut ctx, &mut run)), 8.0);
+        assert_eq!(expect_num(sum(&[a_val(nums)], &mut ctx, &mut run)), 16.0);
 
-        // Test with wrong number of parameters
-        let values = vec![array.clone()];
-        let result = remove(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with wrong type for first parameter
-        let values = vec![create_string_value("not_array"), create_number_value(0.0)];
-        let result = remove(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
-        // Test with item not found
-        let values = vec![array, create_number_value(999.0)];
-        let result = remove(&values, &mut ctx);
-        assert_eq!(result, Signal::Failure(RuntimeError::default()));
+        // empty
+        match min(&[a_val(v_list(vec![]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match max(&[a_val(v_list(vec![]))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        assert_eq!(expect_num(sum(&[a_val(v_list(vec![]))], &mut ctx, &mut run)), 0.0);
+
+        // wrong type
+        match sum(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match min(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match max(&[a_val(v_str("nope"))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+    }
+
+    // --- join ----------------------------------------------------------------
+    #[test]
+    fn test_join_success_and_error() {
+        let mut ctx = Context::new(); let mut run = dummy_run;
+        let arr = v_list(vec![v_str("hello"), v_str("world"), v_str("test")]);
+        assert_eq!(expect_str(join(&[a_val(arr), a_val(v_str(", "))], &mut ctx, &mut run)), "hello, world, test");
+
+        // errors
+        let arr2 = v_list(vec![v_str("hello")]);
+        match join(&[a_val(arr2.clone())], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match join(&[a_val(v_str("not_array")), a_val(v_str(","))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
+        match join(&[a_val(arr2), a_val(v_num(42.0))], &mut ctx, &mut run) { Signal::Failure(_) => {}, x => panic!("{:?}", x) }
     }
 }

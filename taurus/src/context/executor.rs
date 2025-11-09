@@ -1,18 +1,17 @@
 use crate::context::Context;
-use crate::context::signal::Signal;
-use crate::error::RuntimeError;
-use std::collections::HashMap;
-use tucana::shared::{NodeFunction, NodeParameter};
 use crate::context::argument::{Argument, ParameterNode};
 use crate::context::registry::FunctionStore;
+use crate::context::signal::Signal;
+use crate::error::RuntimeError;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use tucana::shared::{NodeFunction};
 
 pub struct Executor<'a> {
     functions: &'a FunctionStore,
     nodes: HashMap<i64, NodeFunction>,
-    context: Context,
+    context: RefCell<Context>,
 }
-
-type HandleNodeParameterFn = fn(&mut Executor, node_parameter: &NodeParameter) -> Signal;
 
 impl<'a> Executor<'a> {
     pub fn new(
@@ -23,11 +22,11 @@ impl<'a> Executor<'a> {
         Executor {
             functions,
             nodes,
-            context,
+            context: RefCell::new(context),
         }
     }
 
-    pub fn execute(&mut self, starting_node_id: i64) -> Signal {
+    pub fn execute(&self, starting_node_id: i64) -> Signal {
         let mut current_node_id = starting_node_id;
 
         loop {
@@ -41,11 +40,13 @@ impl<'a> Executor<'a> {
                 Some(n) => n.clone(),
             };
 
-
             let entry = match self.functions.get(node.runtime_function_id.as_str()) {
                 None => {
-                    return Signal::Failure(RuntimeError::simple_str("FunctionNotFound","The function was not found"))
-                },
+                    return Signal::Failure(RuntimeError::simple_str(
+                        "FunctionNotFound",
+                        "The function was not found",
+                    ));
+                }
                 Some(f) => f,
             };
 
@@ -53,11 +54,21 @@ impl<'a> Executor<'a> {
             for parameter in &node.parameters {
                 let node_value = match &parameter.value {
                     Some(v) => v,
-                    None => return Signal::Failure(RuntimeError::simple_str("NodeValueNotFound","Missing parameter value")),
+                    None => {
+                        return Signal::Failure(RuntimeError::simple_str(
+                            "NodeValueNotFound",
+                            "Missing parameter value",
+                        ));
+                    }
                 };
                 let value = match &node_value.value {
                     Some(v) => v,
-                    None => return Signal::Failure(RuntimeError::simple_str("NodeValueNotFound","Missing inner value")),
+                    None => {
+                        return Signal::Failure(RuntimeError::simple_str(
+                            "NodeValueNotFound",
+                            "Missing inner value",
+                        ));
+                    }
                 };
 
                 match value {
@@ -73,26 +84,28 @@ impl<'a> Executor<'a> {
                 }
             }
 
-
-            // Eagerly evaluate args that the function *declares* as Eager
             for (i, a) in args.iter_mut().enumerate() {
-                let mode = entry.param_modes.get(i).copied().unwrap_or(ParameterNode::Eager);
+                let mode = entry
+                    .param_modes
+                    .get(i)
+                    .copied()
+                    .unwrap_or(ParameterNode::Eager);
                 if matches!(mode, ParameterNode::Eager) {
                     if let Argument::Thunk(id) = *a {
                         match self.execute(id) {
                             Signal::Success(v) => *a = Argument::Eval(v),
-                            // propagate control flow immediately
-                            s @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => return s,
+                            s @ (Signal::Failure(_)
+                            | Signal::Return(_)
+                            | Signal::Respond(_)
+                            | Signal::Stop) => return s,
                         }
                     }
                 }
             }
 
-            // Provide a runner for Lazy params
             let mut run = |node_id: i64| self.execute(node_id);
-
-            // Call the handler (no special cases anywhere)
-            let result = (entry.handler)(&args, &mut self.context, &mut run);
+            let mut ctx = self.context.borrow_mut();
+            let result = (entry.handler)(&args, &mut ctx, &mut run);
 
             match result {
                 Signal::Success(value) => {

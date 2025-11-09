@@ -1,9 +1,9 @@
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
+use crate::{context::Context, error::RuntimeError, };
 use base64::Engine;
 use tucana::shared::{ListValue, Value, value::Kind};
 
-pub fn collect_text_functions() -> Vec<(&'static str, HandlerFn)> {
+pub fn collect_text_functions() -> Vec<(&'static str, crate::reg)> {
     vec![
         ("std::text::as_bytes", as_bytes),
         ("std::text::byte_size", byte_size),

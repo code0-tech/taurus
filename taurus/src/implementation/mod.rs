@@ -1,4 +1,4 @@
-use crate::registry::HandlerFn;
+use crate::context::registry::HandlerFn;
 
 mod array;
 mod boolean;

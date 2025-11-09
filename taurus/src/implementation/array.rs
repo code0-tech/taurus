@@ -3,7 +3,8 @@ use std::cmp::Ordering;
 use tucana::shared::{Value, value::Kind};
 
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError, registry::HandlerFn};
+use crate::{context::Context, error::RuntimeError, };
+use crate::context::registry::HandlerFn;
 
 pub fn collect_array_functions() -> Vec<(&'static str, HandlerFn)> {
     vec![

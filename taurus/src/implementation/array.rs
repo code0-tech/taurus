@@ -64,12 +64,7 @@ fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal
 fn concat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
     args!(args => lhs_v: Value, rhs_v: Value);
 
-    let Kind::ListValue(lhs) = lhs_v
-        .kind
-        .clone()
-        .ok_or_else(|| ())
-        .unwrap_or_else(|_| Kind::NullValue(0))
-    else {
+    let Kind::ListValue(lhs) = lhs_v.kind.clone().ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
@@ -78,12 +73,7 @@ fn concat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
             ),
         ));
     };
-    let Kind::ListValue(rhs) = rhs_v
-        .kind
-        .clone()
-        .ok_or_else(|| ())
-        .unwrap_or_else(|_| Kind::NullValue(0))
-    else {
+    let Kind::ListValue(rhs) = rhs_v.kind.clone().ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!(
@@ -167,11 +157,15 @@ fn find(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sign
     }
 
     let mut i = 0usize;
-    let item = array.values.iter().cloned().find(|_| {
-        let keep = *preds.get(i).unwrap_or(&false);
-        i += 1;
-        keep
-    });
+    let item = array
+        .values
+        .iter()
+        .find(|&_| {
+            let keep = *preds.get(i).unwrap_or(&false);
+            i += 1;
+            keep
+        })
+        .cloned();
 
     match item {
         Some(v) => Signal::Success(v),

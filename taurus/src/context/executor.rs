@@ -90,15 +90,15 @@ impl<'a> Executor<'a> {
                     .get(i)
                     .copied()
                     .unwrap_or(ParameterNode::Eager);
-                if matches!(mode, ParameterNode::Eager) {
-                    if let Argument::Thunk(id) = *a {
-                        match self.execute(id) {
-                            Signal::Success(v) => *a = Argument::Eval(v),
-                            s @ (Signal::Failure(_)
-                            | Signal::Return(_)
-                            | Signal::Respond(_)
-                            | Signal::Stop) => return s,
-                        }
+                if matches!(mode, ParameterNode::Eager)
+                    && let Argument::Thunk(id) = *a
+                {
+                    match self.execute(id) {
+                        Signal::Success(v) => *a = Argument::Eval(v),
+                        s @ (Signal::Failure(_)
+                        | Signal::Return(_)
+                        | Signal::Respond(_)
+                        | Signal::Stop) => return s,
                     }
                 }
             }

@@ -1,10 +1,10 @@
 use tucana::shared::{Struct, Value, value::Kind};
 
+use crate::context::Context;
 use crate::context::argument::Argument;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError};
 
 pub fn collect_object_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![

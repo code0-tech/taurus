@@ -1,8 +1,8 @@
-use std::convert::Infallible;
-use tucana::shared::{ListValue, Struct, Value};
-use tucana::shared::value::Kind;
 use crate::context::signal::Signal;
 use crate::error::RuntimeError;
+use std::convert::Infallible;
+use tucana::shared::value::Kind;
+use tucana::shared::{ListValue, Struct, Value};
 
 #[derive(Clone, Debug)]
 pub enum Argument {
@@ -11,13 +11,13 @@ pub enum Argument {
     Eval(tucana::shared::Value),
     // Thunk of NodeFunction identifier
     // - used for lazy execution of nodes
-    Thunk(i64)
+    Thunk(i64),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum ParameterNode {
     Eager,
-    Lazy
+    Lazy,
 }
 
 pub trait TryFromArgument: Sized {
@@ -25,7 +25,10 @@ pub trait TryFromArgument: Sized {
 }
 
 fn type_err(msg: &str) -> Signal {
-    Signal::Failure(RuntimeError::simple("InvalidArgumentRuntimeError", msg.to_string()))
+    Signal::Failure(RuntimeError::simple(
+        "InvalidArgumentRuntimeError",
+        msg.to_string(),
+    ))
 }
 
 impl TryFromArgument for Value {
@@ -40,7 +43,9 @@ impl TryFromArgument for Value {
 impl TryFromArgument for f64 {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
-            Argument::Eval(Value { kind: Some(Kind::NumberValue(n)) }) => Ok(*n),
+            Argument::Eval(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => Ok(*n),
             _ => Err(type_err("Expected number")),
         }
     }
@@ -49,7 +54,9 @@ impl TryFromArgument for f64 {
 impl TryFromArgument for bool {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
-            Argument::Eval(Value { kind: Some(Kind::BoolValue(b)) }) => Ok(*b),
+            Argument::Eval(Value {
+                kind: Some(Kind::BoolValue(b)),
+            }) => Ok(*b),
             _ => Err(type_err("Expected boolean")),
         }
     }
@@ -58,7 +65,9 @@ impl TryFromArgument for bool {
 impl TryFromArgument for String {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
-            Argument::Eval(Value { kind: Some(Kind::StringValue(s)) }) => Ok(s.clone()),
+            Argument::Eval(Value {
+                kind: Some(Kind::StringValue(s)),
+            }) => Ok(s.clone()),
             _ => Err(type_err("Expected string")),
         }
     }
@@ -67,7 +76,9 @@ impl TryFromArgument for String {
 impl TryFromArgument for Struct {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
-            Argument::Eval(Value { kind: Some(Kind::StructValue(s)) }) => Ok(s.clone()),
+            Argument::Eval(Value {
+                kind: Some(Kind::StructValue(s)),
+            }) => Ok(s.clone()),
             _ => Err(type_err("Expected struct")),
         }
     }
@@ -76,7 +87,9 @@ impl TryFromArgument for Struct {
 impl TryFromArgument for ListValue {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
-            Argument::Eval(Value { kind: Some(Kind::ListValue(list)) }) => Ok(list.clone()),
+            Argument::Eval(Value {
+                kind: Some(Kind::ListValue(list)),
+            }) => Ok(list.clone()),
             _ => Err(Signal::Failure(RuntimeError::simple_str(
                 "InvalidArgumentRuntimeError",
                 "Expected array (ListValue)",

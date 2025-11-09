@@ -24,10 +24,13 @@ pub fn collect_text_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::text::reverse", HandlerFn::eager(reverse, 1)),
         ("std::text::remove", HandlerFn::eager(remove, 3)),
         ("std::text::replace", HandlerFn::eager(replace, 3)),
-        ("std::text::replace_first", HandlerFn::eager(replace_first, 3)),
+        (
+            "std::text::replace_first",
+            HandlerFn::eager(replace_first, 3),
+        ),
         ("std::text::replace_last", HandlerFn::eager(replace_last, 3)),
-        ("std::text::hex", HandlerFn::eager(hex,1)),
-        ("std::text::octal", HandlerFn::eager(octal,1 )),
+        ("std::text::hex", HandlerFn::eager(hex, 1)),
+        ("std::text::octal", HandlerFn::eager(octal, 1)),
         ("std::text::index_of", HandlerFn::eager(index_of, 2)),
         ("std::text::contains", HandlerFn::eager(contains, 2)),
         ("std::text::split", HandlerFn::eager(split, 2)),
@@ -249,7 +252,7 @@ fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     let new = chars
         .into_iter()
         .enumerate()
-        .filter(|&(i, _)| i <  from_u || i >= to_u)
+        .filter(|&(i, _)| i < from_u || i >= to_u)
         .map(|e| e.1)
         .collect::<String>();
 
@@ -496,52 +499,72 @@ mod tests {
 
     // ---------- helpers: build Arguments ----------
     fn a_str(s: &str) -> Argument {
-        Argument:: Eval(Value { kind: Some(Kind::StringValue(s.to_string())) })
+        Argument::Eval(Value {
+            kind: Some(Kind::StringValue(s.to_string())),
+        })
     }
     fn a_num(n: f64) -> Argument {
-        Argument::Eval(Value { kind: Some(Kind::NumberValue(n)) })
+        Argument::Eval(Value {
+            kind: Some(Kind::NumberValue(n)),
+        })
     }
     fn a_list(vals: Vec<Value>) -> Argument {
-        Argument::Eval(Value { kind: Some(Kind::ListValue(ListValue { values: vals })) })
+        Argument::Eval(Value {
+            kind: Some(Kind::ListValue(ListValue { values: vals })),
+        })
     }
 
     // ---------- helpers: build bare Values ----------
     fn v_str(s: &str) -> Value {
-        Value { kind: Some(Kind::StringValue(s.to_string())) }
+        Value {
+            kind: Some(Kind::StringValue(s.to_string())),
+        }
     }
     fn v_num(n: f64) -> Value {
-        Value { kind: Some(Kind::NumberValue(n)) }
+        Value {
+            kind: Some(Kind::NumberValue(n)),
+        }
     }
 
     // ---------- helpers: extract from Signal ----------
     fn expect_num(sig: Signal) -> f64 {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::NumberValue(n)) }) => n,
+            Signal::Success(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => n,
             other => panic!("Expected NumberValue, got {:?}", other),
         }
     }
     fn expect_bool(sig: Signal) -> bool {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::BoolValue(b)) }) => b,
+            Signal::Success(Value {
+                kind: Some(Kind::BoolValue(b)),
+            }) => b,
             other => panic!("Expected BoolValue, got {:?}", other),
         }
     }
     fn expect_str(sig: Signal) -> String {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::StringValue(s)) }) => s,
+            Signal::Success(Value {
+                kind: Some(Kind::StringValue(s)),
+            }) => s,
             other => panic!("Expected StringValue, got {:?}", other),
         }
     }
     fn expect_list(sig: Signal) -> Vec<Value> {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::ListValue(ListValue { values })) }) => values,
+            Signal::Success(Value {
+                kind: Some(Kind::ListValue(ListValue { values })),
+            }) => values,
             other => panic!("Expected ListValue, got {:?}", other),
         }
     }
 
     // dummy runner for handlers that accept `run: &mut dyn FnMut(i64) -> Signal`
     fn dummy_run(_: i64) -> Signal {
-        Signal::Success(Value { kind: Some(Kind::NullValue(0)) })
+        Signal::Success(Value {
+            kind: Some(Kind::NullValue(0)),
+        })
     }
 
     // ---------- tests ----------
@@ -557,13 +580,22 @@ mod tests {
         assert_eq!(bytes[0], v_num(104.0)); // 'h'
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(byte_size(&[a_str("hello")], &mut ctx, &mut run)), 5.0);
+        assert_eq!(
+            expect_num(byte_size(&[a_str("hello")], &mut ctx, &mut run)),
+            5.0
+        );
 
         // unicode: "café" -> 5 bytes, 4 chars
         let mut run = dummy_run;
-        assert_eq!(expect_num(byte_size(&[a_str("café")], &mut ctx, &mut run)), 5.0);
+        assert_eq!(
+            expect_num(byte_size(&[a_str("café")], &mut ctx, &mut run)),
+            5.0
+        );
         let mut run = dummy_run;
-        assert_eq!(expect_num(length(&[a_str("café")], &mut ctx, &mut run)), 4.0);
+        assert_eq!(
+            expect_num(length(&[a_str("café")], &mut ctx, &mut run)),
+            4.0
+        );
     }
 
     #[test]
@@ -571,19 +603,34 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(capitalize(&[a_str("hello world")], &mut ctx, &mut run)), "Hello World");
+        assert_eq!(
+            expect_str(capitalize(&[a_str("hello world")], &mut ctx, &mut run)),
+            "Hello World"
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(uppercase(&[a_str("Hello")], &mut ctx, &mut run)), "HELLO");
+        assert_eq!(
+            expect_str(uppercase(&[a_str("Hello")], &mut ctx, &mut run)),
+            "HELLO"
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(lowercase(&[a_str("Hello")], &mut ctx, &mut run)), "hello");
+        assert_eq!(
+            expect_str(lowercase(&[a_str("Hello")], &mut ctx, &mut run)),
+            "hello"
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(swapcase(&[a_str("HeLLo123")], &mut ctx, &mut run)), "hEllO123");
+        assert_eq!(
+            expect_str(swapcase(&[a_str("HeLLo123")], &mut ctx, &mut run)),
+            "hEllO123"
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(trim(&[a_str("  hi  ")], &mut ctx, &mut run)), "hi");
+        assert_eq!(
+            expect_str(trim(&[a_str("  hi  ")], &mut ctx, &mut run)),
+            "hi"
+        );
     }
 
     #[test]
@@ -595,7 +642,10 @@ mod tests {
         assert_eq!(chars_list, vec![v_str("a"), v_str("b"), v_str("c")]);
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(at(&[a_str("hello"), a_num(1.0)], &mut ctx, &mut run)), "e");
+        assert_eq!(
+            expect_str(at(&[a_str("hello"), a_num(1.0)], &mut ctx, &mut run)),
+            "e"
+        );
 
         // out-of-bounds
         let mut run = dummy_run;
@@ -616,20 +666,41 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(append(&[a_str("hello"), a_str(" world")], &mut ctx, &mut run)), "hello world");
+        assert_eq!(
+            expect_str(append(
+                &[a_str("hello"), a_str(" world")],
+                &mut ctx,
+                &mut run
+            )),
+            "hello world"
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(prepend(&[a_str("world"), a_str("hello ")], &mut ctx, &mut run)), "hello world");
+        assert_eq!(
+            expect_str(prepend(
+                &[a_str("world"), a_str("hello ")],
+                &mut ctx,
+                &mut run
+            )),
+            "hello world"
+        );
 
         // insert uses BYTE index; for ASCII this matches char index
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(insert(&[a_str("hello"), a_num(2.0), a_str("XXX")], &mut ctx, &mut run)),
+            expect_str(insert(
+                &[a_str("hello"), a_num(2.0), a_str("XXX")],
+                &mut ctx,
+                &mut run
+            )),
             "heXXXllo"
         );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(length(&[a_str("hello")], &mut ctx, &mut run)), 5.0);
+        assert_eq!(
+            expect_num(length(&[a_str("hello")], &mut ctx, &mut run)),
+            5.0
+        );
     }
 
     #[test]
@@ -639,25 +710,41 @@ mod tests {
         // remove uses CHAR indices [from, to)
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(remove(&[a_str("hello world"), a_num(2.0), a_num(7.0)], &mut ctx, &mut run)),
+            expect_str(remove(
+                &[a_str("hello world"), a_num(2.0), a_num(7.0)],
+                &mut ctx,
+                &mut run
+            )),
             "heorld"
         );
 
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(replace(&[a_str("hello world hello"), a_str("hello"), a_str("hi")], &mut ctx, &mut run)),
+            expect_str(replace(
+                &[a_str("hello world hello"), a_str("hello"), a_str("hi")],
+                &mut ctx,
+                &mut run
+            )),
             "hi world hi"
         );
 
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(replace_first(&[a_str("one two one"), a_str("one"), a_str("1")], &mut ctx, &mut run)),
+            expect_str(replace_first(
+                &[a_str("one two one"), a_str("one"), a_str("1")],
+                &mut ctx,
+                &mut run
+            )),
             "1 two one"
         );
 
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(replace_last(&[a_str("one two one"), a_str("one"), a_str("1")], &mut ctx, &mut run)),
+            expect_str(replace_last(
+                &[a_str("one two one"), a_str("one"), a_str("1")],
+                &mut ctx,
+                &mut run
+            )),
             "one two 1"
         );
     }
@@ -667,13 +754,19 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(hex(&[a_str("hello")], &mut ctx, &mut run)), "68656c6c6f");
+        assert_eq!(
+            expect_str(hex(&[a_str("hello")], &mut ctx, &mut run)),
+            "68656c6c6f"
+        );
 
         let mut run = dummy_run;
         assert_eq!(expect_str(octal(&[a_str("A")], &mut ctx, &mut run)), "101");
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(reverse(&[a_str("hello")], &mut ctx, &mut run)), "olleh");
+        assert_eq!(
+            expect_str(reverse(&[a_str("hello")], &mut ctx, &mut run)),
+            "olleh"
+        );
     }
 
     #[test]
@@ -681,23 +774,49 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(index_of(&[a_str("hello world"), a_str("world")], &mut ctx, &mut run)), 6.0);
+        assert_eq!(
+            expect_num(index_of(
+                &[a_str("hello world"), a_str("world")],
+                &mut ctx,
+                &mut run
+            )),
+            6.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(index_of(&[a_str("hello"), a_str("xyz")], &mut ctx, &mut run)), -1.0);
+        assert_eq!(
+            expect_num(index_of(
+                &[a_str("hello"), a_str("xyz")],
+                &mut ctx,
+                &mut run
+            )),
+            -1.0
+        );
 
         let mut run = dummy_run;
-        assert!(expect_bool(contains(&[a_str("hello world"), a_str("world")], &mut ctx, &mut run)));
+        assert!(expect_bool(contains(
+            &[a_str("hello world"), a_str("world")],
+            &mut ctx,
+            &mut run
+        )));
 
         let mut run = dummy_run;
         let split_list = expect_list(split(&[a_str("a,b,c"), a_str(",")], &mut ctx, &mut run));
         assert_eq!(split_list, vec![v_str("a"), v_str("b"), v_str("c")]);
 
         let mut run = dummy_run;
-        assert!(expect_bool(starts_with(&[a_str("hello"), a_str("he")], &mut ctx, &mut run)));
+        assert!(expect_bool(starts_with(
+            &[a_str("hello"), a_str("he")],
+            &mut ctx,
+            &mut run
+        )));
 
         let mut run = dummy_run;
-        assert!(expect_bool(ends_with(&[a_str("hello"), a_str("lo")], &mut ctx, &mut run)));
+        assert!(expect_bool(ends_with(
+            &[a_str("hello"), a_str("lo")],
+            &mut ctx,
+            &mut run
+        )));
     }
 
     #[test]
@@ -710,7 +829,10 @@ mod tests {
 
         let mut run = dummy_run;
         let list_arg = a_list(vec![v_num(65.0), v_num(66.0), v_num(67.0)]);
-        assert_eq!(expect_str(from_ascii(&[list_arg], &mut ctx, &mut run)), "ABC");
+        assert_eq!(
+            expect_str(from_ascii(&[list_arg], &mut ctx, &mut run)),
+            "ABC"
+        );
 
         // invalid element
         let mut run = dummy_run;
@@ -727,13 +849,21 @@ mod tests {
 
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(encode(&[a_str("hello"), a_str("BASE64")], &mut ctx, &mut run)),
+            expect_str(encode(
+                &[a_str("hello"), a_str("BASE64")],
+                &mut ctx,
+                &mut run
+            )),
             "aGVsbG8="
         );
 
         let mut run = dummy_run;
         assert_eq!(
-            expect_str(decode(&[a_str("aGVsbG8="), a_str("base64")], &mut ctx, &mut run)),
+            expect_str(decode(
+                &[a_str("aGVsbG8="), a_str("base64")],
+                &mut ctx,
+                &mut run
+            )),
             "hello"
         );
 
@@ -745,8 +875,16 @@ mod tests {
         }
 
         let mut run = dummy_run;
-        assert!(expect_bool(is_equal(&[a_str("x"), a_str("x")], &mut ctx, &mut run)));
+        assert!(expect_bool(is_equal(
+            &[a_str("x"), a_str("x")],
+            &mut ctx,
+            &mut run
+        )));
         let mut run = dummy_run;
-        assert!(!expect_bool(is_equal(&[a_str("x"), a_str("y")], &mut ctx, &mut run)));
+        assert!(!expect_bool(is_equal(
+            &[a_str("x"), a_str("y")],
+            &mut ctx,
+            &mut run
+        )));
     }
 }

@@ -371,7 +371,9 @@ mod tests {
 
     // ---- helpers: Arguments ----
     fn a_num(n: f64) -> Argument {
-        Argument::Eval(Value { kind: Some(Kind::NumberValue(n)) })
+        Argument::Eval(Value {
+            kind: Some(Kind::NumberValue(n)),
+        })
     }
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {
@@ -382,36 +384,50 @@ mod tests {
     // ---- helpers: extractors ----
     fn expect_num(sig: Signal) -> f64 {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::NumberValue(n)) }) => n,
+            Signal::Success(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => n,
             other => panic!("Expected NumberValue, got {:?}", other),
         }
     }
     fn expect_bool(sig: Signal) -> bool {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::BoolValue(b)) }) => b,
+            Signal::Success(Value {
+                kind: Some(Kind::BoolValue(b)),
+            }) => b,
             other => panic!("Expected BoolValue, got {:?}", other),
         }
     }
     fn expect_str(sig: Signal) -> String {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::StringValue(s)) }) => s,
+            Signal::Success(Value {
+                kind: Some(Kind::StringValue(s)),
+            }) => s,
             other => panic!("Expected StringValue, got {:?}", other),
         }
     }
 
     // dummy runner for handlers that accept `run: &mut dyn FnMut(i64) -> Signal`
     fn dummy_run(_: i64) -> Signal {
-        Signal::Success(Value { kind: Some(Kind::NullValue(0)) })
+        Signal::Success(Value {
+            kind: Some(Kind::NullValue(0)),
+        })
     }
 
     #[test]
     fn test_add_and_multiply() {
         let mut ctx = Context::new();
         let mut run = dummy_run;
-        assert_eq!(expect_num(add(&[a_num(5.0), a_num(3.0)], &mut ctx, &mut run)), 8.0);
+        assert_eq!(
+            expect_num(add(&[a_num(5.0), a_num(3.0)], &mut ctx, &mut run)),
+            8.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(multiply(&[a_num(4.0), a_num(2.5)], &mut ctx, &mut run)), 10.0);
+        assert_eq!(
+            expect_num(multiply(&[a_num(4.0), a_num(2.5)], &mut ctx, &mut run)),
+            10.0
+        );
     }
 
     #[test]
@@ -419,10 +435,16 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(substract(&[a_num(10.0), a_num(4.0)], &mut ctx, &mut run)), 6.0);
+        assert_eq!(
+            expect_num(substract(&[a_num(10.0), a_num(4.0)], &mut ctx, &mut run)),
+            6.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(divide(&[a_num(15.0), a_num(3.0)], &mut ctx, &mut run)), 5.0);
+        assert_eq!(
+            expect_num(divide(&[a_num(15.0), a_num(3.0)], &mut ctx, &mut run)),
+            5.0
+        );
 
         // divide by zero -> Failure
         let mut run = dummy_run;
@@ -437,7 +459,10 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(modulo(&[a_num(10.0), a_num(3.0)], &mut ctx, &mut run)), 1.0);
+        assert_eq!(
+            expect_num(modulo(&[a_num(10.0), a_num(3.0)], &mut ctx, &mut run)),
+            1.0
+        );
 
         // modulo by zero -> Failure
         let mut run = dummy_run;
@@ -457,14 +482,26 @@ mod tests {
         let mut run = dummy_run;
         assert!(expect_bool(is_positive(&[a_num(5.0)], &mut ctx, &mut run)));
         let mut run = dummy_run;
-        assert!(!expect_bool(is_positive(&[a_num(-1.0)], &mut ctx, &mut run)));
+        assert!(!expect_bool(is_positive(
+            &[a_num(-1.0)],
+            &mut ctx,
+            &mut run
+        )));
         let mut run = dummy_run;
         assert!(expect_bool(is_positive(&[a_num(0.0)], &mut ctx, &mut run)));
 
         let mut run = dummy_run;
-        assert!(expect_bool(is_greater(&[a_num(10.0), a_num(5.0)], &mut ctx, &mut run)));
+        assert!(expect_bool(is_greater(
+            &[a_num(10.0), a_num(5.0)],
+            &mut ctx,
+            &mut run
+        )));
         let mut run = dummy_run;
-        assert!(expect_bool(is_less(&[a_num(3.0), a_num(7.0)], &mut ctx, &mut run)));
+        assert!(expect_bool(is_less(
+            &[a_num(3.0), a_num(7.0)],
+            &mut ctx,
+            &mut run
+        )));
 
         let mut run = dummy_run;
         assert!(expect_bool(is_zero(&[a_num(0.0)], &mut ctx, &mut run)));
@@ -480,7 +517,10 @@ mod tests {
         assert_eq!(expect_num(square(&[a_num(4.0)], &mut ctx, &mut run)), 16.0);
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(exponential(&[a_num(2.0), a_num(3.0)], &mut ctx, &mut run)), 8.0);
+        assert_eq!(
+            expect_num(exponential(&[a_num(2.0), a_num(3.0)], &mut ctx, &mut run)),
+            8.0
+        );
     }
 
     #[test]
@@ -488,10 +528,14 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert!((expect_num(pi(&[], &mut ctx, &mut run)) - std::f64::consts::PI).abs() < f64::EPSILON);
+        assert!(
+            (expect_num(pi(&[], &mut ctx, &mut run)) - std::f64::consts::PI).abs() < f64::EPSILON
+        );
 
         let mut run = dummy_run;
-        assert!((expect_num(euler(&[], &mut ctx, &mut run)) - std::f64::consts::E).abs() < f64::EPSILON);
+        assert!(
+            (expect_num(euler(&[], &mut ctx, &mut run)) - std::f64::consts::E).abs() < f64::EPSILON
+        );
 
         let mut run = dummy_run;
         let inf = expect_num(infinity(&[], &mut ctx, &mut run));
@@ -503,13 +547,30 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(round_up(&[a_num(f64::consts::PI), a_num(2.0)], &mut ctx, &mut run)), 3.15);
+        assert_eq!(
+            expect_num(round_up(
+                &[a_num(f64::consts::PI), a_num(2.0)],
+                &mut ctx,
+                &mut run
+            )),
+            3.15
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(round_down(&[a_num(f64::consts::PI), a_num(2.0)], &mut ctx, &mut run)), 3.14);
+        assert_eq!(
+            expect_num(round_down(
+                &[a_num(f64::consts::PI), a_num(2.0)],
+                &mut ctx,
+                &mut run
+            )),
+            3.14
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(round(&[a_num(3.145), a_num(2.0)], &mut ctx, &mut run)), 3.15);
+        assert_eq!(
+            expect_num(round(&[a_num(3.145), a_num(2.0)], &mut ctx, &mut run)),
+            3.15
+        );
     }
 
     #[test]
@@ -517,11 +578,14 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(square_root(&[a_num(16.0)], &mut ctx, &mut run)), 4.0);
+        assert_eq!(
+            expect_num(square_root(&[a_num(16.0)], &mut ctx, &mut run)),
+            4.0
+        );
 
         // cube root via exponent 1/3
         let mut run = dummy_run;
-        let r = expect_num(root(&[a_num(8.0), a_num(1.0/3.0)], &mut ctx, &mut run));
+        let r = expect_num(root(&[a_num(8.0), a_num(1.0 / 3.0)], &mut ctx, &mut run));
         assert!((r - 2.0).abs() < 1e-6);
 
         let mut run = dummy_run;
@@ -538,10 +602,16 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(from_text(&[a_str("42.5")], &mut ctx, &mut run)), 42.5);
+        assert_eq!(
+            expect_num(from_text(&[a_str("42.5")], &mut ctx, &mut run)),
+            42.5
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(as_text(&[a_num(42.5)], &mut ctx, &mut run)), "42.5".to_string());
+        assert_eq!(
+            expect_str(as_text(&[a_num(42.5)], &mut ctx, &mut run)),
+            "42.5".to_string()
+        );
 
         // from_text failure
         let mut run = dummy_run;
@@ -556,10 +626,16 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(min(&[a_num(3.0), a_num(7.0)], &mut ctx, &mut run)), 3.0);
+        assert_eq!(
+            expect_num(min(&[a_num(3.0), a_num(7.0)], &mut ctx, &mut run)),
+            3.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(max(&[a_num(3.0), a_num(7.0)], &mut ctx, &mut run)), 7.0);
+        assert_eq!(
+            expect_num(max(&[a_num(3.0), a_num(7.0)], &mut ctx, &mut run)),
+            7.0
+        );
 
         let mut run = dummy_run;
         assert_eq!(expect_num(negate(&[a_num(5.0)], &mut ctx, &mut run)), -5.0);
@@ -579,7 +655,7 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        let s = expect_num(sin(&[a_num(f64::consts::PI/2.0)], &mut ctx, &mut run));
+        let s = expect_num(sin(&[a_num(f64::consts::PI / 2.0)], &mut ctx, &mut run));
         assert!((s - 1.0).abs() < 1e-12);
 
         let mut run = dummy_run;
@@ -587,12 +663,12 @@ mod tests {
         assert!((c - 1.0).abs() < 1e-12);
 
         let mut run = dummy_run;
-        let t = expect_num(tan(&[a_num(f64::consts::PI/4.0)], &mut ctx, &mut run));
+        let t = expect_num(tan(&[a_num(f64::consts::PI / 4.0)], &mut ctx, &mut run));
         assert!((t - 1.0).abs() < 1e-4);
 
         let mut run = dummy_run;
         let asn = expect_num(arcsin(&[a_num(1.0)], &mut ctx, &mut run));
-        assert!((asn - f64::consts::PI/2.0).abs() < 1e-12);
+        assert!((asn - f64::consts::PI / 2.0).abs() < 1e-12);
 
         let mut run = dummy_run;
         let acs = expect_num(arccos(&[a_num(1.0)], &mut ctx, &mut run));
@@ -600,7 +676,7 @@ mod tests {
 
         let mut run = dummy_run;
         let atn = expect_num(arctan(&[a_num(1.0)], &mut ctx, &mut run));
-        assert!((atn - f64::consts::PI/4.0).abs() < 1e-12);
+        assert!((atn - f64::consts::PI / 4.0).abs() < 1e-12);
 
         let mut run = dummy_run;
         let sh = expect_num(sinh(&[a_num(0.0)], &mut ctx, &mut run));
@@ -616,18 +692,47 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(clamp(&[a_num(5.0), a_num(1.0), a_num(10.0)], &mut ctx, &mut run)), 5.0);
+        assert_eq!(
+            expect_num(clamp(
+                &[a_num(5.0), a_num(1.0), a_num(10.0)],
+                &mut ctx,
+                &mut run
+            )),
+            5.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(clamp(&[a_num(-5.0), a_num(1.0), a_num(10.0)], &mut ctx, &mut run)), 1.0);
+        assert_eq!(
+            expect_num(clamp(
+                &[a_num(-5.0), a_num(1.0), a_num(10.0)],
+                &mut ctx,
+                &mut run
+            )),
+            1.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(clamp(&[a_num(15.0), a_num(1.0), a_num(10.0)], &mut ctx, &mut run)), 10.0);
+        assert_eq!(
+            expect_num(clamp(
+                &[a_num(15.0), a_num(1.0), a_num(10.0)],
+                &mut ctx,
+                &mut run
+            )),
+            10.0
+        );
 
         let mut run = dummy_run;
-        assert!(expect_bool(is_equal(&[a_num(5.0), a_num(5.0)], &mut ctx, &mut run)));
+        assert!(expect_bool(is_equal(
+            &[a_num(5.0), a_num(5.0)],
+            &mut ctx,
+            &mut run
+        )));
 
         let mut run = dummy_run;
-        assert!(!expect_bool(is_equal(&[a_num(5.0), a_num(3.0)], &mut ctx, &mut run)));
+        assert!(!expect_bool(is_equal(
+            &[a_num(5.0), a_num(3.0)],
+            &mut ctx,
+            &mut run
+        )));
     }
 }

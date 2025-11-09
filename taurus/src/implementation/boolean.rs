@@ -8,11 +8,14 @@ use tucana::shared::{Value, value::Kind};
 pub fn collect_boolean_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
         ("std::boolean::as_number", HandlerFn::eager(as_number, 1)),
-        ("std::boolean::as_text",  HandlerFn::eager(as_text, 1)),
-        ("std::boolean::from_number",  HandlerFn::eager(from_number, 1)),
-        ("std::boolean::from_text",  HandlerFn::eager(from_text, 1)),
-        ("std::boolean::is_equal",  HandlerFn::eager(is_equal, 2)),
-        ("std::boolean::negate",  HandlerFn::eager(negate, 1)),
+        ("std::boolean::as_text", HandlerFn::eager(as_text, 1)),
+        (
+            "std::boolean::from_number",
+            HandlerFn::eager(from_number, 1),
+        ),
+        ("std::boolean::from_text", HandlerFn::eager(from_text, 1)),
+        ("std::boolean::is_equal", HandlerFn::eager(is_equal, 2)),
+        ("std::boolean::negate", HandlerFn::eager(negate, 1)),
     ]
 }
 
@@ -77,38 +80,52 @@ mod tests {
 
     // ---- helpers: make Arguments ----
     fn a_bool(b: bool) -> Argument {
-        Argument::Eval(Value { kind: Some(Kind::BoolValue(b)) })
+        Argument::Eval(Value {
+            kind: Some(Kind::BoolValue(b)),
+        })
     }
     fn a_num(n: f64) -> Argument {
-        Argument::Eval(Value { kind: Some(Kind::NumberValue(n)) })
+        Argument::Eval(Value {
+            kind: Some(Kind::NumberValue(n)),
+        })
     }
     fn a_str(s: &str) -> Argument {
-        Argument::Eval(Value { kind: Some(Kind::StringValue(s.to_string())) })
+        Argument::Eval(Value {
+            kind: Some(Kind::StringValue(s.to_string())),
+        })
     }
 
     // ---- helpers: unwrap Signal ----
     fn expect_num(sig: Signal) -> f64 {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::NumberValue(n)) }) => n,
+            Signal::Success(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => n,
             other => panic!("Expected NumberValue, got {:?}", other),
         }
     }
     fn expect_str(sig: Signal) -> String {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::StringValue(s)) }) => s,
+            Signal::Success(Value {
+                kind: Some(Kind::StringValue(s)),
+            }) => s,
             other => panic!("Expected StringValue, got {:?}", other),
         }
     }
     fn expect_bool(sig: Signal) -> bool {
         match sig {
-            Signal::Success(Value { kind: Some(Kind::BoolValue(b)) }) => b,
+            Signal::Success(Value {
+                kind: Some(Kind::BoolValue(b)),
+            }) => b,
             other => panic!("Expected BoolValue, got {:?}", other),
         }
     }
 
     // dummy `run` closure (unused by these handlers)
     fn dummy_run(_: i64) -> Signal {
-        Signal::Success(Value { kind: Some(Kind::BoolValue(true)) })
+        Signal::Success(Value {
+            kind: Some(Kind::BoolValue(true)),
+        })
     }
 
     // ---- tests ----
@@ -117,10 +134,16 @@ mod tests {
     fn test_as_number_success() {
         let mut ctx = Context::new();
         let mut run = dummy_run;
-        assert_eq!(expect_num(as_number(&[a_bool(true)], &mut ctx, &mut run)), 1.0);
+        assert_eq!(
+            expect_num(as_number(&[a_bool(true)], &mut ctx, &mut run)),
+            1.0
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_num(as_number(&[a_bool(false)], &mut ctx, &mut run)), 0.0);
+        assert_eq!(
+            expect_num(as_number(&[a_bool(false)], &mut ctx, &mut run)),
+            0.0
+        );
     }
 
     #[test]
@@ -154,10 +177,16 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(as_text(&[a_bool(true)], &mut ctx, &mut run)), "true");
+        assert_eq!(
+            expect_str(as_text(&[a_bool(true)], &mut ctx, &mut run)),
+            "true"
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_str(as_text(&[a_bool(false)], &mut ctx, &mut run)), "false");
+        assert_eq!(
+            expect_str(as_text(&[a_bool(false)], &mut ctx, &mut run)),
+            "false"
+        );
     }
 
     #[test]
@@ -188,17 +217,29 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(from_number(&[a_num(0.0)], &mut ctx, &mut run)), false);
+        assert_eq!(
+            expect_bool(from_number(&[a_num(0.0)], &mut ctx, &mut run)),
+            false
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(from_number(&[a_num(3.5)], &mut ctx, &mut run)), true);
+        assert_eq!(
+            expect_bool(from_number(&[a_num(3.5)], &mut ctx, &mut run)),
+            true
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(from_number(&[a_num(-2.0)], &mut ctx, &mut run)), true);
+        assert_eq!(
+            expect_bool(from_number(&[a_num(-2.0)], &mut ctx, &mut run)),
+            true
+        );
 
         // -0.0 should behave like 0.0
         let mut run = dummy_run;
-        assert_eq!(expect_bool(from_number(&[a_num(-0.0)], &mut ctx, &mut run)), false);
+        assert_eq!(
+            expect_bool(from_number(&[a_num(-0.0)], &mut ctx, &mut run)),
+            false
+        );
     }
 
     #[test]
@@ -230,10 +271,16 @@ mod tests {
 
         // success (case-insensitive)
         let mut run = dummy_run;
-        assert_eq!(expect_bool(from_text(&[a_str("true")], &mut ctx, &mut run)), true);
+        assert_eq!(
+            expect_bool(from_text(&[a_str("true")], &mut ctx, &mut run)),
+            true
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(from_text(&[a_str("FALSE")], &mut ctx, &mut run)), false);
+        assert_eq!(
+            expect_bool(from_text(&[a_str("FALSE")], &mut ctx, &mut run)),
+            false
+        );
 
         // errors
         let mut run = dummy_run;
@@ -267,13 +314,26 @@ mod tests {
 
         // equalities
         let mut run = dummy_run;
-        assert_eq!(expect_bool(is_equal(&[a_bool(true), a_bool(true)], &mut ctx, &mut run)), true);
+        assert_eq!(
+            expect_bool(is_equal(&[a_bool(true), a_bool(true)], &mut ctx, &mut run)),
+            true
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(is_equal(&[a_bool(false), a_bool(false)], &mut ctx, &mut run)), true);
+        assert_eq!(
+            expect_bool(is_equal(
+                &[a_bool(false), a_bool(false)],
+                &mut ctx,
+                &mut run
+            )),
+            true
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(is_equal(&[a_bool(true), a_bool(false)], &mut ctx, &mut run)), false);
+        assert_eq!(
+            expect_bool(is_equal(&[a_bool(true), a_bool(false)], &mut ctx, &mut run)),
+            false
+        );
 
         // arity/type errors
         let mut run = dummy_run;
@@ -300,10 +360,16 @@ mod tests {
         let mut ctx = Context::new();
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(negate(&[a_bool(true)], &mut ctx, &mut run)), false);
+        assert_eq!(
+            expect_bool(negate(&[a_bool(true)], &mut ctx, &mut run)),
+            false
+        );
 
         let mut run = dummy_run;
-        assert_eq!(expect_bool(negate(&[a_bool(false)], &mut ctx, &mut run)), true);
+        assert_eq!(
+            expect_bool(negate(&[a_bool(false)], &mut ctx, &mut run)),
+            true
+        );
 
         // errors
         let mut run = dummy_run;

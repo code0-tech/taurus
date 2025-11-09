@@ -1,9 +1,9 @@
-pub mod context;
-pub mod signal;
 pub mod argument;
+pub mod context;
 pub mod executor;
-pub mod registry;
 pub mod macros;
+pub mod registry;
+pub mod signal;
 
 use crate::error::RuntimeError;
 use std::{

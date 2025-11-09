@@ -5,7 +5,7 @@ use crate::context::signal::Signal;
 use crate::error::RuntimeError;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use tucana::shared::{NodeFunction};
+use tucana::shared::NodeFunction;
 
 pub struct Executor<'a> {
     functions: &'a FunctionStore,

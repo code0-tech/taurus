@@ -1,4 +1,4 @@
-use crate::context::registry::{HandlerFunctionEntry};
+use crate::context::registry::HandlerFunctionEntry;
 
 mod array;
 mod boolean;

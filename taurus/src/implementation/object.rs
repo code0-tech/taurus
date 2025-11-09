@@ -1,21 +1,28 @@
-use tucana::shared::{Value, value::Kind, Struct};
+use tucana::shared::{Struct, Value, value::Kind};
 
-use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError};
 use crate::context::argument::Argument;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
+use crate::context::signal::Signal;
+use crate::{context::Context, error::RuntimeError};
 
 pub fn collect_object_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
-        ("std::object::contains_key", HandlerFn::eager(contains_key, 2)),
+        (
+            "std::object::contains_key",
+            HandlerFn::eager(contains_key, 2),
+        ),
         ("std::object::keys", HandlerFn::eager(keys, 1)),
         ("std::object::size", HandlerFn::eager(size, 1)),
         ("std::object::set", HandlerFn::eager(set, 3)),
     ]
 }
 
-fn contains_key(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn contains_key(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64) -> Signal,
+) -> Signal {
     args!(args => object: Struct, key: String);
     let contains = object.fields.contains_key(&key);
 
@@ -66,21 +73,31 @@ mod tests {
 
     // ---- helpers: Value builders ----
     fn v_string(s: &str) -> Value {
-        Value { kind: Some(Kind::StringValue(s.to_string())) }
+        Value {
+            kind: Some(Kind::StringValue(s.to_string())),
+        }
     }
     fn v_number(n: f64) -> Value {
-        Value { kind: Some(Kind::NumberValue(n)) }
+        Value {
+            kind: Some(Kind::NumberValue(n)),
+        }
     }
     fn v_bool(b: bool) -> Value {
-        Value { kind: Some(Kind::BoolValue(b)) }
+        Value {
+            kind: Some(Kind::BoolValue(b)),
+        }
     }
     fn v_struct(fields: HashMap<String, Value>) -> Value {
-        Value { kind: Some(Kind::StructValue(TcStruct { fields })) }
+        Value {
+            kind: Some(Kind::StructValue(TcStruct { fields })),
+        }
     }
 
     // ---- helpers: Struct builders (for args that expect Struct) ----
     fn s_empty() -> TcStruct {
-        TcStruct { fields: HashMap::new() }
+        TcStruct {
+            fields: HashMap::new(),
+        }
     }
     fn s_from(mut kv: Vec<(&str, Value)>) -> TcStruct {
         let mut map = HashMap::<String, Value>::new();
@@ -92,22 +109,32 @@ mod tests {
     fn s_test() -> TcStruct {
         s_from(vec![
             ("name", v_string("John")),
-            ("age",  v_number(30.0)),
+            ("age", v_number(30.0)),
             ("active", v_bool(true)),
         ])
     }
 
     // ---- helpers: Argument builders ----
     #[allow(dead_code)]
-    fn a_value(v: Value) -> Argument { Argument::Eval(v) }
-    fn a_string(s: &str) -> Argument { Argument::Eval(Value {
-        kind: Some(Kind::StringValue(s.to_string())),
-    }) }
-    fn a_struct(s: TcStruct) -> Argument { Argument::Eval(Value { kind: Some(Kind::StructValue(s)) }) }
+    fn a_value(v: Value) -> Argument {
+        Argument::Eval(v)
+    }
+    fn a_string(s: &str) -> Argument {
+        Argument::Eval(Value {
+            kind: Some(Kind::StringValue(s.to_string())),
+        })
+    }
+    fn a_struct(s: TcStruct) -> Argument {
+        Argument::Eval(Value {
+            kind: Some(Kind::StructValue(s)),
+        })
+    }
 
     // dummy runner for handlers that accept `run: &mut dyn FnMut(i64) -> Signal`
     fn dummy_run(_: i64) -> Signal {
-        Signal::Success(Value { kind: Some(Kind::NullValue(0)) })
+        Signal::Success(Value {
+            kind: Some(Kind::NullValue(0)),
+        })
     }
 
     #[test]
@@ -118,22 +145,40 @@ mod tests {
         let mut run = dummy_run;
         let args = vec![a_struct(s_test()), a_string("name")];
         let signal = contains_key(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
-        match v.kind { Some(Kind::BoolValue(b)) => assert!(b), _ => panic!("Expected BoolValue") }
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
+        match v.kind {
+            Some(Kind::BoolValue(b)) => assert!(b),
+            _ => panic!("Expected BoolValue"),
+        }
 
         // non-existing key
         let mut run = dummy_run;
         let args = vec![a_struct(s_test()), a_string("nonexistent")];
         let signal = contains_key(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
-        match v.kind { Some(Kind::BoolValue(b)) => assert!(!b), _ => panic!("Expected BoolValue") }
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
+        match v.kind {
+            Some(Kind::BoolValue(b)) => assert!(!b),
+            _ => panic!("Expected BoolValue"),
+        }
 
         // empty object
         let mut run = dummy_run;
         let args = vec![a_struct(s_empty()), a_string("any_key")];
         let signal = contains_key(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
-        match v.kind { Some(Kind::BoolValue(b)) => assert!(!b), _ => panic!("Expected BoolValue") }
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
+        match v.kind {
+            Some(Kind::BoolValue(b)) => assert!(!b),
+            _ => panic!("Expected BoolValue"),
+        }
     }
 
     #[test]
@@ -144,15 +189,27 @@ mod tests {
         let mut run = dummy_run;
         let args = vec![a_struct(s_test())];
         let signal = size(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
-        match v.kind { Some(Kind::NumberValue(n)) => assert_eq!(n, 3.0), _ => panic!("Expected NumberValue") }
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
+        match v.kind {
+            Some(Kind::NumberValue(n)) => assert_eq!(n, 3.0),
+            _ => panic!("Expected NumberValue"),
+        }
 
         // empty object
         let mut run = dummy_run;
         let args = vec![a_struct(s_empty())];
         let signal = size(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
-        match v.kind { Some(Kind::NumberValue(n)) => assert_eq!(n, 0.0), _ => panic!("Expected NumberValue") }
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
+        match v.kind {
+            Some(Kind::NumberValue(n)) => assert_eq!(n, 0.0),
+            _ => panic!("Expected NumberValue"),
+        }
     }
 
     #[test]
@@ -163,15 +220,27 @@ mod tests {
         let mut run = dummy_run;
         let args = vec![a_struct(s_test())];
         let signal = keys(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
         match v.kind {
             Some(Kind::ListValue(list)) => {
-                let mut got: Vec<String> = list.values.iter().filter_map(|v| {
-                    if let Some(Kind::StringValue(s)) = &v.kind { Some(s.clone()) } else { None }
-                }).collect();
+                let mut got: Vec<String> = list
+                    .values
+                    .iter()
+                    .filter_map(|v| {
+                        if let Some(Kind::StringValue(s)) = &v.kind {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
                 got.sort();
 
-                let mut expected = vec!["active".to_string(), "age".to_string(), "name".to_string()];
+                let mut expected =
+                    vec!["active".to_string(), "age".to_string(), "name".to_string()];
                 expected.sort();
                 assert_eq!(got, expected);
             }
@@ -182,7 +251,10 @@ mod tests {
         let mut run = dummy_run;
         let args = vec![a_struct(s_empty())];
         let signal = keys(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
         match v.kind {
             Some(Kind::ListValue(list)) => assert_eq!(list.values.len(), 0),
             _ => panic!("Expected ListValue"),
@@ -195,14 +267,24 @@ mod tests {
 
         // set new key
         let mut run = dummy_run;
-        let args = vec![a_struct(s_test()), a_string("email"), Argument::Eval(v_string("john@example.com"))];
+        let args = vec![
+            a_struct(s_test()),
+            a_string("email"),
+            Argument::Eval(v_string("john@example.com")),
+        ];
         let signal = set(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
         match v.kind {
             Some(Kind::StructValue(st)) => {
                 assert_eq!(st.fields.len(), 4);
                 match st.fields.get("email") {
-                    Some(Value { kind: Some(Kind::StringValue(s)), .. }) => assert_eq!(s, "john@example.com"),
+                    Some(Value {
+                        kind: Some(Kind::StringValue(s)),
+                        ..
+                    }) => assert_eq!(s, "john@example.com"),
                     _ => panic!("Expected email to be a string"),
                 }
             }
@@ -211,14 +293,24 @@ mod tests {
 
         // overwrite existing key
         let mut run = dummy_run;
-        let args = vec![a_struct(s_test()), a_string("age"), Argument::Eval(v_number(31.0))];
+        let args = vec![
+            a_struct(s_test()),
+            a_string("age"),
+            Argument::Eval(v_number(31.0)),
+        ];
         let signal = set(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
         match v.kind {
             Some(Kind::StructValue(st)) => {
                 assert_eq!(st.fields.len(), 3);
                 match st.fields.get("age") {
-                    Some(Value { kind: Some(Kind::NumberValue(n)), .. }) => assert_eq!(*n, 31.0),
+                    Some(Value {
+                        kind: Some(Kind::NumberValue(n)),
+                        ..
+                    }) => assert_eq!(*n, 31.0),
                     _ => panic!("Expected age to be a number"),
                 }
             }
@@ -232,14 +324,24 @@ mod tests {
 
         // empty object -> add first key
         let mut run = dummy_run;
-        let args = vec![a_struct(s_empty()), a_string("first_key"), Argument::Eval(v_bool(true))];
+        let args = vec![
+            a_struct(s_empty()),
+            a_string("first_key"),
+            Argument::Eval(v_bool(true)),
+        ];
         let signal = set(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
         match v.kind {
             Some(Kind::StructValue(st)) => {
                 assert_eq!(st.fields.len(), 1);
                 match st.fields.get("first_key") {
-                    Some(Value { kind: Some(Kind::BoolValue(b)), .. }) => assert_eq!(*b, true),
+                    Some(Value {
+                        kind: Some(Kind::BoolValue(b)),
+                        ..
+                    }) => assert_eq!(*b, true),
                     _ => panic!("Expected first_key to be a bool"),
                 }
             }
@@ -253,13 +355,23 @@ mod tests {
             v_struct(nf)
         };
         let mut run = dummy_run;
-        let args = vec![a_struct(s_test()), a_string("address"), Argument::Eval(nested)];
+        let args = vec![
+            a_struct(s_test()),
+            a_string("address"),
+            Argument::Eval(nested),
+        ];
         let signal = set(&args, &mut ctx, &mut run);
-        let v = match signal { Signal::Success(v) => v, _ => panic!("Expected Success") };
+        let v = match signal {
+            Signal::Success(v) => v,
+            _ => panic!("Expected Success"),
+        };
         match v.kind {
             Some(Kind::StructValue(st)) => {
                 match st.fields.get("address") {
-                    Some(Value { kind: Some(Kind::StructValue(_)), .. }) => { /* ok */ }
+                    Some(Value {
+                        kind: Some(Kind::StructValue(_)),
+                        ..
+                    }) => { /* ok */ }
                     _ => panic!("Expected address to be a struct"),
                 }
             }
@@ -277,7 +389,11 @@ mod tests {
         let orig_clone = original.clone();
 
         let mut run = dummy_run;
-        let args = vec![a_struct(original), a_string("new_key"), Argument::Eval(v_string("new_val"))];
+        let args = vec![
+            a_struct(original),
+            a_string("new_key"),
+            Argument::Eval(v_string("new_val")),
+        ];
         let _ = set(&args, &mut ctx, &mut run);
 
         // ensure original (captured clone) unchanged

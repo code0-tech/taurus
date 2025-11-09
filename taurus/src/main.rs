@@ -4,6 +4,8 @@ pub mod error;
 pub mod implementation;
 
 use crate::config::Config;
+use crate::context::executor::Executor;
+use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
 use crate::implementation::collect;
 use code0_flow::flow_config::load_env_file;
@@ -15,8 +17,6 @@ use std::collections::HashMap;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
-use crate::context::executor::Executor;
-use crate::context::registry::FunctionStore;
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
     let context = Context::new();

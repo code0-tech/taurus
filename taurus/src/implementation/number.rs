@@ -365,8 +365,8 @@ fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::context::Context;
     use crate::context::argument::Argument;
+    use crate::context::context::Context;
     use tucana::shared::{Value, value::Kind};
 
     // ---- helpers: Arguments ----

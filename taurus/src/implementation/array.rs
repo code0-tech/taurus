@@ -870,7 +870,7 @@ mod tests {
 
     #[test]
     fn test_last_success() {
-        let mut ctx = Context::default ();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_str("first"), v_str("second"), v_str("last")]);
         assert_eq!(expect_str(last(&[a_val(arr)], &mut ctx, &mut run)), "last");

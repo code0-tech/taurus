@@ -1,7 +1,7 @@
 use tucana::shared::{Struct, Value, value::Kind};
 
-use crate::context::context::Context;
 use crate::context::argument::Argument;
+use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
@@ -66,8 +66,8 @@ fn set(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::context::Context;
     use crate::context::argument::Argument;
+    use crate::context::context::Context;
     use std::collections::HashMap;
     use tucana::shared::{Struct as TcStruct, Value, value::Kind};
 

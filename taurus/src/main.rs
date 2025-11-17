@@ -1,27 +1,25 @@
 mod config;
 pub mod context;
 pub mod error;
-mod executor;
 pub mod implementation;
-pub mod registry;
 
 use crate::config::Config;
+use crate::context::executor::Executor;
+use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
-use crate::executor::Executor;
 use crate::implementation::collect;
 use code0_flow::flow_config::load_env_file;
-use context::Context;
+use context::context::Context;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
-use registry::FunctionStore;
 use std::collections::HashMap;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
-    let context = Context::new();
+    let context = Context::default();
 
     let node_functions: HashMap<i64, NodeFunction> = flow
         .node_functions

@@ -1,4 +1,4 @@
-use crate::registry::HandlerFn;
+use crate::context::registry::HandlerFunctionEntry;
 
 mod array;
 mod boolean;
@@ -8,7 +8,7 @@ mod number;
 mod object;
 mod text;
 
-pub fn collect() -> Vec<(&'static str, HandlerFn)> {
+pub fn collect() -> Vec<(&'static str, HandlerFunctionEntry)> {
     let mut result = vec![];
 
     result.extend(array::collect_array_functions());

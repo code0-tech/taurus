@@ -6,7 +6,7 @@ use crate::context::argument::Argument;
 use crate::context::macros::{args, no_args};
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError};
+use crate::{context::context::Context, error::RuntimeError};
 
 pub fn collect_number_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -365,7 +365,7 @@ fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::Context;
+    use crate::context::context::Context;
     use crate::context::argument::Argument;
     use tucana::shared::{Value, value::Kind};
 
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_add_and_multiply() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         assert_eq!(
             expect_num(add(&[a_num(5.0), a_num(3.0)], &mut ctx, &mut run)),
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_substract_and_divide() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn test_modulo_and_abs() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_comparisons_and_zero() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert!(expect_bool(is_positive(&[a_num(5.0)], &mut ctx, &mut run)));
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_powers_and_exponential() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(expect_num(square(&[a_num(4.0)], &mut ctx, &mut run)), 16.0);
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_constants() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert!(
@@ -544,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_rounding() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_roots_and_logs() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -599,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_text_conversions() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -623,7 +623,7 @@ mod tests {
 
     #[test]
     fn test_min_max_and_negate() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -643,7 +643,7 @@ mod tests {
 
     #[test]
     fn test_random_range() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         let r = expect_num(random(&[a_num(1.0), a_num(10.0)], &mut ctx, &mut run));
@@ -652,7 +652,7 @@ mod tests {
 
     #[test]
     fn test_trig_and_hyperbolic() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         let s = expect_num(sin(&[a_num(f64::consts::PI / 2.0)], &mut ctx, &mut run));
@@ -689,7 +689,7 @@ mod tests {
 
     #[test]
     fn test_clamp_and_is_equal() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(

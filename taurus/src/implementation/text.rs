@@ -2,7 +2,7 @@ use crate::context::argument::Argument;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError};
+use crate::{context::context::Context, error::RuntimeError};
 use base64::Engine;
 use tucana::shared::{ListValue, Value, value::Kind};
 
@@ -494,7 +494,7 @@ fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::Context;
+    use crate::context::context::Context;
     use tucana::shared::{ListValue, Value, value::Kind};
 
     // ---------- helpers: build Arguments ----------
@@ -571,7 +571,7 @@ mod tests {
 
     #[test]
     fn test_as_bytes_and_byte_size() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
 
         // "hello" -> 5 bytes
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_case_ops_and_trim() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn test_chars_and_at() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         let chars_list = expect_list(chars(&[a_str("abc")], &mut ctx, &mut run));
@@ -663,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_append_prepend_insert_length() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -705,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_remove_replace_variants() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // remove uses CHAR indices [from, to)
         let mut run = dummy_run;
@@ -751,7 +751,7 @@ mod tests {
 
     #[test]
     fn test_hex_octal_reverse() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -771,7 +771,7 @@ mod tests {
 
     #[test]
     fn test_index_contains_split_starts_ends() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -821,7 +821,7 @@ mod tests {
 
     #[test]
     fn test_to_ascii_and_from_ascii() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         let ascii_vals = expect_list(to_ascii(&[a_str("AB")], &mut ctx, &mut run));
@@ -845,7 +845,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_base64_and_is_equal() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(

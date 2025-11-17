@@ -1,5 +1,5 @@
-use crate::context::Context;
 use crate::context::argument::{Argument, ParameterNode};
+use crate::context::context::{Context, ContextResult};
 use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
 use crate::error::RuntimeError;
@@ -75,8 +75,23 @@ impl<'a> Executor<'a> {
                     tucana::shared::node_value::Value::LiteralValue(val) => {
                         args.push(Argument::Eval(val.clone()))
                     }
-                    tucana::shared::node_value::Value::ReferenceValue(_r) => {
-                        unimplemented!("ReferenceValue")
+                    tucana::shared::node_value::Value::ReferenceValue(reference) => {
+                        let mut ctx = self.context.borrow_mut();
+                        let value = ctx.get(reference.node_id);
+                        match value {
+                            ContextResult::Error(runtime_error) => {
+                                return Signal::Failure(runtime_error);
+                            }
+                            ContextResult::Success(result) => {
+                                args.push(Argument::Eval(result.clone()));
+                            }
+                            ContextResult::NotFound => {
+                                return Signal::Failure(RuntimeError::simple_str(
+                                    "ReferenceValueNotFound",
+                                    "The given node has not been executed but referenced.",
+                                ));
+                            }
+                        }
                     }
                     tucana::shared::node_value::Value::NodeFunctionId(id) => {
                         args.push(Argument::Thunk(*id))

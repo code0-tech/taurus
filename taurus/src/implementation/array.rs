@@ -6,7 +6,7 @@ use crate::context::argument::Argument;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError};
+use crate::{context::context::Context, error::RuntimeError};
 
 pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -629,7 +629,7 @@ fn join(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sign
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::Context;
+    use crate::context::context::Context;
     use tucana::shared::{ListValue, Value, value::Kind};
 
     // --- helpers -------------------------------------------------------------
@@ -699,7 +699,7 @@ mod tests {
     // --- at ------------------------------------------------------------------
     #[test]
     fn test_at_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_num(10.0), v_num(20.0), v_num(30.0)]);
 
@@ -727,7 +727,7 @@ mod tests {
 
     #[test]
     fn test_at_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_num(1.0)]);
 
@@ -764,7 +764,7 @@ mod tests {
     // --- concat --------------------------------------------------------------
     #[test]
     fn test_concat_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let a = v_list(vec![v_num(1.0), v_num(2.0)]);
         let b = v_list(vec![v_num(3.0), v_num(4.0)]);
@@ -776,7 +776,7 @@ mod tests {
 
     #[test]
     fn test_concat_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_num(1.0)]);
         match concat(&[a_val(arr.clone())], &mut ctx, &mut run) {
@@ -800,7 +800,7 @@ mod tests {
     // --- filter / find / find_last / find_index ------------------------------
     #[test]
     fn test_filter_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let array = v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]);
         let predicate = v_list(vec![v_bool(true), v_bool(false), v_bool(true)]);
@@ -816,7 +816,7 @@ mod tests {
 
     #[test]
     fn test_filter_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let array = v_list(vec![v_num(1.0)]);
         let predicate = v_list(vec![v_bool(true)]);
@@ -841,7 +841,7 @@ mod tests {
     // --- first / last --------------------------------------------------------
     #[test]
     fn test_first_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_str("first"), v_str("second"), v_str("third")]);
         assert_eq!(
@@ -852,7 +852,7 @@ mod tests {
 
     #[test]
     fn test_first_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match first(&[a_val(v_list(vec![]))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -870,7 +870,7 @@ mod tests {
 
     #[test]
     fn test_last_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default ();
         let mut run = dummy_run;
         let arr = v_list(vec![v_str("first"), v_str("second"), v_str("last")]);
         assert_eq!(expect_str(last(&[a_val(arr)], &mut ctx, &mut run)), "last");
@@ -878,7 +878,7 @@ mod tests {
 
     #[test]
     fn test_last_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match last(&[a_val(v_list(vec![]))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -893,7 +893,7 @@ mod tests {
     // --- for_each / map ------------------------------------------------------
     #[test]
     fn test_for_each_and_map() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match for_each(&[], &mut ctx, &mut run) {
             Signal::Success(Value {
@@ -920,7 +920,7 @@ mod tests {
     // --- push / pop / remove -------------------------------------------------
     #[test]
     fn test_push_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let out = expect_list(push(
             &[
@@ -936,7 +936,7 @@ mod tests {
 
     #[test]
     fn test_push_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match push(&[a_val(v_list(vec![v_num(1.0)]))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -954,7 +954,7 @@ mod tests {
 
     #[test]
     fn test_pop_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let out = expect_list(pop(
             &[a_val(v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]))],
@@ -968,7 +968,7 @@ mod tests {
 
     #[test]
     fn test_pop_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match pop(&[a_val(v_str("nope"))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -982,7 +982,7 @@ mod tests {
 
     #[test]
     fn test_remove_success_and_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         // success
         let arr = v_list(vec![v_str("first"), v_str("second"), v_str("third")]);
@@ -1020,7 +1020,7 @@ mod tests {
     // --- is_empty / size -----------------------------------------------------
     #[test]
     fn test_is_empty_and_size() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         assert!(expect_bool(is_empty(
             &[a_val(v_list(vec![]))],
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[test]
     fn test_is_empty_error_and_size_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match is_empty(&[a_val(v_str("nope"))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -1071,7 +1071,7 @@ mod tests {
     // --- index_of / to_unique ------------------------------------------------
     #[test]
     fn test_index_of_and_to_unique() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_num(10.0), v_num(42.0), v_num(30.0), v_num(42.0)]);
         assert_eq!(
@@ -1100,7 +1100,7 @@ mod tests {
 
     #[test]
     fn test_index_of_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         match index_of(&[a_val(v_list(vec![v_num(1.0)]))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -1119,7 +1119,7 @@ mod tests {
     // --- sort / sort_reverse -------------------------------------------------
     #[test]
     fn test_sort_and_sort_reverse() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
 
         // We don't rely on actual values; ordering is driven by the comparator sequence.
@@ -1143,7 +1143,7 @@ mod tests {
     // --- reverse / flat ------------------------------------------------------
     #[test]
     fn test_reverse_success_and_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let out = expect_list(reverse(
             &[a_val(v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]))],
@@ -1165,7 +1165,7 @@ mod tests {
 
     #[test]
     fn test_flat_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let nested = v_list(vec![
             v_num(1.0),
@@ -1184,7 +1184,7 @@ mod tests {
     // --- min / max / sum -----------------------------------------------------
     #[test]
     fn test_min_max_sum_success_and_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let nums = v_list(vec![v_num(5.0), v_num(1.0), v_num(8.0), v_num(2.0)]);
         assert_eq!(
@@ -1229,7 +1229,7 @@ mod tests {
     // --- join ----------------------------------------------------------------
     #[test]
     fn test_join_success_and_error() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         let arr = v_list(vec![v_str("hello"), v_str("world"), v_str("test")]);
         assert_eq!(

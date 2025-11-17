@@ -1,6 +1,6 @@
 use tucana::shared::{Struct, Value, value::Kind};
 
-use crate::context::Context;
+use crate::context::context::Context;
 use crate::context::argument::Argument;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
@@ -66,7 +66,7 @@ fn set(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::Context;
+    use crate::context::context::Context;
     use crate::context::argument::Argument;
     use std::collections::HashMap;
     use tucana::shared::{Struct as TcStruct, Value, value::Kind};
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_contains_key_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // existing key
         let mut run = dummy_run;
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_size_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // non-empty object
         let mut run = dummy_run;
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_keys_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // with fields
         let mut run = dummy_run;
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_set_success_and_overwrite() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // set new key
         let mut run = dummy_run;
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_set_with_empty_object_and_nested() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // empty object -> add first key
         let mut run = dummy_run;
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn test_set_preserves_original_struct() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let original = s_test();
         let original_len = original.fields.len();
 

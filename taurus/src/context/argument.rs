@@ -8,7 +8,7 @@ use tucana::shared::{ListValue, Struct, Value};
 pub enum Argument {
     // Eval => Evaluated Value
     // - can be consumed directly by a function
-    Eval(tucana::shared::Value),
+    Eval(Value),
     // Thunk of NodeFunction identifier
     // - used for lazy execution of nodes
     Thunk(i64),

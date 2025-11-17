@@ -2,7 +2,7 @@ use crate::context::argument::Argument;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::Context, error::RuntimeError};
+use crate::{context::context::Context, error::RuntimeError};
 use tucana::shared::{Value, value::Kind};
 
 pub fn collect_boolean_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
@@ -75,7 +75,7 @@ fn negate(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::Context;
+    use crate::context::context::Context;
     use tucana::shared::{Value, value::Kind};
 
     // ---- helpers: make Arguments ----
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_as_number_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
         let mut run = dummy_run;
         assert_eq!(
             expect_num(as_number(&[a_bool(true)], &mut ctx, &mut run)),
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_as_number_errors() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // wrong arity: none
         let mut run = dummy_run;
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_as_text_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_as_text_errors() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         match as_text(&[], &mut ctx, &mut run) {
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_from_number_success() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_from_number_errors() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         match from_number(&[], &mut ctx, &mut run) {
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_from_text_success_and_errors() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // success (case-insensitive)
         let mut run = dummy_run;
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_is_equal_and_errors() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         // equalities
         let mut run = dummy_run;
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_negate_success_and_errors() {
-        let mut ctx = Context::new();
+        let mut ctx = Context::default();
 
         let mut run = dummy_run;
         assert_eq!(

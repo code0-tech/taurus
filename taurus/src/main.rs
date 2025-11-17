@@ -9,7 +9,7 @@ use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
 use crate::implementation::collect;
 use code0_flow::flow_config::load_env_file;
-use context::Context;
+use context::context::Context;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
@@ -19,7 +19,7 @@ use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
-    let context = Context::new();
+    let context = Context::default();
 
     let node_functions: HashMap<i64, NodeFunction> = flow
         .node_functions

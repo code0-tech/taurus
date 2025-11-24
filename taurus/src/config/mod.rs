@@ -26,6 +26,8 @@ pub struct Config {
     pub grpc_host: String,
 
     pub grpc_port: u16,
+
+    pub definitions: String,
 }
 
 /// Implementation for all relevant `Aquila` startup configurations
@@ -36,12 +38,13 @@ impl Config {
     pub fn new() -> Self {
         Config {
             environment: env_with_default("ENVIRONMENT", Environment::Development),
-            mode: env_with_default("MODE", Mode::STATIC),
+            mode: env_with_default("MODE", Mode::DYNAMIC),
             nats_url: env_with_default("NATS_URL", String::from("nats://localhost:4222")),
             aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:50051")),
             with_health_service: env_with_default("WITH_HEALTH_SERVICE", false),
             grpc_host: env_with_default("GRPC_HOST", "127.0.0.1".to_string()),
             grpc_port: env_with_default("GRPC_PORT", 50051),
+            definitions: env_with_default("DEFINITIONS", String::from("./definitions")),
         }
     }
 }

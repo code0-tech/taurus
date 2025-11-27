@@ -8,10 +8,10 @@ use crate::context::executor::Executor;
 use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
 use crate::implementation::collect;
+use code0_flow::flow_service::FlowUpdateService;
 
 use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
-use code0_flow::flow_definition::FlowUpdateService;
 use context::context::Context;
 use futures_lite::StreamExt;
 use log::error;
@@ -90,8 +90,8 @@ async fn main() {
             config.aquila_url.clone(),
             config.definitions.clone().as_str(),
         )
-            .send()
-            .await;
+        .send()
+        .await;
     }
 
     let mut worker_task = tokio::spawn(async move {

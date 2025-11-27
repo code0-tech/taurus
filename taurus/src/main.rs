@@ -8,12 +8,16 @@ use crate::context::executor::Executor;
 use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
 use crate::implementation::collect;
+use code0_flow::flow_service::FlowUpdateService;
+
 use code0_flow::flow_config::load_env_file;
+use code0_flow::flow_config::mode::Mode::DYNAMIC;
 use context::context::Context;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
 use std::collections::HashMap;
+use tokio::signal;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
@@ -43,13 +47,17 @@ async fn main() {
     store.populate(collect());
 
     let client = match async_nats::connect(config.nats_url.clone()).await {
-        Ok(client) => client,
+        Ok(client) => {
+            log::info!("Connected to nats server");
+            client
+        }
         Err(err) => {
             panic!("Failed to connect to NATS server: {}", err);
         }
     };
 
-    if config.with_health_service {
+    // Optional health service task
+    let health_task = if config.with_health_service {
         let health_service = code0_flow::flow_health::HealthService::new(config.nats_url.clone());
         let address = match format!("{}:{}", config.grpc_host, config.grpc_port).parse() {
             Ok(address) => address,
@@ -59,51 +67,114 @@ async fn main() {
             }
         };
 
-        tokio::spawn(async move {
-            let _ = tonic::transport::Server::builder()
+        log::info!("Health server starting at {}", address);
+
+        Some(tokio::spawn(async move {
+            if let Err(err) = tonic::transport::Server::builder()
                 .add_service(HealthServer::new(health_service))
                 .serve(address)
-                .await;
-        });
+                .await
+            {
+                log::error!("Health server error: {:?}", err);
+            } else {
+                log::info!("Health server stopped gracefully.");
+            }
+        }))
+    } else {
+        None
+    };
 
-        println!("Health server started at {}", address);
+    // Optional: dynamic mode sync at startup
+    if config.mode == DYNAMIC {
+        FlowUpdateService::from_url(
+            config.aquila_url.clone(),
+            config.definitions.clone().as_str(),
+        )
+        .send()
+        .await;
     }
 
-    match client
-        .queue_subscribe(String::from("execution.*"), "taurus".into())
-        .await
-    {
-        Ok(mut sub) => {
-            println!("Subscribed to 'execution.*'");
+    let mut worker_task = tokio::spawn(async move {
+        let mut sub = match client
+            .queue_subscribe(String::from("execution.*"), "taurus".into())
+            .await
+        {
+            Ok(sub) => {
+                log::info!("Subscribed to 'execution.*'");
+                sub
+            }
+            Err(err) => {
+                log::error!("Failed to subscribe to 'execution.*': {:?}", err);
+                return;
+            }
+        };
 
-            while let Some(msg) = sub.next().await {
-                let flow: ExecutionFlow = match ExecutionFlow::decode(&*msg.payload) {
-                    Ok(flow) => flow,
-                    Err(err) => {
-                        println!("Failed to deserialize flow: {}, {:?}", err, &msg.payload);
-                        continue;
-                    }
-                };
+        while let Some(msg) = sub.next().await {
+            let flow: ExecutionFlow = match ExecutionFlow::decode(&*msg.payload) {
+                Ok(flow) => flow,
+                Err(err) => {
+                    log::error!(
+                        "Failed to deserialize flow: {:?}, payload: {:?}",
+                        err,
+                        &msg.payload
+                    );
+                    continue;
+                }
+            };
 
-                let value = match handle_message(flow, &store) {
-                    Signal::Failure(error) => error.as_value(),
-                    Signal::Success(v) => v,
-                    Signal::Return(v) => v,
-                    Signal::Respond(v) => v,
-                    Signal::Stop => Value {
-                        kind: Some(Kind::NullValue(0)),
-                    },
-                };
+            let value = match handle_message(flow, &store) {
+                Signal::Failure(error) => error.as_value(),
+                Signal::Success(v) => v,
+                Signal::Return(v) => v,
+                Signal::Respond(v) => v,
+                Signal::Stop => Value {
+                    kind: Some(Kind::NullValue(0)),
+                },
+            };
 
-                // Send a response to the reply subject
-                if let Some(reply) = msg.reply {
-                    match client.publish(reply, value.encode_to_vec().into()).await {
-                        Ok(_) => println!("Response sent"),
-                        Err(err) => println!("Failed to send response: {}", err),
-                    }
+            // Send a response to the reply subject
+            if let Some(reply) = msg.reply {
+                match client.publish(reply, value.encode_to_vec().into()).await {
+                    Ok(_) => log::debug!("Response sent"),
+                    Err(err) => log::error!("Failed to send response: {:?}", err),
                 }
             }
         }
-        Err(err) => panic!("Failed to subscribe to 'execution.*': {}", err),
-    };
+
+        log::info!("NATS worker loop ended");
+    });
+
+    match health_task {
+        Some(mut health_task) => {
+            // both are mutable JoinHandle<()> so we can borrow them in select!
+            tokio::select! {
+                _ = &mut worker_task => {
+                    log::warn!("NATS worker task finished, shutting down");
+                    health_task.abort();
+                }
+                _ = &mut health_task => {
+                    log::warn!("Health server task finished, shutting down");
+                    worker_task.abort();
+                }
+                _ = signal::ctrl_c() => {
+                    log::info!("Ctrl+C/Exit signal received, shutting down");
+                    worker_task.abort();
+                    health_task.abort();
+                }
+            }
+        }
+        None => {
+            tokio::select! {
+                _ = &mut worker_task => {
+                    log::warn!("NATS worker task finished, shutting down");
+                }
+                _ = signal::ctrl_c() => {
+                    log::info!("Ctrl+C/Exit signal received, shutting down");
+                    worker_task.abort();
+                }
+            }
+        }
+    }
+
+    log::info!("Taurus shutdown complete");
 }

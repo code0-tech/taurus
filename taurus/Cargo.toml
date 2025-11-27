@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-code0-flow = { workspace = true }
+code0-flow = { workspace = true, features = ["flow_service"] }
 tucana = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }

@@ -135,7 +135,7 @@ async fn main() {
             // Send a response to the reply subject
             if let Some(reply) = msg.reply {
                 match client.publish(reply, value.encode_to_vec().into()).await {
-                    Ok(_) => log::info!("Response sent"),
+                    Ok(_) => log::debug!("Response sent"),
                     Err(err) => log::error!("Failed to send response: {:?}", err),
                 }
             }

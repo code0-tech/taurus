@@ -77,7 +77,7 @@ async fn main() {
             {
                 log::error!("Health server error: {:?}", err);
             } else {
-                log::info!("Health server started!");
+                log::info!("Health server stopped gracefully.");
             }
         }))
     } else {

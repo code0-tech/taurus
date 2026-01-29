@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-code0-flow = { version = "0.0.22" }
+code0-flow = { version = "0.0.24" }
 tucana = { version = "0.0.43" }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "signal"] }
 log = "0.4.27"

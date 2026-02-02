@@ -90,6 +90,7 @@ async fn main() {
             config.aquila_url.clone(),
             config.definitions.clone().as_str(),
         )
+        .await
         .send()
         .await;
     }

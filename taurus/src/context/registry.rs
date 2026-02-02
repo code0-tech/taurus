@@ -7,8 +7,11 @@ use std::collections::HashMap;
 /// - For eager params, the executor will already convert them to Argument::Eval(Value).
 /// - For lazy params, the executor will pass Argument::Thunk(node_id).
 /// - If a handler wants to execute a lazy arg, it calls run(node_id).
-pub type HandlerFn =
-    fn(args: &[Argument], ctx: &mut Context, run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal;
+pub type HandlerFn = fn(
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal;
 
 pub struct HandlerFunctionEntry {
     pub handler: HandlerFn,

@@ -31,14 +31,22 @@ fn contains_key(
     })
 }
 
-fn size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn size(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => object: Struct);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(object.fields.len() as f64)),
     })
 }
 
-fn keys(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn keys(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => object: Struct);
 
     let keys = object
@@ -54,7 +62,11 @@ fn keys(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Co
     })
 }
 
-fn set(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn set(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => object: Struct, key: String, value: Value);
     let mut new_object = object.clone();
     new_object.fields.insert(key.clone(), value.clone());

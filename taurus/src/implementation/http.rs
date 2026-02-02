@@ -118,10 +118,12 @@ fn create_response(
 
     let code = match http_status_code.as_str().parse::<f64>() {
         Ok(c) => c,
-        Err(_) => return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentExeption",
-            "Expected http_status_code to be parsed to float",
-        )),
+        Err(_) => {
+            return Signal::Failure(RuntimeError::simple_str(
+                "InvalidArgumentExeption",
+                "Expected http_status_code to be parsed to float",
+            ));
+        }
     };
     fields.insert(
         "status_code".to_string(),

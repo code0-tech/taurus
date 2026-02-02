@@ -19,14 +19,22 @@ pub fn collect_boolean_functions() -> Vec<(&'static str, HandlerFunctionEntry)> 
     ]
 }
 
-fn as_number(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn as_number(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue((value as i64) as f64)),
     })
 }
 
-fn as_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn as_text(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_string())),
@@ -45,7 +53,11 @@ fn from_number(
     })
 }
 
-fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn from_text(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => text: String);
 
     match text.to_lowercase().parse::<bool>() {
@@ -59,14 +71,22 @@ fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &m
     }
 }
 
-fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn is_equal(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: bool, rhs: bool);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
     })
 }
 
-fn negate(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn negate(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(!value)),

@@ -28,10 +28,7 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::list::index_of", HandlerFn::eager(index_of, 2)),
         ("std::list::to_unique", HandlerFn::eager(to_unique, 1)),
         ("std::list::sort", HandlerFn::eager(sort, 2)),
-        (
-            "std::list::sort_reverse",
-            HandlerFn::eager(sort_reverse, 2),
-        ),
+        ("std::list::sort_reverse", HandlerFn::eager(sort_reverse, 2)),
         ("std::list::reverse", HandlerFn::eager(reverse, 1)),
         ("std::list::flat", HandlerFn::eager(flat, 1)),
         ("std::list::min", HandlerFn::eager(min, 1)),
@@ -41,7 +38,11 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     ]
 }
 
-fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn at(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     // array, index
     args!(args => array: ListValue, index: f64);
 
@@ -61,7 +62,11 @@ fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Cont
     }
 }
 
-fn concat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn concat(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs_v: Value, rhs_v: Value);
 
     let Kind::ListValue(lhs) = lhs_v.kind.clone().ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -91,7 +96,11 @@ fn concat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut 
     })
 }
 
-fn filter(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn filter(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value, predicate_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple(
@@ -132,7 +141,11 @@ fn filter(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut 
     })
 }
 
-fn find(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn find(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value, predicate_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -176,7 +189,11 @@ fn find(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Co
     }
 }
 
-fn find_last(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn find_last(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value, predicate_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -267,7 +284,11 @@ fn find_index(
     }
 }
 
-fn first(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn first(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array: ListValue);
 
     match array.values.first() {
@@ -279,7 +300,11 @@ fn first(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut C
     }
 }
 
-fn last(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn last(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array: ListValue);
     match array.values.last() {
         Some(v) => Signal::Success(v.clone()),
@@ -296,14 +321,22 @@ fn last(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Co
 /// The definition itself takes in an array and a node
 /// The node itself will be executed on the arrays elements
 /// If the node is (CONSUMER) resolved it goes in this function --> therefor all code is already executed
-fn for_each(_args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn for_each(
+    _args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     // Already executed by the engine (consumer); return Null
     Signal::Success(Value {
         kind: Some(Kind::NullValue(0)),
     })
 }
 
-fn map(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn map(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     // (array, transformed_results[])
     args!(args => _array_v: Value, transform_v: Value);
     let Kind::ListValue(transform_result) =
@@ -319,7 +352,11 @@ fn map(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Con
     })
 }
 
-fn push(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn push(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -333,7 +370,11 @@ fn push(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Co
     })
 }
 
-fn pop(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn pop(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -347,7 +388,11 @@ fn pop(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Con
     })
 }
 
-fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn remove(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -369,7 +414,11 @@ fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut 
     }
 }
 
-fn is_empty(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn is_empty(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -382,7 +431,11 @@ fn is_empty(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mu
     })
 }
 
-fn size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn size(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -395,7 +448,11 @@ fn size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Co
     })
 }
 
-fn index_of(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn index_of(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -415,7 +472,11 @@ fn index_of(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mu
     }
 }
 
-fn to_unique(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn to_unique(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -436,7 +497,11 @@ fn to_unique(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &m
     })
 }
 
-fn sort(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn sort(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     // array, resolved comparator yields -1/0/1 sequence
     args!(args => array_v: Value, cmp_v: Value);
     let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -519,7 +584,11 @@ fn sort_reverse(
     })
 }
 
-fn reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn reverse(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -533,7 +602,11 @@ fn reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut
     })
 }
 
-fn flat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn flat(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::simple_str(
@@ -555,7 +628,11 @@ fn flat(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Co
     })
 }
 
-fn min(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn min(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array: ListValue);
 
     let mut nums: Vec<f64> = Vec::new();
@@ -576,7 +653,11 @@ fn min(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Con
     }
 }
 
-fn max(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn max(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array: ListValue);
 
     let mut nums: Vec<f64> = Vec::new();
@@ -597,7 +678,11 @@ fn max(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Con
     }
 }
 
-fn sum(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn sum(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array: ListValue);
 
     let mut s = 0.0;
@@ -612,7 +697,11 @@ fn sum(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Con
     })
 }
 
-fn join(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn join(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => array: ListValue, separator: String);
 
     let mut parts: Vec<String> = Vec::new();

@@ -23,16 +23,28 @@ pub fn collect_control_functions() -> Vec<(&'static str, HandlerFunctionEntry)> 
     ]
 }
 
-fn stop(_args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn stop(
+    _args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     Signal::Stop
 }
 
-fn r#return(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn r#return(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: Value);
     Signal::Return(value)
 }
 
-fn r#if(args: &[Argument], ctx: &mut Context, run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn r#if(
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     let [
         Argument::Eval(Value {
             kind: Some(Kind::BoolValue(bool)),
@@ -55,7 +67,11 @@ fn r#if(args: &[Argument], ctx: &mut Context, run: &mut dyn FnMut(i64, &mut Cont
     }
 }
 
-fn if_else(args: &[Argument], ctx: &mut Context, run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
+fn if_else(
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     let [
         Argument::Eval(Value {
             kind: Some(Kind::BoolValue(bool)),

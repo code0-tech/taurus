@@ -20,7 +20,15 @@ macro_rules! args {
                 $ty as $crate::context::argument::TryFromArgument
             >::try_from_argument(& $args_ident[__i]) {
                 Ok(v) => v,
-                Err(sig) => return sig,
+                Err(sig) => {
+                    log::debug!(
+                        "Failed to parse argument '{}' (index {}, type {})",
+                        stringify!($name),
+                        __i,
+                        ::core::any::type_name::<$ty>(),
+                    );
+                    return sig;
+                }
             };
             __i += 1;
         )+

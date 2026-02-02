@@ -5,7 +5,7 @@ use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntr
 use crate::context::signal::Signal;
 use crate::error::RuntimeError;
 use tucana::shared::value::Kind;
-use tucana::shared::{Struct, Value};
+use tucana::shared::{ListValue, Struct, Value};
 
 pub fn collect_http_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -14,11 +14,15 @@ pub fn collect_http_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
             "http::response::create",
             HandlerFn::eager(create_response, 4),
         ),
-        ("http::control::respond", HandlerFn::eager(respond, 3)),
+        ("rest::control::respond", HandlerFn::eager(respond, 3)),
     ]
 }
 
-fn respond(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn respond(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => struct_val: Struct);
     let fields = &struct_val.fields;
 
@@ -43,10 +47,10 @@ fn respond(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> S
         ));
     };
 
-    let Some(Kind::StructValue(_headers_struct)) = &headers_val.kind else {
-        return Signal::Failure(RuntimeError::simple(
+    let Some(Kind::ListValue(_headers_struct)) = &headers_val.kind else {
+        return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            "Expected 'headers' to be StructValue".to_string(),
+            "Expected 'headers' to be ListValue",
         ));
     };
 
@@ -72,9 +76,9 @@ fn respond(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> S
 fn create_request(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
+    args!(args => http_method: String, headers: ListValue, http_url: String, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
     fields.insert(
@@ -94,7 +98,7 @@ fn create_request(
     fields.insert(
         "headers".to_string(),
         Value {
-            kind: Some(Kind::StructValue(headers.clone())),
+            kind: Some(Kind::ListValue(headers.clone())),
         },
     );
     fields.insert("body".to_string(), payload.clone());
@@ -107,22 +111,31 @@ fn create_request(
 fn create_response(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => http_status_code: f64, headers: Struct, payload: Value);
+    args!(args => http_status_code: String, headers: ListValue, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
+    let code = match http_status_code.as_str().parse::<f64>() {
+        Ok(c) => c,
+        Err(_) => {
+            return Signal::Failure(RuntimeError::simple_str(
+                "InvalidArgumentExeption",
+                "Expected http_status_code to be parsed to float",
+            ));
+        }
+    };
     fields.insert(
         "status_code".to_string(),
         Value {
-            kind: Some(Kind::NumberValue(http_status_code)),
+            kind: Some(Kind::NumberValue(code)),
         },
     );
 
     fields.insert(
         "headers".to_string(),
         Value {
-            kind: Some(Kind::StructValue(headers.clone())),
+            kind: Some(Kind::ListValue(headers.clone())),
         },
     );
     fields.insert("payload".to_string(), payload.clone());

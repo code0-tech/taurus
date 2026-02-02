@@ -37,7 +37,7 @@ pub fn collect_number_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::number::min", HandlerFn::eager(min, 2)),
         ("std::number::max", HandlerFn::eager(max, 2)),
         ("std::number::negate", HandlerFn::eager(negate, 1)),
-        ("std::number::random", HandlerFn::eager(random, 2)),
+        ("std::number::random_number", HandlerFn::eager(random, 2)),
         ("std::number::sin", HandlerFn::eager(sin, 1)),
         ("std::number::cos", HandlerFn::eager(cos, 1)),
         ("std::number::tan", HandlerFn::eager(tan, 1)),
@@ -51,28 +51,44 @@ pub fn collect_number_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     ]
 }
 
-fn add(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn add(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs + rhs)),
     })
 }
 
-fn multiply(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn multiply(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs * rhs)),
     })
 }
 
-fn substract(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn substract(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs - rhs)),
     })
 }
 
-fn divide(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn divide(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
 
     if rhs == 0.0 {
@@ -87,7 +103,11 @@ fn divide(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     })
 }
 
-fn modulo(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn modulo(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
 
     if rhs == 0.0 {
@@ -102,7 +122,11 @@ fn modulo(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     })
 }
 
-fn abs(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn abs(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.abs())),
@@ -112,7 +136,7 @@ fn abs(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signa
 fn is_positive(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
@@ -123,7 +147,7 @@ fn is_positive(
 fn is_greater(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
@@ -131,21 +155,33 @@ fn is_greater(
     })
 }
 
-fn is_less(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn is_less(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs < rhs)),
     })
 }
 
-fn is_zero(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn is_zero(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(value == 0.0)),
     })
 }
 
-fn square(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn square(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.powf(2.0))),
@@ -155,7 +191,7 @@ fn square(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
 fn exponential(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => base: f64, exponent: f64);
     Signal::Success(Value {
@@ -163,28 +199,44 @@ fn exponential(
     })
 }
 
-fn pi(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn pi(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     no_args!(args);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(f64::consts::PI)),
     })
 }
 
-fn euler(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn euler(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     no_args!(args);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(f64::consts::E)),
     })
 }
 
-fn infinity(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn infinity(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     no_args!(args);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(f64::INFINITY)),
     })
 }
 
-fn round_up(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn round_up(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64, decimal_places: f64);
     let factor = 10_f64.powi(decimal_places as i32);
     Signal::Success(Value {
@@ -195,7 +247,7 @@ fn round_up(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
 fn round_down(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: f64, decimal_places: f64);
     let factor = 10_f64.powi(decimal_places as i32);
@@ -204,7 +256,11 @@ fn round_down(
     })
 }
 
-fn round(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn round(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64, decimal_places: f64);
     let factor = 10_f64.powi(decimal_places as i32);
     Signal::Success(Value {
@@ -215,7 +271,7 @@ fn round(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sig
 fn square_root(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
@@ -223,28 +279,44 @@ fn square_root(
     })
 }
 
-fn root(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn root(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64, root: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.powf(root))),
     })
 }
 
-fn log(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn log(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64, base: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.log(base))),
     })
 }
 
-fn ln(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn ln(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.ln())),
     })
 }
 
-fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn from_text(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => string_value: String);
 
     match string_value.parse::<f64>() {
@@ -258,105 +330,171 @@ fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) ->
     }
 }
 
-fn as_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn as_text(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_string())),
     })
 }
 
-fn min(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn min(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs.min(rhs))),
     })
 }
 
-fn max(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn max(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(lhs.max(rhs))),
     })
 }
 
-fn negate(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn negate(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(-value)),
     })
 }
 
-fn random(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn random(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => min: f64, max: f64);
+
+    let min_i = min.ceil() as i64;
+    let max_i = max.floor() as i64;
+
+    let value = rand::random_range(min_i..=max_i) as i64;
+
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(rand::random_range(min..max))),
+        kind: Some(Kind::NumberValue(value as f64)),
     })
 }
 
-fn sin(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn sin(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.sin())),
     })
 }
 
-fn cos(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn cos(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.cos())),
     })
 }
 
-fn tan(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn tan(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.tan())),
     })
 }
 
-fn arcsin(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn arcsin(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.asin())),
     })
 }
 
-fn arccos(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn arccos(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.acos())),
     })
 }
 
-fn arctan(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn arctan(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.atan())),
     })
 }
 
-fn sinh(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn sinh(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.sinh())),
     })
 }
 
-fn cosh(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn cosh(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.cosh())),
     })
 }
 
-fn clamp(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn clamp(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: f64, min: f64, max: f64);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.clamp(min, max))),
     })
 }
 
-fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn is_equal(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => lhs: f64, rhs: f64);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
@@ -407,8 +545,8 @@ mod tests {
         }
     }
 
-    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64) -> Signal`
-    fn dummy_run(_: i64) -> Signal {
+    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64, &mut Context) -> Signal`
+    fn dummy_run(_: i64, _: &mut Context) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })

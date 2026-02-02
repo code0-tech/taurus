@@ -23,41 +23,43 @@ pub fn collect_control_functions() -> Vec<(&'static str, HandlerFunctionEntry)> 
     ]
 }
 
-fn stop(_args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn stop(
+    _args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     Signal::Stop
 }
 
-fn r#return(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn r#return(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     args!(args => value: Value);
     Signal::Return(value)
 }
 
-fn r#if(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn r#if(
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     let [
         Argument::Eval(Value {
-            kind: Some(Kind::StringValue(text)),
+            kind: Some(Kind::BoolValue(bool)),
         }),
         Argument::Thunk(if_pointer),
     ] = args
     else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!("Expected a string value but received {:?}", args),
+            format!("Expected a bool value but received {:?}", args),
         ));
     };
 
-    let bool: bool = match text.to_lowercase().parse() {
-        Ok(value) => value,
-        Err(_) => {
-            return Signal::Failure(RuntimeError::simple(
-                "InvalidArgumentRuntimeError",
-                format!("Failed to parse boolean from string: {:?}", text),
-            ));
-        }
-    };
-
-    if bool {
-        _run(*if_pointer)
+    if *bool {
+        run(*if_pointer, ctx)
     } else {
         Signal::Return(Value {
             kind: Some(Kind::NullValue(0)),
@@ -65,10 +67,14 @@ fn r#if(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sign
     }
 }
 
-fn if_else(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn if_else(
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
     let [
         Argument::Eval(Value {
-            kind: Some(Kind::StringValue(text)),
+            kind: Some(Kind::BoolValue(bool)),
         }),
         Argument::Thunk(if_pointer),
         Argument::Thunk(else_pointer),
@@ -76,23 +82,13 @@ fn if_else(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> S
     else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            format!("Expected a string value but received {:?}", args),
+            format!("Expected a bool value but received {:?}", args),
         ));
     };
 
-    let bool: bool = match text.to_lowercase().parse() {
-        Ok(value) => value,
-        Err(_) => {
-            return Signal::Failure(RuntimeError::simple(
-                "InvalidArgumentRuntimeError",
-                format!("Failed to parse boolean from string: {:?}", text),
-            ));
-        }
-    };
-
-    if bool {
-        _run(*if_pointer)
+    if *bool {
+        run(*if_pointer, ctx)
     } else {
-        _run(*else_pointer)
+        run(*else_pointer, ctx)
     }
 }

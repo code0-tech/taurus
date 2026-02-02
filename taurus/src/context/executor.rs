@@ -3,38 +3,31 @@ use crate::context::context::{Context, ContextResult};
 use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
 use crate::error::RuntimeError;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use tucana::shared::NodeFunction;
 
 pub struct Executor<'a> {
     functions: &'a FunctionStore,
     nodes: HashMap<i64, NodeFunction>,
-    context: RefCell<Context>,
 }
 
 impl<'a> Executor<'a> {
-    pub fn new(
-        functions: &'a FunctionStore,
-        nodes: HashMap<i64, NodeFunction>,
-        context: Context,
-    ) -> Self {
-        Executor {
-            functions,
-            nodes,
-            context: RefCell::new(context),
-        }
+    pub fn new(functions: &'a FunctionStore, nodes: HashMap<i64, NodeFunction>) -> Self {
+        Executor { functions, nodes }
     }
 
-    pub fn execute(&self, starting_node_id: i64) -> Signal {
+    pub fn execute(&self, starting_node_id: i64, ctx: &mut Context) -> Signal {
         let mut current_node_id = starting_node_id;
 
         loop {
             let node = match self.nodes.get(&current_node_id) {
                 None => {
-                    return Signal::Failure(RuntimeError::simple_str(
+                    return Signal::Failure(RuntimeError::simple(
                         "NodeNotFound",
-                        "The node with the id was not found",
+                        format!(
+                            "The node with the database id: {} was not found",
+                            current_node_id
+                        ),
                     ));
                 }
                 Some(n) => n.clone(),
@@ -42,9 +35,12 @@ impl<'a> Executor<'a> {
 
             let entry = match self.functions.get(node.runtime_function_id.as_str()) {
                 None => {
-                    return Signal::Failure(RuntimeError::simple_str(
+                    return Signal::Failure(RuntimeError::simple(
                         "FunctionNotFound",
-                        "The function was not found",
+                        format!(
+                            "The function {} (database id: {}) was not found",
+                            node.runtime_function_id, node.database_id
+                        ),
                     ));
                 }
                 Some(f) => f,
@@ -57,7 +53,7 @@ impl<'a> Executor<'a> {
                     None => {
                         return Signal::Failure(RuntimeError::simple_str(
                             "NodeValueNotFound",
-                            "Missing parameter value",
+                            "Missing parameter value: {}",
                         ));
                     }
                 };
@@ -76,7 +72,6 @@ impl<'a> Executor<'a> {
                         args.push(Argument::Eval(val.clone()))
                     }
                     tucana::shared::node_value::Value::ReferenceValue(reference) => {
-                        let mut ctx = self.context.borrow_mut();
                         let value = ctx.get(reference.node_id);
                         match value {
                             ContextResult::Error(runtime_error) => {
@@ -108,19 +103,26 @@ impl<'a> Executor<'a> {
                 if matches!(mode, ParameterNode::Eager)
                     && let Argument::Thunk(id) = *a
                 {
-                    match self.execute(id) {
-                        Signal::Success(v) => *a = Argument::Eval(v),
-                        s @ (Signal::Failure(_)
-                        | Signal::Return(_)
-                        | Signal::Respond(_)
-                        | Signal::Stop) => return s,
+                    match self.execute(id, ctx) {
+                        Signal::Success(v) => {
+                            log::debug!(
+                                "Successfully executed node with database id {}, resulted in value: {:?}",
+                                id,
+                                a
+                            );
+                            *a = Argument::Eval(v)
+                        }
+                        Signal::Failure(err) => {
+                            log::error!("Failed to execute node with database id: {}", id);
+                            return Signal::Failure(err);
+                        }
+                        s @ (Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => return s,
                     }
                 }
             }
 
-            let mut run = |node_id: i64| self.execute(node_id);
-            let mut ctx = self.context.borrow_mut();
-            let result = (entry.handler)(&args, &mut ctx, &mut run);
+            let mut run = |node_id: i64, ctx: &mut Context| self.execute(node_id, ctx);
+            let result = (entry.handler)(&args, ctx, &mut run);
 
             match result {
                 Signal::Success(value) => {
@@ -128,6 +130,11 @@ impl<'a> Executor<'a> {
                         current_node_id = next_node_id;
                         continue;
                     } else {
+                        log::debug!(
+                            "Successfully executed node with database id {}, resulted in value: {:?}",
+                            current_node_id,
+                            value
+                        );
                         return Signal::Success(value);
                     }
                 }

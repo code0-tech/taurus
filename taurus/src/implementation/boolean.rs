@@ -19,14 +19,14 @@ pub fn collect_boolean_functions() -> Vec<(&'static str, HandlerFunctionEntry)> 
     ]
 }
 
-fn as_number(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn as_number(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue((value as i64) as f64)),
     })
 }
 
-fn as_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn as_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_string())),
@@ -36,7 +36,7 @@ fn as_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> S
 fn from_number(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => number: f64);
     let is_zero = number == 0.0;
@@ -45,7 +45,7 @@ fn from_number(
     })
 }
 
-fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => text: String);
 
     match text.to_lowercase().parse::<bool>() {
@@ -59,14 +59,14 @@ fn from_text(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) ->
     }
 }
 
-fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => lhs: bool, rhs: bool);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
     })
 }
 
-fn negate(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn negate(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(!value)),
@@ -122,7 +122,7 @@ mod tests {
     }
 
     // dummy `run` closure (unused by these handlers)
-    fn dummy_run(_: i64) -> Signal {
+    fn dummy_run(_: i64, _: &mut Context) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::BoolValue(true)),
         })

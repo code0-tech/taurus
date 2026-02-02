@@ -51,7 +51,7 @@ fn arg_err<S: Into<String>>(msg: S) -> Signal {
     ))
 }
 
-fn as_bytes(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn as_bytes(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let bytes: Vec<Value> = value
@@ -67,7 +67,7 @@ fn as_bytes(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
     })
 }
 
-fn byte_size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn byte_size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.len() as f64)),
@@ -77,7 +77,7 @@ fn byte_size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) ->
 fn capitalize(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: String);
 
@@ -101,21 +101,21 @@ fn capitalize(
     })
 }
 
-fn uppercase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn uppercase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_uppercase())),
     })
 }
 
-fn lowercase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn lowercase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_lowercase())),
     })
 }
 
-fn swapcase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn swapcase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let swapped = value
@@ -136,14 +136,14 @@ fn swapcase(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
     })
 }
 
-fn trim(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn trim(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.trim().to_string())),
     })
 }
 
-fn chars(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn chars(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let list = value
@@ -158,7 +158,7 @@ fn chars(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sig
     })
 }
 
-fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, index: f64);
 
     if index < 0.0 {
@@ -181,21 +181,21 @@ fn at(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal
     }
 }
 
-fn append(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn append(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, suffix: String);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value + &suffix)),
     })
 }
 
-fn prepend(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn prepend(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, prefix: String);
     Signal::Success(Value {
         kind: Some(Kind::StringValue(prefix + &value)),
     })
 }
 
-fn insert(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn insert(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, position: f64, text: String);
 
     if position < 0.0 {
@@ -219,14 +219,14 @@ fn insert(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     })
 }
 
-fn length(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn length(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(value.chars().count() as f64)),
     })
 }
 
-fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, from: f64, to: f64);
 
     if from < 0.0 || to < 0.0 {
@@ -261,7 +261,7 @@ fn remove(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     })
 }
 
-fn replace(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn replace(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, old: String, new: String);
     let replaced = value.replace(&old, &new);
     Signal::Success(Value {
@@ -272,7 +272,7 @@ fn replace(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> S
 fn replace_first(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: String, old: String, new: String);
     let replaced = value.replacen(&old, &new, 1);
@@ -284,7 +284,7 @@ fn replace_first(
 fn replace_last(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: String, old: String, new: String);
 
@@ -307,7 +307,7 @@ fn replace_last(
     })
 }
 
-fn hex(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn hex(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let hex = value
@@ -321,7 +321,7 @@ fn hex(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signa
     })
 }
 
-fn octal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn octal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let oct = value
@@ -335,7 +335,7 @@ fn octal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sig
     })
 }
 
-fn index_of(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn index_of(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, sub: String);
 
     match value.find(&sub) {
@@ -348,14 +348,14 @@ fn index_of(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
     }
 }
 
-fn contains(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn contains(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, sub: String);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(value.contains(&sub))),
     })
 }
 
-fn split(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn split(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, delimiter: String);
 
     let parts = value
@@ -370,7 +370,7 @@ fn split(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sig
     })
 }
 
-fn reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let reversed = value.chars().rev().collect::<String>();
@@ -382,7 +382,7 @@ fn reverse(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> S
 fn starts_with(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: String, prefix: String);
     Signal::Success(Value {
@@ -390,14 +390,14 @@ fn starts_with(
     })
 }
 
-fn ends_with(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn ends_with(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, suffix: String);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(value.ends_with(&suffix))),
     })
 }
 
-fn to_ascii(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn to_ascii(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String);
 
     let ascii = value
@@ -415,7 +415,7 @@ fn to_ascii(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> 
 fn from_ascii(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     // Requires a TryFromArg impl for ListValue in your macro system.
     args!(args => list: ListValue);
@@ -440,7 +440,7 @@ fn from_ascii(
 }
 
 // NOTE: "encode"/"decode" currently only support base64.
-fn encode(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn encode(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, encoding: String);
 
     let encoded = match encoding.to_lowercase().as_str() {
@@ -455,7 +455,7 @@ fn encode(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     })
 }
 
-fn decode(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn decode(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => value: String, encoding: String);
 
     let decoded = match encoding.to_lowercase().as_str() {
@@ -484,7 +484,7 @@ fn decode(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Si
     })
 }
 
-fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn is_equal(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => lhs: String, rhs: String);
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
@@ -560,8 +560,8 @@ mod tests {
         }
     }
 
-    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64) -> Signal`
-    fn dummy_run(_: i64) -> Signal {
+    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64, &mut Context) -> Signal`
+    fn dummy_run(_: i64, _: &mut Context) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })

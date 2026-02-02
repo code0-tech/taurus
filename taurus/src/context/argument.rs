@@ -24,10 +24,10 @@ pub trait TryFromArgument: Sized {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal>;
 }
 
-fn type_err(msg: &str) -> Signal {
+fn type_err(msg: &str, a: &Argument) -> Signal {
     Signal::Failure(RuntimeError::simple(
         "InvalidArgumentRuntimeError",
-        msg.to_string(),
+        format!("{} but it was the arugment: {:?}", msg, a),
     ))
 }
 
@@ -35,7 +35,7 @@ impl TryFromArgument for Value {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
             Argument::Eval(v) => Ok(v.clone()),
-            _ => Err(type_err("Expected evaluated value but got lazy thunk")),
+            _ => Err(type_err("Expected evaluated value but got lazy thunk", a)),
         }
     }
 }
@@ -46,7 +46,7 @@ impl TryFromArgument for f64 {
             Argument::Eval(Value {
                 kind: Some(Kind::NumberValue(n)),
             }) => Ok(*n),
-            _ => Err(type_err("Expected number")),
+            _ => Err(type_err("Expected number", a)),
         }
     }
 }
@@ -57,7 +57,7 @@ impl TryFromArgument for bool {
             Argument::Eval(Value {
                 kind: Some(Kind::BoolValue(b)),
             }) => Ok(*b),
-            _ => Err(type_err("Expected boolean")),
+            _ => Err(type_err("Expected boolean", a)),
         }
     }
 }
@@ -68,7 +68,7 @@ impl TryFromArgument for String {
             Argument::Eval(Value {
                 kind: Some(Kind::StringValue(s)),
             }) => Ok(s.clone()),
-            _ => Err(type_err("Expected string")),
+            _ => Err(type_err("Expected string", a)),
         }
     }
 }
@@ -79,7 +79,7 @@ impl TryFromArgument for Struct {
             Argument::Eval(Value {
                 kind: Some(Kind::StructValue(s)),
             }) => Ok(s.clone()),
-            _ => Err(type_err("Expected struct")),
+            _ => Err(type_err("Expected struct", a)),
         }
     }
 }
@@ -90,9 +90,9 @@ impl TryFromArgument for ListValue {
             Argument::Eval(Value {
                 kind: Some(Kind::ListValue(list)),
             }) => Ok(list.clone()),
-            _ => Err(Signal::Failure(RuntimeError::simple_str(
+            _ => Err(Signal::Failure(RuntimeError::simple(
                 "InvalidArgumentRuntimeError",
-                "Expected array (ListValue)",
+                format!("Expected array (ListValue) but it was: {:?}", a),
             ))),
         }
     }

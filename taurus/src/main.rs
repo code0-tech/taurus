@@ -23,7 +23,7 @@ use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeFunction, Value};
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
-    let context = Context::default();
+    let mut context = Context::default();
 
     let node_functions: HashMap<i64, NodeFunction> = flow
         .node_functions
@@ -31,7 +31,7 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
         .map(|node| (node.database_id, node))
         .collect();
 
-    Executor::new(store, node_functions, context).execute(flow.starting_node_id)
+    Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context)
 }
 
 #[tokio::main]
@@ -122,15 +122,36 @@ async fn main() {
                 }
             };
 
+            let flow_id = flow.flow_id;
             let value = match handle_message(flow, &store) {
-                Signal::Failure(error) => error.as_value(),
-                Signal::Success(v) => v,
-                Signal::Return(v) => v,
-                Signal::Respond(v) => v,
-                Signal::Stop => Value {
-                    kind: Some(Kind::NullValue(0)),
-                },
+                Signal::Failure(error) => {
+                    log::error!(
+                        "RuntimeError occurred, execution failed because: {:?}",
+                        error
+                    );
+                    error.as_value()
+                }
+                Signal::Success(v) => {
+                    log::debug!("Execution ended on a success signal");
+                    v
+                }
+                Signal::Return(v) => {
+                    log::debug!("Execution ended on a return signal");
+                    v
+                }
+                Signal::Respond(v) => {
+                    log::debug!("Execution ended on a respond signal");
+                    v
+                }
+                Signal::Stop => {
+                    log::debug!("Revied stop signal as last signal");
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    }
+                }
             };
+
+            log::info!("For the flow_id {} returing the value {:?}", flow_id, value);
 
             // Send a response to the reply subject
             if let Some(reply) = msg.reply {

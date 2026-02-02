@@ -21,7 +21,7 @@ pub fn collect_object_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
 fn contains_key(
     args: &[Argument],
     _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64) -> Signal,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => object: Struct, key: String);
     let contains = object.fields.contains_key(&key);
@@ -31,14 +31,14 @@ fn contains_key(
     })
 }
 
-fn size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn size(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => object: Struct);
     Signal::Success(Value {
         kind: Some(Kind::NumberValue(object.fields.len() as f64)),
     })
 }
 
-fn keys(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn keys(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => object: Struct);
 
     let keys = object
@@ -54,7 +54,7 @@ fn keys(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Sign
     })
 }
 
-fn set(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64) -> Signal) -> Signal {
+fn set(args: &[Argument], _ctx: &mut Context, _run: &mut dyn FnMut(i64, &mut Context) -> Signal) -> Signal {
     args!(args => object: Struct, key: String, value: Value);
     let mut new_object = object.clone();
     new_object.fields.insert(key.clone(), value.clone());
@@ -130,8 +130,8 @@ mod tests {
         })
     }
 
-    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64) -> Signal`
-    fn dummy_run(_: i64) -> Signal {
+    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64, &mut Context) -> Signal`
+    fn dummy_run(_: i64, _: &mut Context) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })

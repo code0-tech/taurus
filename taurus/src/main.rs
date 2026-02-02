@@ -165,9 +165,19 @@ async fn main() {
         log::info!("NATS worker loop ended");
     });
 
+    #[cfg(unix)]
+    let sigterm = async {
+        use tokio::signal::unix::{SignalKind, signal};
+
+        let mut term = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+        term.recv().await;
+    };
+
+    #[cfg(not(unix))]
+    let sigterm = std::future::pending::<()>();
+
     match health_task {
         Some(mut health_task) => {
-            // both are mutable JoinHandle<()> so we can borrow them in select!
             tokio::select! {
                 _ = &mut worker_task => {
                     log::warn!("NATS worker task finished, shutting down");
@@ -182,6 +192,11 @@ async fn main() {
                     worker_task.abort();
                     health_task.abort();
                 }
+                _ = sigterm => {
+                    log::info!("SIGTERM received, shutting down");
+                    worker_task.abort();
+                    health_task.abort();
+                 }
             }
         }
         None => {
@@ -191,6 +206,10 @@ async fn main() {
                 }
                 _ = signal::ctrl_c() => {
                     log::info!("Ctrl+C/Exit signal received, shutting down");
+                    worker_task.abort();
+                }
+                _ = sigterm => {
+                    log::info!("SIGTERM received, shutting down");
                     worker_task.abort();
                 }
             }

@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use tucana::shared::{ListValue, Value, value::Kind};
 
 use crate::context::argument::Argument;
+use crate::context::argument::ParameterNode::{Eager, Lazy};
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
@@ -12,14 +13,38 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
         ("std::list::at", HandlerFn::eager(at, 2)),
         ("std::list::concat", HandlerFn::eager(concat, 2)),
-        ("std::list::filter", HandlerFn::eager(filter, 2)),
-        ("std::list::find", HandlerFn::eager(find, 2)),
-        ("std::list::find_last", HandlerFn::eager(find_last, 2)),
-        ("std::list::find_index", HandlerFn::eager(find_index, 2)),
+        //TODO
+        (
+            "std::list::filter",
+            HandlerFn::into_function_entry(filter, vec![Eager, Lazy]),
+        ),
+        //TODO
+        (
+            "std::list::find",
+            HandlerFn::into_function_entry(find, vec![Eager, Lazy]),
+        ),
+        //TODO
+        (
+            "std::list::find_last",
+            HandlerFn::into_function_entry(find_last, vec![Eager, Lazy]),
+        ),
+        //TODO
+        (
+            "std::list::find_index",
+            HandlerFn::into_function_entry(find_index, vec![Eager, Lazy]),
+        ),
         ("std::list::first", HandlerFn::eager(first, 1)),
         ("std::list::last", HandlerFn::eager(last, 1)),
-        ("std::list::for_each", HandlerFn::eager(for_each, 0)),
-        ("std::list::map", HandlerFn::eager(map, 2)),
+        //TODO
+        (
+            "std::list::for_each",
+            HandlerFn::into_function_entry(for_each, vec![Eager, Lazy]),
+        ),
+        //TODO
+        (
+            "std::list::map",
+            HandlerFn::into_function_entry(map, vec![Eager, Lazy]),
+        ),
         ("std::list::push", HandlerFn::eager(push, 2)),
         ("std::list::pop", HandlerFn::eager(pop, 1)),
         ("std::list::remove", HandlerFn::eager(remove, 2)),
@@ -27,8 +52,16 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::list::size", HandlerFn::eager(size, 1)),
         ("std::list::index_of", HandlerFn::eager(index_of, 2)),
         ("std::list::to_unique", HandlerFn::eager(to_unique, 1)),
-        ("std::list::sort", HandlerFn::eager(sort, 2)),
-        ("std::list::sort_reverse", HandlerFn::eager(sort_reverse, 2)),
+        //TODO
+        (
+            "std::list::sort",
+            HandlerFn::into_function_entry(sort, vec![Eager, Lazy]),
+        ),
+        //TODO
+        (
+            "std::list::sort_reverse",
+            HandlerFn::into_function_entry(sort_reverse, vec![Eager, Lazy]),
+        ),
         ("std::list::reverse", HandlerFn::eager(reverse, 1)),
         ("std::list::flat", HandlerFn::eager(flat, 1)),
         ("std::list::min", HandlerFn::eager(min, 1)),
@@ -36,6 +69,23 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::list::sum", HandlerFn::eager(sum, 1)),
         ("std::list::join", HandlerFn::eager(join, 2)),
     ]
+}
+
+fn as_list(value: &Value, err: &'static str) -> Result<ListValue, RuntimeError> {
+    match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
+        Kind::ListValue(lv) => Ok(lv),
+        _ => Err(RuntimeError::simple_str("InvalidArgumentRuntimeError", err)),
+    }
+}
+
+fn as_bool(value: &Value) -> Result<bool, RuntimeError> {
+    match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
+        Kind::BoolValue(b) => Ok(b),
+        _ => Err(RuntimeError::simple_str(
+            "InvalidArgumentRuntimeError",
+            "Expected boolean result from predicate",
+        )),
+    }
 }
 
 fn at(
@@ -98,192 +148,174 @@ fn concat(
 
 fn filter(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array".to_string(),
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans".to_string(),
+            format!(
+                "filter expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<Value> = Vec::new();
+
+    for item in array.values.iter().cloned() {
+        let pred_sig = run(*predicate_node, ctx);
+
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => out.push(item),
+                Ok(false) => {}
+                Err(e) => return Signal::Failure(e),
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
         }
     }
 
-    let mut i = 0usize;
-    let new_array = array
-        .values
-        .iter()
-        .filter(|_| {
-            let keep = *preds.get(i).unwrap_or(&false);
-            i += 1;
-            keep
-        })
-        .cloned()
-        .collect::<Vec<Value>>();
-
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(ListValue { values: new_array })),
+        kind: Some(Kind::ListValue(ListValue { values: out })),
     })
 }
 
 fn find(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans",
+            format!(
+                "find expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    for item in array.values.iter().cloned() {
+        let pred_sig = run(*predicate_node, ctx);
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => return Signal::Success(item),
+                Ok(false) => {}
+                Err(e) => return Signal::Failure(e),
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
         }
     }
 
-    let mut i = 0usize;
-    let item = array
-        .values
-        .iter()
-        .find(|&_| {
-            let keep = *preds.get(i).unwrap_or(&false);
-            i += 1;
-            keep
-        })
-        .cloned();
-
-    match item {
-        Some(v) => Signal::Success(v),
-        None => Signal::Failure(RuntimeError::simple_str(
-            "NotFoundError",
-            "No item found that satisfies the predicate",
-        )),
-    }
+    Signal::Failure(RuntimeError::simple_str(
+        "NotFoundError",
+        "No item found that satisfies the predicate",
+    ))
 }
-
 fn find_last(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans",
+            format!(
+                "find_last expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let mut array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+    array.values.reverse();
+
+    for item in array.values.into_iter() {
+        let pred_sig = run(*predicate_node, ctx);
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => return Signal::Success(item),
+                Ok(false) => {}
+                Err(e) => return Signal::Failure(e),
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
         }
     }
 
-    let mut i = 0usize;
-    let mut reversed = array.values.clone();
-    reversed.reverse();
-
-    let item = reversed.into_iter().find(|_| {
-        let keep = *preds.get(i).unwrap_or(&false);
-        i += 1;
-        keep
-    });
-
-    match item {
-        Some(v) => Signal::Success(v),
-        None => Signal::Failure(RuntimeError::simple_str(
-            "NotFoundError",
-            "No item found that satisfies the predicate",
-        )),
-    }
+    Signal::Failure(RuntimeError::simple_str(
+        "NotFoundError",
+        "No item found that satisfies the predicate",
+    ))
 }
 
 fn find_index(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans",
+            format!(
+                "find_index expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    for (idx, _item) in array.values.iter().cloned().enumerate() {
+        let pred_sig = run(*predicate_node, ctx);
+
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => {
+                    return Signal::Success(Value {
+                        kind: Some(Kind::NumberValue(idx as f64)),
+                    });
+                }
+                Ok(false) => {}
+                Err(e) => return Signal::Failure(e),
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
         }
     }
 
-    let mut idx = 0usize;
-    let found = array.values.iter().find(|_| {
-        let keep = *preds.get(idx).unwrap_or(&false);
-        if !keep {
-            idx += 1;
-        }
-        keep
-    });
-
-    match found {
-        Some(_) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(idx as f64)),
-        }),
-        None => Signal::Failure(RuntimeError::simple_str(
-            "NotFoundError",
-            "No item found that satisfies the predicate",
-        )),
-    }
+    Signal::Failure(RuntimeError::simple_str(
+        "NotFoundError",
+        "No item found that satisfies the predicate",
+    ))
 }
-
 fn first(
     args: &[Argument],
     _ctx: &mut Context,
@@ -315,18 +347,38 @@ fn last(
     }
 }
 
-/// for_each has no implementation
-///
-/// Reason:
-/// The definition itself takes in an array and a node
-/// The node itself will be executed on the arrays elements
-/// If the node is (CONSUMER) resolved it goes in this function --> therefor all code is already executed
 fn for_each(
-    _args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    // Already executed by the engine (consumer); return Null
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
+        ));
+    };
+
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    for _ in array.values.iter().cloned() {
+        let sig = run(*transform_node, ctx);
+
+        match sig {
+            Signal::Success(_) => {}
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
+        }
+    }
+
     Signal::Success(Value {
         kind: Some(Kind::NullValue(0)),
     })
@@ -334,21 +386,39 @@ fn for_each(
 
 fn map(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    // (array, transformed_results[])
-    args!(args => _array_v: Value, transform_v: Value);
-    let Kind::ListValue(transform_result) =
-        transform_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected transform result to be an array",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
+
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<Value> = Vec::with_capacity(array.values.len());
+
+    for _ in array.values.iter().cloned() {
+        let sig = run(*transform_node, ctx);
+        match sig {
+            Signal::Success(v) => out.push(v),
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
+        }
+    }
+
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(transform_result.clone())),
+        kind: Some(Kind::ListValue(ListValue { values: out })),
     })
 }
 

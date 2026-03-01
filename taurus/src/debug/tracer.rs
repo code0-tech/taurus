@@ -15,6 +15,12 @@ pub struct Tracer {
     stack: Vec<u64>,
 }
 
+impl Default for Tracer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tracer {
     pub fn new() -> Self {
         Self {

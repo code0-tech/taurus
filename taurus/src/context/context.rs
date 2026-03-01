@@ -19,16 +19,16 @@ pub struct Context {
 
 impl Context {
     pub fn new(flow_input: Value) -> Self {
-        return Context {
+        Context {
             results: HashMap::new(),
             input_types: HashMap::new(),
             flow_input,
             current_node_id: 0,
-        };
+        }
     }
 
     pub fn get_current_node_id(&mut self) -> i64 {
-        return self.current_node_id;
+        self.current_node_id
     }
 
     pub fn set_current_node_id(&mut self, node_id: i64) {
@@ -108,7 +108,7 @@ impl Context {
     }
 
     fn get_flow_input(&mut self) -> ContextResult {
-        return ContextResult::Success(self.flow_input.clone());
+        ContextResult::Success(self.flow_input.clone())
     }
 
     fn get_input_type(&mut self, input_type: InputType) -> ContextResult {

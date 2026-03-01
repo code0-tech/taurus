@@ -162,7 +162,7 @@ fn filter(
     let mut out: Vec<Value> = Vec::new();
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
@@ -210,7 +210,7 @@ fn find(
     };
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
@@ -266,7 +266,7 @@ fn find_last(
     array.values.reverse();
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
@@ -321,7 +321,7 @@ fn find_index(
     };
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
@@ -410,7 +410,7 @@ fn for_each(
     };
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
@@ -457,7 +457,7 @@ fn map(
     let mut out: Vec<Value> = Vec::with_capacity(array.values.len());
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
@@ -649,13 +649,13 @@ fn sort(
     let mut out: Vec<f64> = Vec::new();
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
 
     let input_type_next = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 1,
     };
@@ -666,7 +666,7 @@ fn sort(
         ctx.insert_input_type(input_type_next, b.clone());
         let sig = run(*transform_node, ctx);
         signals.push(sig);
-        return Ordering::Equal;
+        Ordering::Equal
     });
 
     for sig in signals {
@@ -735,13 +735,13 @@ fn sort_reverse(
     let mut out: Vec<f64> = Vec::new();
     let node_id = ctx.get_current_node_id();
     let input_type = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 0,
     };
 
     let input_type_next = InputType {
-        node_id: node_id,
+        node_id,
         parameter_index: 1,
         input_index: 1,
     };
@@ -752,7 +752,7 @@ fn sort_reverse(
         ctx.insert_input_type(input_type_next, b.clone());
         let sig = run(*transform_node, ctx);
         signals.push(sig);
-        return Ordering::Equal;
+        Ordering::Equal
     });
 
     for sig in signals {

@@ -14,6 +14,7 @@ pub struct Context {
     results: HashMap<i64, ContextResult>,
     input_types: HashMap<InputType, Value>,
     flow_input: Value,
+    current_node_id: i64,
 }
 
 impl Context {
@@ -22,7 +23,16 @@ impl Context {
             results: HashMap::new(),
             input_types: HashMap::new(),
             flow_input,
+            current_node_id: 0,
         };
+    }
+
+    pub fn get_current_node_id(&mut self) -> i64 {
+        return self.current_node_id;
+    }
+
+    pub fn set_current_node_id(&mut self, node_id: i64) {
+        self.current_node_id = node_id;
     }
 
     pub fn get(&mut self, reference: ReferenceValue) -> ContextResult {

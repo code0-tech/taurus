@@ -81,6 +81,7 @@ impl<'a> Executor<'a> {
         ctx: &mut Context,
         tracer: &mut dyn ExecutionTracer,
     ) -> (Signal, u64) {
+        ctx.set_current_node_id(node_id);
         let node = match self.nodes.get(&node_id) {
             Some(n) => n.clone(),
             None => {

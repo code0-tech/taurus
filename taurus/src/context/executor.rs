@@ -193,7 +193,7 @@ impl<'a> Executor<'a> {
                             ArgTrace {
                                 index: i,
                                 kind: ArgKind::Reference {
-                                    reference: reference,
+                                    reference,
                                     hit: true,
                                 },
                                 preview: format!("ctx.get({:?}) -> {:?}", r, v),
@@ -247,8 +247,8 @@ impl<'a> Executor<'a> {
                 .copied()
                 .unwrap_or(ParameterNode::Eager);
 
-            if matches!(mode, ParameterNode::Eager) {
-                if let Argument::Thunk(id) = *arg {
+            if matches!(mode, ParameterNode::Eager)
+                && let Argument::Thunk(id) = *arg {
                     let (child_sig, child_root) = self.execute_call(id, ctx, tracer);
 
                     tracer.link_child(
@@ -271,7 +271,6 @@ impl<'a> Executor<'a> {
                         }
                     }
                 }
-            }
         }
 
         Ok(())

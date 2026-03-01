@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use tucana::shared::InputType;
 use tucana::shared::{ListValue, Value, value::Kind};
 
 use crate::context::argument::Argument;
@@ -13,34 +14,28 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
         ("std::list::at", HandlerFn::eager(at, 2)),
         ("std::list::concat", HandlerFn::eager(concat, 2)),
-        //TODO
         (
             "std::list::filter",
             HandlerFn::into_function_entry(filter, vec![Eager, Lazy]),
         ),
-        //TODO
         (
             "std::list::find",
             HandlerFn::into_function_entry(find, vec![Eager, Lazy]),
         ),
-        //TODO
         (
             "std::list::find_last",
             HandlerFn::into_function_entry(find_last, vec![Eager, Lazy]),
         ),
-        //TODO
         (
             "std::list::find_index",
             HandlerFn::into_function_entry(find_index, vec![Eager, Lazy]),
         ),
         ("std::list::first", HandlerFn::eager(first, 1)),
         ("std::list::last", HandlerFn::eager(last, 1)),
-        //TODO
         (
             "std::list::for_each",
             HandlerFn::into_function_entry(for_each, vec![Eager, Lazy]),
         ),
-        //TODO
         (
             "std::list::map",
             HandlerFn::into_function_entry(map, vec![Eager, Lazy]),
@@ -52,12 +47,10 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::list::size", HandlerFn::eager(size, 1)),
         ("std::list::index_of", HandlerFn::eager(index_of, 2)),
         ("std::list::to_unique", HandlerFn::eager(to_unique, 1)),
-        //TODO
         (
             "std::list::sort",
             HandlerFn::into_function_entry(sort, vec![Eager, Lazy]),
         ),
-        //TODO
         (
             "std::list::sort_reverse",
             HandlerFn::into_function_entry(sort_reverse, vec![Eager, Lazy]),
@@ -167,13 +160,19 @@ fn filter(
     };
 
     let mut out: Vec<Value> = Vec::new();
-
-    for item in array.values.iter().cloned() {
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+    for item in array.values.iter() {
+        ctx.insert_input_type(input_type, item.clone());
         let pred_sig = run(*predicate_node, ctx);
 
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
-                Ok(true) => out.push(item),
+                Ok(true) => out.push(item.clone()),
                 Ok(false) => {}
                 Err(e) => return Signal::Failure(e),
             },
@@ -184,6 +183,7 @@ fn filter(
         }
     }
 
+    ctx.clear_input_type(input_type);
     Signal::Success(Value {
         kind: Some(Kind::ListValue(ListValue { values: out })),
     })
@@ -208,22 +208,37 @@ fn find(
         Ok(a) => a,
         Err(e) => return Signal::Failure(e),
     };
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
 
-    for item in array.values.iter().cloned() {
+    for item in array.values.iter() {
+        ctx.insert_input_type(input_type, item.clone());
         let pred_sig = run(*predicate_node, ctx);
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
-                Ok(true) => return Signal::Success(item),
-                Ok(false) => {}
-                Err(e) => return Signal::Failure(e),
+                Ok(true) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Success(item.clone());
+                }
+                Ok(false) => continue,
+                Err(e) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(e);
+                }
             },
             other
             @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
                 return other;
             }
         }
     }
 
+    ctx.clear_input_type(input_type);
     Signal::Failure(RuntimeError::simple_str(
         "NotFoundError",
         "No item found that satisfies the predicate",
@@ -249,22 +264,36 @@ fn find_last(
         Err(e) => return Signal::Failure(e),
     };
     array.values.reverse();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
 
     for item in array.values.into_iter() {
+        ctx.insert_input_type(input_type, item.clone());
         let pred_sig = run(*predicate_node, ctx);
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
-                Ok(true) => return Signal::Success(item),
-                Ok(false) => {}
-                Err(e) => return Signal::Failure(e),
+                Ok(true) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Success(item);
+                }
+                Ok(false) => continue,
+                Err(e) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(e);
+                }
             },
             other
             @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
                 return other;
             }
         }
     }
-
+    ctx.clear_input_type(input_type);
     Signal::Failure(RuntimeError::simple_str(
         "NotFoundError",
         "No item found that satisfies the predicate",
@@ -290,27 +319,40 @@ fn find_index(
         Ok(a) => a,
         Err(e) => return Signal::Failure(e),
     };
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
 
-    for (idx, _item) in array.values.iter().cloned().enumerate() {
+    for (idx, item) in array.values.iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
         let pred_sig = run(*predicate_node, ctx);
 
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
                 Ok(true) => {
+                    ctx.clear_input_type(input_type);
                     return Signal::Success(Value {
                         kind: Some(Kind::NumberValue(idx as f64)),
                     });
                 }
-                Ok(false) => {}
-                Err(e) => return Signal::Failure(e),
+                Ok(false) => continue,
+                Err(e) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(e);
+                }
             },
             other
             @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
                 return other;
             }
         }
     }
 
+    ctx.clear_input_type(input_type);
     Signal::Failure(RuntimeError::simple_str(
         "NotFoundError",
         "No item found that satisfies the predicate",
@@ -366,8 +408,15 @@ fn for_each(
         Ok(a) => a,
         Err(e) => return Signal::Failure(e),
     };
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
 
-    for _ in array.values.iter().cloned() {
+    for item in array.values.iter() {
+        ctx.insert_input_type(input_type, item.clone());
         let sig = run(*transform_node, ctx);
 
         match sig {
@@ -379,6 +428,7 @@ fn for_each(
         }
     }
 
+    ctx.clear_input_type(input_type);
     Signal::Success(Value {
         kind: Some(Kind::NullValue(0)),
     })
@@ -405,18 +455,27 @@ fn map(
     };
 
     let mut out: Vec<Value> = Vec::with_capacity(array.values.len());
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
 
-    for _ in array.values.iter().cloned() {
+    for item in array.values.iter() {
+        ctx.insert_input_type(input_type, item.clone());
         let sig = run(*transform_node, ctx);
         match sig {
             Signal::Success(v) => out.push(v),
             other
             @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
                 return other;
             }
         }
     }
 
+    ctx.clear_input_type(input_type);
     Signal::Success(Value {
         kind: Some(Kind::ListValue(ListValue { values: out })),
     })
@@ -569,34 +628,77 @@ fn to_unique(
 
 fn sort(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    // array, resolved comparator yields -1/0/1 sequence
-    args!(args => array_v: Value, cmp_v: Value);
-    let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(cmp_vals) = cmp_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of numbers",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut comps: Vec<f64> = Vec::new();
-    for v in &cmp_vals.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            comps.push(n);
+    let mut array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<f64> = Vec::new();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    let input_type_next = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 1,
+    };
+
+    let mut signals = Vec::new();
+    array.values.sort_by(|a, b| {
+        ctx.insert_input_type(input_type, a.clone());
+        ctx.insert_input_type(input_type_next, b.clone());
+        let sig = run(*transform_node, ctx);
+        signals.push(sig);
+        return Ordering::Equal;
+    });
+
+    for sig in signals {
+        match sig {
+            Signal::Success(v) => {
+                if let Value {
+                    kind: Some(Kind::NumberValue(i)),
+                } = v
+                {
+                    out.push(i);
+                } else {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(RuntimeError::simple(
+                        "InvalidArgumentRuntimeError",
+                        format!(
+                            "expected return value of comparator to be a number but was {:?}",
+                            v
+                        ),
+                    ));
+                }
+            }
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
 
     let mut i = 0usize;
-    arr.values.sort_by(|_, _| {
-        let comp = *comps.get(i).unwrap_or(&0.0);
+    array.values.sort_by(|_, _| {
+        let comp = *out.get(i).unwrap_or(&0.0);
         i += 1;
         match comp {
             n if n < 0.0 => Ordering::Less,
@@ -606,41 +708,85 @@ fn sort(
     });
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(arr)),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 
 fn sort_reverse(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, cmp_v: Value);
-    let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(cmp_vals) = cmp_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of numbers",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut comps: Vec<f64> = Vec::new();
-    for v in &cmp_vals.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            comps.push(n);
+    let mut array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<f64> = Vec::new();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    let input_type_next = InputType {
+        node_id: node_id,
+        parameter_index: 1,
+        input_index: 1,
+    };
+
+    let mut signals = Vec::new();
+    array.values.sort_by(|a, b| {
+        ctx.insert_input_type(input_type, a.clone());
+        ctx.insert_input_type(input_type_next, b.clone());
+        let sig = run(*transform_node, ctx);
+        signals.push(sig);
+        return Ordering::Equal;
+    });
+
+    for sig in signals {
+        match sig {
+            Signal::Success(v) => {
+                if let Value {
+                    kind: Some(Kind::NumberValue(i)),
+                } = v
+                {
+                    out.push(i);
+                } else {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(RuntimeError::simple(
+                        "InvalidArgumentRuntimeError",
+                        format!(
+                            "expected return value of comparator to be a number but was {:?}",
+                            v
+                        ),
+                    ));
+                }
+            }
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
 
-    arr.values.reverse(); // keep behavior consistent with original
+    array.values.reverse(); // keep behavior consistent with original
 
     let mut i = 0usize;
-    arr.values.sort_by(|_, _| {
-        let comp = *comps.get(i).unwrap_or(&0.0);
+    array.values.sort_by(|_, _| {
+        let comp = *out.get(i).unwrap_or(&0.0);
         i += 1;
         match comp {
             n if n < 0.0 => Ordering::Less,
@@ -650,7 +796,7 @@ fn sort_reverse(
     });
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(arr)),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 

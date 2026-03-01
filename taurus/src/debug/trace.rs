@@ -34,7 +34,7 @@ pub enum ReferenceKind {
         parameter_index: i64,
     },
     FlowInput,
-    Empty
+    Empty,
 }
 
 #[derive(Debug, Clone)]

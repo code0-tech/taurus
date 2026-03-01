@@ -8,8 +8,6 @@ use crate::config::Config;
 use crate::context::executor::Executor;
 use crate::context::registry::FunctionStore;
 use crate::context::signal::Signal;
-use crate::debug::render::render_trace;
-use crate::debug::tracer::Tracer;
 use crate::implementation::collect;
 use code0_flow::flow_service::FlowUpdateService;
 

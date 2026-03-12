@@ -3,7 +3,7 @@ use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::error::RuntimeError;
+use crate::runtime::error::RuntimeError;
 use tucana::shared::value::Kind;
 use tucana::shared::{ListValue, Struct, Value};
 
@@ -47,10 +47,10 @@ fn respond(
         ));
     };
 
-    let Some(Kind::ListValue(_headers_struct)) = &headers_val.kind else {
+    let Some(Kind::StructValue(_headers_struct)) = &headers_val.kind else {
         return Signal::Failure(RuntimeError::simple_str(
             "InvalidArgumentRuntimeError",
-            "Expected 'headers' to be ListValue",
+            "Expected 'headers' to be StructValue",
         ));
     };
 
@@ -78,7 +78,7 @@ fn create_request(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => http_method: String, headers: ListValue, http_url: String, payload: Value);
+    args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
     fields.insert(
@@ -98,7 +98,7 @@ fn create_request(
     fields.insert(
         "headers".to_string(),
         Value {
-            kind: Some(Kind::ListValue(headers.clone())),
+            kind: Some(Kind::StructValue(headers.clone())),
         },
     );
     fields.insert("body".to_string(), payload.clone());
@@ -113,7 +113,7 @@ fn create_response(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => http_status_code: String, headers: ListValue, payload: Value);
+    args!(args => http_status_code: String, headers: Struct, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
     let code = match http_status_code.as_str().parse::<f64>() {
@@ -135,7 +135,7 @@ fn create_response(
     fields.insert(
         "headers".to_string(),
         Value {
-            kind: Some(Kind::ListValue(headers.clone())),
+            kind: Some(Kind::StructValue(headers.clone())),
         },
     );
     fields.insert("payload".to_string(), payload.clone());

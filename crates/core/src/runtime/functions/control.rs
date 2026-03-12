@@ -4,7 +4,7 @@ use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::error::RuntimeError;
+use crate::runtime::error::RuntimeError;
 use tucana::shared::Value;
 use tucana::shared::value::Kind;
 

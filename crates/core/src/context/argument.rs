@@ -1,5 +1,5 @@
 use crate::context::signal::Signal;
-use crate::error::RuntimeError;
+use crate::runtime::error::RuntimeError;
 use std::convert::Infallible;
 use tucana::shared::value::Kind;
 use tucana::shared::{ListValue, Struct, Value};

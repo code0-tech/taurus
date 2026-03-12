@@ -1,22 +1,18 @@
 mod config;
-pub mod context;
-pub mod debug;
-pub mod error;
-pub mod implementation;
 
 use crate::config::Config;
-use crate::context::executor::Executor;
-use crate::context::registry::FunctionStore;
-use crate::context::signal::Signal;
-use crate::implementation::collect;
 use code0_flow::flow_service::FlowUpdateService;
 
 use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
-use context::context::Context;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
+use core::context::context::Context;
+use core::context::executor::Executor;
+use core::context::registry::FunctionStore;
+use core::context::signal::Signal;
+use core::runtime::functions::collect;
 use std::collections::HashMap;
 use tokio::signal;
 use tonic_health::pb::health_server::HealthServer;

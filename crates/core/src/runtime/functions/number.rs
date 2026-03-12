@@ -3,11 +3,11 @@ use std::f64;
 use tucana::shared::{Value, value::Kind};
 
 use crate::context::argument::Argument;
+use crate::context::context::Context;
 use crate::context::macros::{args, no_args};
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
-use crate::{context::context::Context};
 
 pub fn collect_number_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -382,13 +382,17 @@ fn random(
 ) -> Signal {
     args!(args => min: f64, max: f64);
 
-    let min_i = min.ceil() as i64;
-    let max_i = max.floor() as i64;
+    if min > max {
+        return Signal::Failure(RuntimeError::simple_str(
+            "InvalidRange",
+            "First number can't be bigger then second when creating a range for std::math::random",
+        ));
+    }
 
-    let value = rand::random_range(min_i..=max_i) as i64;
+    let value = rand::random_range(min..=max);
 
     Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value as f64)),
+        kind: Some(Kind::NumberValue(value)),
     })
 }
 
@@ -787,6 +791,25 @@ mod tests {
         let mut run = dummy_run;
         let r = expect_num(random(&[a_num(1.0), a_num(10.0)], &mut ctx, &mut run));
         assert!(r >= 1.0 && r < 10.0);
+    }
+
+
+    #[test]
+    fn test_random_range_numbers_equal() {
+        let mut ctx = Context::default();
+
+        let mut run = dummy_run;
+        let r = expect_num(random(&[a_num(1.0), a_num(1.0)], &mut ctx, &mut run));
+        assert!(r == 1.0);
+    }
+
+    #[test]
+    fn test_random_range_fist_bigger_then_second() {
+        let mut ctx = Context::default();
+
+        let mut run = dummy_run;
+        let res = random(&[a_num(10.0), a_num(1.0)], &mut ctx, &mut run);
+        assert!(matches!(res, Signal::Failure(_)));
     }
 
     #[test]

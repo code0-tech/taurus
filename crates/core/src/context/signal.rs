@@ -1,5 +1,6 @@
-use crate::error::RuntimeError;
 use tucana::shared::Value;
+
+use crate::runtime::error::RuntimeError;
 
 #[derive(Debug)]
 pub enum Signal {

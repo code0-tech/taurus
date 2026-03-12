@@ -1,4 +1,3 @@
-// src/debug_trace/trace.rs
 use std::time::Instant;
 
 #[derive(Debug, Clone)]

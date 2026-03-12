@@ -4,7 +4,7 @@ use crate::context::registry::{FunctionStore, HandlerFunctionEntry};
 use crate::context::signal::Signal;
 use crate::debug::trace::{ArgKind, ArgTrace, EdgeKind, Outcome, ReferenceKind};
 use crate::debug::tracer::{ExecutionTracer, Tracer};
-use crate::error::RuntimeError;
+use crate::runtime::error::RuntimeError;
 
 use std::collections::HashMap;
 use tucana::shared::NodeFunction;

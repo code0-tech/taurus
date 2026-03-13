@@ -40,8 +40,7 @@ async fn main() {
     load_env_file();
 
     let config = Config::new();
-    let mut store = FunctionStore::new();
-    store.populate(collect());
+    let store = FunctionStore::default();
 
     let client = match async_nats::connect(config.nats_url.clone()).await {
         Ok(client) => {

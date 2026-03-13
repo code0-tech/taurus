@@ -1,6 +1,7 @@
 use crate::context::argument::{Argument, ParameterNode};
 use crate::context::context::Context;
 use crate::context::signal::Signal;
+use crate::runtime::functions::collect;
 use std::collections::HashMap;
 
 /// HandlerFm
@@ -25,7 +26,9 @@ pub struct FunctionStore {
 
 impl Default for FunctionStore {
     fn default() -> Self {
-        Self::new()
+        let mut store = Self::new();
+        store.populate(collect());
+        store
     }
 }
 

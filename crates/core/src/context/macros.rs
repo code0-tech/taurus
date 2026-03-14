@@ -39,10 +39,12 @@ macro_rules! args {
 macro_rules! no_args {
     ($args_ident:ident) => {
         if !$args_ident.is_empty() {
-            return $crate::context::signal::Signal::Failure($crate::runtime::error::RuntimeError::simple(
-                "InvalidArgumentRuntimeError",
-                format!("Expected 0 args but received {}", $args_ident.len()),
-            ));
+            return $crate::context::signal::Signal::Failure(
+                $crate::runtime::error::RuntimeError::simple(
+                    "InvalidArgumentRuntimeError",
+                    format!("Expected 0 args but received {}", $args_ident.len()),
+                ),
+            );
         }
     };
 }

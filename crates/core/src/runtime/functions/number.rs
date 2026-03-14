@@ -793,7 +793,6 @@ mod tests {
         assert!(r >= 1.0 && r < 10.0);
     }
 
-
     #[test]
     fn test_random_range_numbers_equal() {
         let mut ctx = Context::default();

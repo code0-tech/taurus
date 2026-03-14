@@ -20,15 +20,16 @@ impl<'a> Executor<'a> {
     }
 
     /// This is now the ONLY execution entry point.
-    pub fn execute(&self, start_node_id: i64, ctx: &mut Context) -> Signal {
+    pub fn execute(&self, start_node_id: i64, ctx: &mut Context, with_trace: bool) -> Signal {
         let mut tracer = Tracer::new();
 
         let (signal, _root_frame) = self.execute_call(start_node_id, ctx, &mut tracer);
 
-        if let Some(run) = tracer.take_run() {
-            println!("{}", crate::debug::render::render_trace(&run));
+        if with_trace {
+            if let Some(run) = tracer.take_run() {
+                println!("{}", crate::debug::render::render_trace(&run));
+            }
         }
-
         signal
     }
 
@@ -248,29 +249,30 @@ impl<'a> Executor<'a> {
                 .unwrap_or(ParameterNode::Eager);
 
             if matches!(mode, ParameterNode::Eager)
-                && let Argument::Thunk(id) = *arg {
-                    let (child_sig, child_root) = self.execute_call(id, ctx, tracer);
+                && let Argument::Thunk(id) = *arg
+            {
+                let (child_sig, child_root) = self.execute_call(id, ctx, tracer);
 
-                    tracer.link_child(
-                        parent_frame,
-                        child_root,
-                        EdgeKind::EagerCall { arg_index: i },
-                    );
+                tracer.link_child(
+                    parent_frame,
+                    child_root,
+                    EdgeKind::EagerCall { arg_index: i },
+                );
 
-                    match child_sig {
-                        Signal::Success(v) => {
-                            *arg = Argument::Eval(v);
-                        }
-                        s => {
-                            return Err((
-                                s,
-                                Outcome::Failure {
-                                    error_preview: "Eager child failed".into(),
-                                },
-                            ));
-                        }
+                match child_sig {
+                    Signal::Success(v) => {
+                        *arg = Argument::Eval(v);
+                    }
+                    s => {
+                        return Err((
+                            s,
+                            Outcome::Failure {
+                                error_preview: "Eager child failed".into(),
+                            },
+                        ));
                     }
                 }
+            }
         }
 
         Ok(())

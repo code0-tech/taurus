@@ -116,8 +116,11 @@ impl Case {
                 None => Context::default(),
             };
 
-            let res = Executor::new(&store, node_functions.clone())
-                .execute(self.flow.starting_node_id, &mut context, false);
+            let res = Executor::new(&store, node_functions.clone()).execute(
+                self.flow.starting_node_id,
+                &mut context,
+                false,
+            );
 
             match res {
                 core::context::signal::Signal::Failure(err) => {

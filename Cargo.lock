@@ -282,7 +282,7 @@ dependencies = [
  "base64",
  "log",
  "rand 0.10.0",
- "tucana",
+ "tucana 0.0.54",
 ]
 
 [[package]]
@@ -1750,7 +1750,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "tucana",
+ "tucana 0.0.54",
 ]
 
 [[package]]

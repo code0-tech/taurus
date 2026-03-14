@@ -25,11 +25,10 @@ impl<'a> Executor<'a> {
 
         let (signal, _root_frame) = self.execute_call(start_node_id, ctx, &mut tracer);
 
-        if with_trace {
-            if let Some(run) = tracer.take_run() {
+        if with_trace
+            && let Some(run) = tracer.take_run() {
                 println!("{}", crate::debug::render::render_trace(&run));
             }
-        }
         signal
     }
 

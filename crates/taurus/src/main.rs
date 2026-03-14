@@ -12,7 +12,6 @@ use core::context::context::Context;
 use core::context::executor::Executor;
 use core::context::registry::FunctionStore;
 use core::context::signal::Signal;
-use core::runtime::functions::collect;
 use std::collections::HashMap;
 use tokio::signal;
 use tonic_health::pb::health_server::HealthServer;

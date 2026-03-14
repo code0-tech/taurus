@@ -5,7 +5,7 @@ use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntr
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
 use tucana::shared::value::Kind;
-use tucana::shared::{ListValue, Struct, Value};
+use tucana::shared::{Struct, Value};
 
 pub fn collect_http_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![

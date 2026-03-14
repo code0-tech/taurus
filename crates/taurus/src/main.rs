@@ -28,7 +28,7 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
         .map(|node| (node.database_id, node))
         .collect();
 
-    Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context)
+    Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context, true)
 }
 
 #[tokio::main]

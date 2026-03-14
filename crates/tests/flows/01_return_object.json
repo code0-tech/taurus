@@ -5,13 +5,11 @@
 		{
 			"input": null,
 			"expected_result": {
-				"http_status_code": 200,
-				"headers": [
-					{
-						"Header": "X"
-					}
-				],
-				"body": "Hello World"
+				"status_code": 200,
+				"headers": {
+					"Header": "X"
+				},
+				"payload": "Hello World"
 			}
 		}
 	],

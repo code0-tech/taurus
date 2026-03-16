@@ -1,4 +1,4 @@
-use core::context::{context::Context, executor::Executor, registry::FunctionStore};
+use taurus_core::context::{context::Context, executor::Executor, registry::FunctionStore};
 use log::{error, info};
 use serde::Deserialize;
 use serde_json::json;
@@ -123,14 +123,14 @@ impl Case {
             );
 
             match res {
-                core::context::signal::Signal::Failure(err) => {
+                taurus_core::context::signal::Signal::Failure(err) => {
                     let json = json!({
                         "name": err.name,
                         "message": err.message,
                     });
                     return CaseResult::Failure(input, json);
                 }
-                core::context::signal::Signal::Success(value) => {
+                taurus_core::context::signal::Signal::Success(value) => {
                     let json = to_json_value(value);
                     if json == input.clone().expected_result {
                         return CaseResult::Success;
@@ -138,7 +138,7 @@ impl Case {
                         return CaseResult::Failure(input, json);
                     }
                 }
-                core::context::signal::Signal::Return(value) => {
+                taurus_core::context::signal::Signal::Return(value) => {
                     let json = to_json_value(value);
                     if json == input.clone().expected_result {
                         return CaseResult::Success;
@@ -146,7 +146,7 @@ impl Case {
                         return CaseResult::Failure(input, json);
                     }
                 }
-                core::context::signal::Signal::Respond(value) => {
+                taurus_core::context::signal::Signal::Respond(value) => {
                     let json = to_json_value(value);
                     if json == input.clone().expected_result {
                         return CaseResult::Success;
@@ -154,7 +154,7 @@ impl Case {
                         return CaseResult::Failure(input, json);
                     }
                 }
-                core::context::signal::Signal::Stop => continue,
+                taurus_core::context::signal::Signal::Stop => continue,
             }
         }
 

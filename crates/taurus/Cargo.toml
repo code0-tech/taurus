@@ -16,4 +16,4 @@ async-nats = { workspace = true }
 prost = { workspace = true }
 tonic-health = { workspace = true }
 tonic = { workspace = true }
-core = { workspace = true }
+taurus-core = { workspace = true }

@@ -5,10 +5,10 @@ use code0_flow::flow_service::FlowUpdateService;
 
 use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
-use core::context::context::Context;
-use core::context::executor::Executor;
-use core::context::registry::FunctionStore;
-use core::context::signal::Signal;
+use taurus_core::context::context::Context;
+use taurus_core::context::executor::Executor;
+use taurus_core::context::registry::FunctionStore;
+use taurus_core::context::signal::Signal;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;

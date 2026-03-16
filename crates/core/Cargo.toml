@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "taurus-core"
 version.workspace = true
 edition.workspace = true
 

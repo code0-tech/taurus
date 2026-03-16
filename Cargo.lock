@@ -276,16 +276,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "base64",
- "log",
- "rand 0.10.0",
- "tucana 0.0.54",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1716,15 +1706,25 @@ dependencies = [
  "async-nats",
  "base64",
  "code0-flow",
- "core",
  "env_logger",
  "futures-lite",
  "log",
  "prost",
  "rand 0.10.0",
+ "taurus-core",
  "tokio",
  "tonic",
  "tonic-health",
+ "tucana 0.0.54",
+]
+
+[[package]]
+name = "taurus-core"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "log",
+ "rand 0.10.0",
  "tucana 0.0.54",
 ]
 
@@ -1745,11 +1745,11 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
- "core",
  "env_logger",
  "log",
  "serde",
  "serde_json",
+ "taurus-core",
  "tucana 0.0.54",
 ]
 

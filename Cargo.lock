@@ -244,9 +244,9 @@ dependencies = [
 
 [[package]]
 name = "code0-flow"
-version = "0.0.27"
+version = "0.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4de17519c4dc211f65c7f2cd2f4c5e08dbd814bd8129da87c8825b9a5476337"
+checksum = "f9a12987b9fa4c342ee01f3d20ce7e84004ff07fab219a29d2e8023234c7adc8"
 dependencies = [
  "async-nats",
  "async-trait",
@@ -259,7 +259,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana 0.0.56",
+ "tucana",
  "walkdir",
 ]
 
@@ -1715,7 +1715,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana 0.0.59",
+ "tucana",
 ]
 
 [[package]]
@@ -1725,7 +1725,7 @@ dependencies = [
  "base64",
  "log",
  "rand 0.10.0",
- "tucana 0.0.59",
+ "tucana",
 ]
 
 [[package]]
@@ -1750,7 +1750,7 @@ dependencies = [
  "serde",
  "serde_json",
  "taurus-core",
- "tucana 0.0.59",
+ "tucana",
 ]
 
 [[package]]
@@ -2054,26 +2054,6 @@ checksum = "9fe58ebd5edd976e0fe0f8a14d2a04b7c81ef153ea9a54eebc42e67c2c23b4e5"
 dependencies = [
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tucana"
-version = "0.0.56"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a33d3527f287b0f0f0a3784cb55c801dabc226bf79ebee28394dd31f3b9794ff"
-dependencies = [
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost",
- "prost-build",
- "prost-types",
- "serde",
- "serde_json",
- "tonic",
- "tonic-build",
- "tonic-prost",
- "tonic-prost-build",
 ]
 
 [[package]]

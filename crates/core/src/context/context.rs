@@ -63,13 +63,16 @@ impl Context {
                 if let Some(index) = path.array_index {
                     match curr.kind {
                         Some(ref kind) => {
-                            if let Kind::ListValue(list) = &kind {
-                                match list.values.get(index as usize) {
-                                    Some(x) => {
-                                        curr = x.clone();
+                            match kind {
+                                Kind::ListValue(list) => {
+                                    match list.values.get(index as usize) {
+                                        Some(x) => {
+                                            curr = x.clone();
+                                        }
+                                        None => return ContextResult::NotFound,
                                     }
-                                    None => return ContextResult::NotFound,
                                 }
+                                _ => return ContextResult::NotFound,
                             }
                         }
                         None => return ContextResult::NotFound,

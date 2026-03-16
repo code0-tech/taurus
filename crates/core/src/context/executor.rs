@@ -210,7 +210,7 @@ impl<'a> Executor<'a> {
                     ContextResult::NotFound => {
                         return Err(RuntimeError::simple_str(
                             "ReferenceValueNotFound",
-                            "Referenced node not executed",
+                            "Reference not found in context",
                         ));
                     }
                 },

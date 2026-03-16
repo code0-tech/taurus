@@ -17,3 +17,6 @@ jobs:
           RUST_BACKTRACE: 'full'
       - name: Run Tests
         run: cargo test
+      - name: Run Test Suite
+        run: cargo run --package tests
+

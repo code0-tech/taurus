@@ -1019,6 +1019,9 @@ mod tests {
     fn a_val(v: Value) -> Argument {
         Argument::Eval(v)
     }
+    fn a_thunk(id: i64) -> Argument {
+        Argument::Thunk(id)
+    }
     fn v_num(n: f64) -> Value {
         Value {
             kind: Some(Kind::NumberValue(n)),
@@ -1077,6 +1080,28 @@ mod tests {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })
+    }
+
+    fn run_from_bools(seq: Vec<bool>) -> impl FnMut(i64, &mut Context) -> Signal {
+        let mut i = 0usize;
+        move |_, _| {
+            let b = *seq.get(i).unwrap_or(&false);
+            i += 1;
+            Signal::Success(Value {
+                kind: Some(Kind::BoolValue(b)),
+            })
+        }
+    }
+
+    fn run_from_values(seq: Vec<Value>) -> impl FnMut(i64, &mut Context) -> Signal {
+        let mut i = 0usize;
+        move |_, _| {
+            let v = seq.get(i).cloned().unwrap_or(Value {
+                kind: Some(Kind::NullValue(0)),
+            });
+            i += 1;
+            Signal::Success(v)
+        }
     }
 
     // --- at ------------------------------------------------------------------
@@ -1184,11 +1209,10 @@ mod tests {
     #[test]
     fn test_filter_success() {
         let mut ctx = Context::default();
-        let mut run = dummy_run;
         let array = v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]);
-        let predicate = v_list(vec![v_bool(true), v_bool(false), v_bool(true)]);
+        let mut run = run_from_bools(vec![true, false, true]);
         let out = expect_list(filter(
-            &[a_val(array), a_val(predicate)],
+            &[a_val(array), a_thunk(1)],
             &mut ctx,
             &mut run,
         ));
@@ -1202,13 +1226,13 @@ mod tests {
         let mut ctx = Context::default();
         let mut run = dummy_run;
         let array = v_list(vec![v_num(1.0)]);
-        let predicate = v_list(vec![v_bool(true)]);
+        let _predicate = v_list(vec![v_bool(true)]);
         match filter(&[a_val(array.clone())], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
             x => panic!("{:?}", x),
         }
         match filter(
-            &[a_val(v_str("not_array")), a_val(predicate.clone())],
+            &[a_val(v_str("not_array")), a_thunk(1)],
             &mut ctx,
             &mut run,
         ) {
@@ -1277,18 +1301,36 @@ mod tests {
     #[test]
     fn test_for_each_and_map() {
         let mut ctx = Context::default();
-        let mut run = dummy_run;
-        match for_each(&[], &mut ctx, &mut run) {
+        let mut called = 0usize;
+        let mut run = |_, _ctx: &mut Context| {
+            called += 1;
+            Signal::Success(Value {
+                kind: Some(Kind::NullValue(0)),
+            })
+        };
+        match for_each(
+            &[
+                a_val(v_list(vec![v_num(1.0), v_num(2.0)])),
+                a_thunk(1),
+            ],
+            &mut ctx,
+            &mut run,
+        ) {
             Signal::Success(Value {
                 kind: Some(Kind::NullValue(_)),
             }) => {}
             x => panic!("expected NullValue, got {:?}", x),
         }
+        assert_eq!(called, 2);
         let transformed = v_list(vec![v_str("X"), v_str("Y")]);
+        let mut run = run_from_values(match transformed.kind.clone() {
+            Some(Kind::ListValue(ListValue { values })) => values,
+            _ => unreachable!(),
+        });
         let out = expect_list(map(
             &[
                 a_val(v_list(vec![v_num(1.0), v_num(2.0)])),
-                a_val(transformed.clone()),
+                a_thunk(2),
             ],
             &mut ctx,
             &mut run,
@@ -1503,20 +1545,21 @@ mod tests {
     #[test]
     fn test_sort_and_sort_reverse() {
         let mut ctx = Context::default();
-        let mut run = dummy_run;
 
         // We don't rely on actual values; ordering is driven by the comparator sequence.
         let arr = v_list(vec![v_str("a"), v_str("b"), v_str("c"), v_str("d")]);
-        let comps = v_list(vec![v_num(-1.0), v_num(1.0), v_num(0.0), v_num(-1.0)]);
+        let comps = vec![v_num(-1.0), v_num(1.0), v_num(0.0), v_num(-1.0)];
+        let mut run = run_from_values(comps.clone());
         let out = expect_list(sort(
-            &[a_val(arr.clone()), a_val(comps.clone())],
+            &[a_val(arr.clone()), a_thunk(1)],
             &mut ctx,
             &mut run,
         ));
         assert_eq!(out.len(), 4);
 
+        let mut run = run_from_values(comps);
         let out_r = expect_list(sort_reverse(
-            &[a_val(arr), a_val(comps)],
+            &[a_val(arr), a_thunk(1)],
             &mut ctx,
             &mut run,
         ));

@@ -167,8 +167,13 @@ fn filter(
         parameter_index: 1,
         input_index: 0,
     };
-    for item in array.values.iter() {
+    for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!(
+            "iter={} value={}",
+            idx,
+            preview_value(item)
+        ));
         let pred_sig = run(*predicate_node, ctx);
 
         match pred_sig {
@@ -216,8 +221,13 @@ fn find(
         input_index: 0,
     };
 
-    for item in array.values.iter() {
+    for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!(
+            "iter={} value={}",
+            idx,
+            preview_value(item)
+        ));
         let pred_sig = run(*predicate_node, ctx);
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
@@ -272,8 +282,13 @@ fn find_last(
         input_index: 0,
     };
 
-    for item in array.values.into_iter() {
+    for (idx, item) in array.values.into_iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!(
+            "iter={} value={}",
+            idx,
+            preview_value(&item)
+        ));
         let pred_sig = run(*predicate_node, ctx);
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
@@ -329,6 +344,11 @@ fn find_index(
 
     for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!(
+            "iter={} value={}",
+            idx,
+            preview_value(item)
+        ));
         let pred_sig = run(*predicate_node, ctx);
 
         match pred_sig {
@@ -416,8 +436,13 @@ fn for_each(
         input_index: 0,
     };
 
-    for item in array.values.iter() {
+    for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!(
+            "iter={} value={}",
+            idx,
+            preview_value(item)
+        ));
         let sig = run(*transform_node, ctx);
 
         match sig {
@@ -433,6 +458,37 @@ fn for_each(
     Signal::Success(Value {
         kind: Some(Kind::NullValue(0)),
     })
+}
+
+fn preview_value(value: &Value) -> String {
+    format_value_json(value)
+}
+
+fn format_value_json(value: &Value) -> String {
+    match value.kind.as_ref() {
+        Some(Kind::NumberValue(v)) => v.to_string(),
+        Some(Kind::BoolValue(v)) => v.to_string(),
+        Some(Kind::StringValue(v)) => format!("{:?}", v),
+        Some(Kind::NullValue(_)) | None => "null".to_string(),
+        Some(Kind::ListValue(list)) => {
+            let mut parts = Vec::new();
+            for item in list.values.iter() {
+                parts.push(format_value_json(item));
+            }
+            format!("[{}]", parts.join(", "))
+        }
+        Some(Kind::StructValue(struct_value)) => {
+            let mut keys: Vec<_> = struct_value.fields.keys().collect();
+            keys.sort();
+            let mut parts = Vec::new();
+            for key in keys.iter() {
+                if let Some(v) = struct_value.fields.get(*key) {
+                    parts.push(format!("{:?}: {}", key, format_value_json(v)));
+                }
+            }
+            format!("{{{}}}", parts.join(", "))
+        }
+    }
 }
 
 fn map(
@@ -463,8 +519,13 @@ fn map(
         input_index: 0,
     };
 
-    for item in array.values.iter() {
+    for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!(
+            "iter={} value={}",
+            idx,
+            preview_value(item)
+        ));
         let sig = run(*transform_node, ctx);
         match sig {
             Signal::Success(v) => out.push(v),
@@ -662,9 +723,17 @@ fn sort(
     };
 
     let mut signals = Vec::new();
+    let mut cmp_idx = 0usize;
     array.values.sort_by(|a, b| {
         ctx.insert_input_type(input_type, a.clone());
         ctx.insert_input_type(input_type_next, b.clone());
+        ctx.push_runtime_trace_label(format!(
+            "cmp#{} a={} b={}",
+            cmp_idx,
+            preview_value(a),
+            preview_value(b)
+        ));
+        cmp_idx += 1;
         let sig = run(*transform_node, ctx);
         signals.push(sig);
         Ordering::Equal
@@ -748,9 +817,17 @@ fn sort_reverse(
     };
 
     let mut signals = Vec::new();
+    let mut cmp_idx = 0usize;
     array.values.sort_by(|a, b| {
         ctx.insert_input_type(input_type, a.clone());
         ctx.insert_input_type(input_type_next, b.clone());
+        ctx.push_runtime_trace_label(format!(
+            "cmp#{} a={} b={}",
+            cmp_idx,
+            preview_value(a),
+            preview_value(b)
+        ));
+        cmp_idx += 1;
         let sig = run(*transform_node, ctx);
         signals.push(sig);
         Ordering::Equal

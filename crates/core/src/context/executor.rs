@@ -7,7 +7,9 @@ use crate::debug::tracer::{ExecutionTracer, Tracer};
 use crate::runtime::error::RuntimeError;
 
 use std::collections::HashMap;
-use tucana::shared::NodeFunction;
+use tucana::shared::{NodeFunction, Value};
+use tucana::shared::reference_value::Target;
+use tucana::shared::value::Kind;
 
 pub struct Executor<'a> {
     functions: &'a FunctionStore,
@@ -127,7 +129,7 @@ impl<'a> Executor<'a> {
         }
 
         // ---- Invoke handler
-        let result = self.invoke_handler(entry, &args, ctx, tracer);
+        let result = self.invoke_handler(entry, &args, ctx, tracer, frame_id);
 
         // ---- Commit result
         let final_signal = self.commit_result(&node, result, ctx, tracer, frame_id);
@@ -160,7 +162,7 @@ impl<'a> Executor<'a> {
                         ArgTrace {
                             index: i,
                             kind: ArgKind::Literal,
-                            preview: format!("{:?}", v),
+                            preview: preview_value(v),
                         },
                     );
                     args.push(Argument::Eval(v.clone()));
@@ -195,7 +197,11 @@ impl<'a> Executor<'a> {
                                     reference,
                                     hit: true,
                                 },
-                                preview: format!("ctx.get({:?}) -> {:?}", r, v),
+                                preview: format!(
+                                    "ctx.get({}) -> {}",
+                                    preview_reference(&r),
+                                    preview_value(&v)
+                                ),
                             },
                         );
                         args.push(Argument::Eval(v));
@@ -249,6 +255,7 @@ impl<'a> Executor<'a> {
             if matches!(mode, ParameterNode::Eager)
                 && let Argument::Thunk(id) = *arg
             {
+                tracer.mark_thunk(parent_frame, i, true, true);
                 let (child_sig, child_root) = self.execute_call(id, ctx, tracer);
 
                 tracer.link_child(
@@ -282,9 +289,13 @@ impl<'a> Executor<'a> {
         args: &[Argument],
         ctx: &mut Context,
         tracer: &mut dyn ExecutionTracer,
+        frame_id: u64,
     ) -> Signal {
         let mut run = |node_id: i64, ctx: &mut Context| {
-            let (sig, _) = self.execute_call(node_id, ctx, tracer);
+            tracer.mark_thunk_executed_by_node(frame_id, node_id);
+            let label = ctx.pop_runtime_trace_label();
+            let (sig, child_root) = self.execute_call(node_id, ctx, tracer);
+            tracer.link_child(frame_id, child_root, EdgeKind::RuntimeCall { label });
             sig
         };
 
@@ -306,7 +317,7 @@ impl<'a> Executor<'a> {
                 tracer.exit_node(
                     frame_id,
                     Outcome::Success {
-                        value_preview: format!("{:#?}", v),
+                        value_preview: preview_value(&v),
                     },
                 );
 
@@ -330,7 +341,7 @@ impl<'a> Executor<'a> {
                 tracer.exit_node(
                     frame_id,
                     Outcome::Return {
-                        value_preview: format!("{:#?}", v),
+                        value_preview: preview_value(&v),
                     },
                 );
                 Signal::Return(v)
@@ -340,7 +351,7 @@ impl<'a> Executor<'a> {
                 tracer.exit_node(
                     frame_id,
                     Outcome::Respond {
-                        value_preview: format!("{:#?}", v),
+                        value_preview: preview_value(&v),
                     },
                 );
                 Signal::Respond(v)
@@ -351,5 +362,54 @@ impl<'a> Executor<'a> {
                 Signal::Stop
             }
         }
+    }
+}
+
+fn preview_value(value: &Value) -> String {
+    format_value_json(value)
+}
+
+fn format_value_json(value: &Value) -> String {
+    match value.kind.as_ref() {
+        Some(Kind::NumberValue(v)) => v.to_string(),
+        Some(Kind::BoolValue(v)) => v.to_string(),
+        Some(Kind::StringValue(v)) => format!("{:?}", v),
+        Some(Kind::NullValue(_)) | None => "null".to_string(),
+        Some(Kind::ListValue(list)) => {
+            let mut parts = Vec::new();
+            for item in list.values.iter() {
+                parts.push(format_value_json(item));
+            }
+            format!("[{}]", parts.join(", "))
+        }
+        Some(Kind::StructValue(struct_value)) => {
+            let mut keys: Vec<_> = struct_value.fields.keys().collect();
+            keys.sort();
+            let mut parts = Vec::new();
+            for key in keys.iter() {
+                if let Some(v) = struct_value.fields.get(*key) {
+                    parts.push(format!("{:?}: {}", key, format_value_json(v)));
+                }
+            }
+            format!("{{{}}}", parts.join(", "))
+        }
+    }
+}
+
+fn preview_reference(r: &tucana::shared::ReferenceValue) -> String {
+    let target = match &r.target {
+        Some(Target::FlowInput(_)) => "flow_input".to_string(),
+        Some(Target::NodeId(id)) => format!("node({})", id),
+        Some(Target::InputType(input_type)) => format!(
+            "input(node={},param={},input={})",
+            input_type.node_id, input_type.parameter_index, input_type.input_index
+        ),
+        None => "empty".to_string(),
+    };
+
+    if r.paths.is_empty() {
+        target
+    } else {
+        format!("{}+paths({})", target, r.paths.len())
     }
 }

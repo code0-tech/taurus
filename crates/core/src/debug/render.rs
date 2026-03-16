@@ -1,15 +1,8 @@
 use crate::debug::trace::{ArgKind, EdgeKind, ExecFrame, Outcome, TraceRun};
 use std::collections::HashMap;
 
-fn short(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        return s.to_string();
-    }
-    format!("{}…", &s[..max])
-}
-
-fn ms(f: &ExecFrame) -> Option<u128> {
-    f.end.map(|e| e.duration_since(f.start).as_millis())
+fn micros(f: &ExecFrame) -> Option<u128> {
+    f.end.map(|e| e.duration_since(f.start).as_micros())
 }
 
 pub fn render_trace(run: &TraceRun) -> String {
@@ -19,7 +12,13 @@ pub fn render_trace(run: &TraceRun) -> String {
     }
 
     let mut out = String::new();
+    if let Some(total_us) = total_duration_us(&run.frames) {
+        out.push_str(&format!("Total: {}µs\n", total_us));
+    }
     render_frame(run.root, &by_id, "", true, &mut out);
+    if let Some(total_us) = total_duration_us(&run.frames) {
+        out.push_str(&format!("Summary: total_time={}µs\n", total_us));
+    }
     out
 }
 
@@ -40,7 +39,7 @@ fn render_frame(
         "├─ "
     };
 
-    let dur = ms(f).map(|m| format!(" ({}ms)", m)).unwrap_or_default();
+    let dur = micros(f).map(|u| format!(" ({}µs)", u)).unwrap_or_default();
 
     out.push_str(&format!(
         "{prefix}{branch}#{fid}  node={nid}  fn={name}{dur}\n",
@@ -55,7 +54,7 @@ fn render_frame(
     // args
     for a in &f.args {
         let pfx = if prefix.is_empty() {
-            ""
+            "   "
         } else if is_last {
             "   "
         } else {
@@ -85,7 +84,7 @@ fn render_frame(
             "{prefix}{pfx}   arg[{}] {:<12} {}\n",
             a.index,
             kind,
-            short(&a.preview, 1600),
+            a.preview,
             prefix = prefix,
             pfx = pfx
         ));
@@ -93,16 +92,24 @@ fn render_frame(
 
     // outcome
     let outcome_line = match &f.outcome {
-        Some(Outcome::Success { value_preview }) => format!("✅ {}", short(value_preview, 1800)),
-        Some(Outcome::Failure { error_preview }) => format!("❌ {}", short(error_preview, 1800)),
-        Some(Outcome::Return { value_preview }) => format!("↩️  {}", short(value_preview, 1800)),
-        Some(Outcome::Respond { value_preview }) => format!("💬 {}", short(value_preview, 1800)),
-        Some(Outcome::Stop) => "🛑 Stop".to_string(),
+        Some(Outcome::Success { value_preview }) => {
+            colorize("SUCCESS", AnsiColor::Green, value_preview)
+        }
+        Some(Outcome::Failure { error_preview }) => {
+            colorize("FAILURE", AnsiColor::Red, error_preview)
+        }
+        Some(Outcome::Return { value_preview }) => {
+            colorize("RETURN", AnsiColor::Cyan, value_preview)
+        }
+        Some(Outcome::Respond { value_preview }) => {
+            colorize("RESPOND", AnsiColor::Blue, value_preview)
+        }
+        Some(Outcome::Stop) => colorize("STOP", AnsiColor::Yellow, "Stop"),
         None => "…".to_string(),
     };
 
     let pfx = if prefix.is_empty() {
-        ""
+        "   "
     } else if is_last {
         "   "
     } else {
@@ -121,12 +128,7 @@ fn render_frame(
         return;
     }
 
-    let new_prefix = if prefix.is_empty() {
-        String::new()
-    } else {
-        format!("{}{}", prefix, if is_last { "   " } else { "│  " })
-    };
-
+    let mut runtime_idx = 0usize;
     for (idx, (edge, child_id)) in kids.iter().enumerate() {
         let last = idx + 1 == kids.len();
 
@@ -134,23 +136,73 @@ fn render_frame(
         let edge_label = match edge {
             EdgeKind::Next => "→ NEXT".to_string(),
             EdgeKind::EagerCall { arg_index } => format!("↳ eager(arg#{})", arg_index),
+            EdgeKind::RuntimeCall { label } => {
+                runtime_idx += 1;
+                match label {
+                    Some(l) => format!("↳ runtime(call #{}) {}", runtime_idx, l),
+                    None => format!("↳ runtime(call #{})", runtime_idx),
+                }
+            }
         };
 
-        let edge_pfx = if prefix.is_empty() {
-            ""
-        } else if is_last {
-            "   "
-        } else {
-            "│  "
-        };
-
+        let edge_branch = if last { "└─ " } else { "├─ " };
         out.push_str(&format!(
-            "{prefix}{edge_pfx}   {edge}\n",
+            "{prefix}{branch}{edge}\n",
             prefix = prefix,
-            edge_pfx = edge_pfx,
+            branch = edge_branch,
             edge = edge_label
         ));
 
-        render_frame(*child_id, by_id, &new_prefix, last, out);
+        let edge_child_prefix = format!("{}{}", prefix, if last { "   " } else { "│  " });
+        render_frame(*child_id, by_id, &edge_child_prefix, true, out);
+    }
+}
+
+enum AnsiColor {
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Cyan,
+}
+
+fn colorize(label: &str, color: AnsiColor, payload: &str) -> String {
+    let code = match color {
+        AnsiColor::Red => 31,
+        AnsiColor::Green => 32,
+        AnsiColor::Yellow => 33,
+        AnsiColor::Blue => 34,
+        AnsiColor::Cyan => 36,
+    };
+    format!("\x1b[{code}m[{label}]\x1b[0m {payload}")
+}
+
+fn total_duration_us(frames: &[ExecFrame]) -> Option<u128> {
+    let mut start: Option<std::time::Instant> = None;
+    let mut end: Option<std::time::Instant> = None;
+
+    for f in frames {
+        if let Some(s) = start {
+            if f.start < s {
+                start = Some(f.start);
+            }
+        } else {
+            start = Some(f.start);
+        }
+
+        if let Some(f_end) = f.end {
+            if let Some(e) = end {
+                if f_end > e {
+                    end = Some(f_end);
+                }
+            } else {
+                end = Some(f_end);
+            }
+        }
+    }
+
+    match (start, end) {
+        (Some(s), Some(e)) => Some(e.duration_since(s).as_micros()),
+        _ => None,
     }
 }

@@ -16,6 +16,7 @@ pub struct Context {
     input_types: HashMap<InputType, Value>,
     flow_input: Value,
     current_node_id: i64,
+    runtime_trace_labels: Vec<String>,
 }
 
 impl Context {
@@ -25,6 +26,7 @@ impl Context {
             input_types: HashMap::new(),
             flow_input,
             current_node_id: 0,
+            runtime_trace_labels: Vec::new(),
         }
     }
 
@@ -137,5 +139,13 @@ impl Context {
 
     pub fn insert_error(&mut self, id: i64, runtime_error: RuntimeError) {
         self.results.insert(id, ContextResult::Error(runtime_error));
+    }
+
+    pub fn push_runtime_trace_label(&mut self, label: String) {
+        self.runtime_trace_labels.push(label);
+    }
+
+    pub fn pop_runtime_trace_label(&mut self) -> Option<String> {
+        self.runtime_trace_labels.pop()
     }
 }

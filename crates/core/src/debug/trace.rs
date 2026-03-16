@@ -6,6 +6,8 @@ pub enum EdgeKind {
     Next,
     /// Eager evaluation of a thunk argument (child execution)
     EagerCall { arg_index: usize },
+    /// Child execution triggered inside a runtime handler
+    RuntimeCall { label: Option<String> },
 }
 
 #[derive(Debug, Clone)]

@@ -8,8 +8,8 @@ use tucana::shared::{Struct, Value};
 
 #[derive(Debug, Default, Clone)]
 pub struct RuntimeError {
-    name: String,
-    message: String,
+    pub name: String,
+    pub message: String,
     suggestion: Option<String>,
 }
 

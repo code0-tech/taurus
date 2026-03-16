@@ -1,0 +1,10 @@
+[package]
+name = "taurus-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tucana = { workspace = true }
+base64 = { workspace = true }
+rand = { workspace = true }
+log = { workspace = true }

@@ -4,7 +4,7 @@ use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::error::RuntimeError;
+use crate::runtime::error::RuntimeError;
 use tucana::shared::Value;
 use tucana::shared::value::Kind;
 
@@ -59,6 +59,7 @@ fn r#if(
     };
 
     if *bool {
+        ctx.push_runtime_trace_label("branch=if".to_string());
         run(*if_pointer, ctx)
     } else {
         Signal::Return(Value {
@@ -87,8 +88,10 @@ fn if_else(
     };
 
     if *bool {
+        ctx.push_runtime_trace_label("branch=if".to_string());
         run(*if_pointer, ctx)
     } else {
+        ctx.push_runtime_trace_label("branch=else".to_string());
         run(*else_pointer, ctx)
     }
 }

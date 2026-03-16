@@ -1,0 +1,85 @@
+{
+	"name": "03_for_each",
+	"description": "This flow validates the functionality of the refernece type 'input_type'",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": null
+		}
+	],
+	"flow": {
+		"startingNodeId": "5",
+		"nodeFunctions": [
+			{
+				"databaseId": "5",
+				"runtimeFunctionId": "std::list::for_each",
+				"parameters": [
+					{
+						"databaseId": "11",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"listValue": {
+									"values": [
+										{
+											"numberValue": 1.0
+										},
+										{
+											"numberValue": 2.0
+										},
+										{
+											"numberValue": 3.0
+										},
+										{
+											"numberValue": 4.0
+										},
+										{
+											"numberValue": 5.0
+										},
+										{
+											"numberValue": 6.0
+										}
+									]
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "12",
+						"runtimeParameterId": "consumer",
+						"value": {
+							"nodeFunctionId": "6"
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "6",
+				"runtimeFunctionId": "std::number::add",
+				"parameters": [
+					{
+						"databaseId": "13",
+						"runtimeParameterId": "first",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "5",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "14",
+						"runtimeParameterId": "second",
+						"value": {
+							"literalValue": {
+								"numberValue": 2.0
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

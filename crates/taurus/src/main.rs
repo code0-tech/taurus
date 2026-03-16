@@ -1,22 +1,18 @@
 mod config;
-pub mod context;
-pub mod error;
-pub mod implementation;
 
 use crate::config::Config;
-use crate::context::executor::Executor;
-use crate::context::registry::FunctionStore;
-use crate::context::signal::Signal;
-use crate::implementation::collect;
 use code0_flow::flow_service::FlowUpdateService;
 
 use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
-use context::context::Context;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
 use std::collections::HashMap;
+use taurus_core::context::context::Context;
+use taurus_core::context::executor::Executor;
+use taurus_core::context::registry::FunctionStore;
+use taurus_core::context::signal::Signal;
 use tokio::signal;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
@@ -31,7 +27,7 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
         .map(|node| (node.database_id, node))
         .collect();
 
-    Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context)
+    Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context, true)
 }
 
 #[tokio::main]
@@ -43,8 +39,7 @@ async fn main() {
     load_env_file();
 
     let config = Config::new();
-    let mut store = FunctionStore::new();
-    store.populate(collect());
+    let store = FunctionStore::default();
 
     let client = match async_nats::connect(config.nats_url.clone()).await {
         Ok(client) => {

@@ -1,25 +1,46 @@
 use std::cmp::Ordering;
 
+use tucana::shared::InputType;
 use tucana::shared::{ListValue, Value, value::Kind};
 
 use crate::context::argument::Argument;
+use crate::context::argument::ParameterNode::{Eager, Lazy};
+use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
-use crate::{context::context::Context, error::RuntimeError};
+use crate::runtime::error::RuntimeError;
 
 pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
         ("std::list::at", HandlerFn::eager(at, 2)),
         ("std::list::concat", HandlerFn::eager(concat, 2)),
-        ("std::list::filter", HandlerFn::eager(filter, 2)),
-        ("std::list::find", HandlerFn::eager(find, 2)),
-        ("std::list::find_last", HandlerFn::eager(find_last, 2)),
-        ("std::list::find_index", HandlerFn::eager(find_index, 2)),
+        (
+            "std::list::filter",
+            HandlerFn::into_function_entry(filter, vec![Eager, Lazy]),
+        ),
+        (
+            "std::list::find",
+            HandlerFn::into_function_entry(find, vec![Eager, Lazy]),
+        ),
+        (
+            "std::list::find_last",
+            HandlerFn::into_function_entry(find_last, vec![Eager, Lazy]),
+        ),
+        (
+            "std::list::find_index",
+            HandlerFn::into_function_entry(find_index, vec![Eager, Lazy]),
+        ),
         ("std::list::first", HandlerFn::eager(first, 1)),
         ("std::list::last", HandlerFn::eager(last, 1)),
-        ("std::list::for_each", HandlerFn::eager(for_each, 0)),
-        ("std::list::map", HandlerFn::eager(map, 2)),
+        (
+            "std::list::for_each",
+            HandlerFn::into_function_entry(for_each, vec![Eager, Lazy]),
+        ),
+        (
+            "std::list::map",
+            HandlerFn::into_function_entry(map, vec![Eager, Lazy]),
+        ),
         ("std::list::push", HandlerFn::eager(push, 2)),
         ("std::list::pop", HandlerFn::eager(pop, 1)),
         ("std::list::remove", HandlerFn::eager(remove, 2)),
@@ -27,8 +48,14 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::list::size", HandlerFn::eager(size, 1)),
         ("std::list::index_of", HandlerFn::eager(index_of, 2)),
         ("std::list::to_unique", HandlerFn::eager(to_unique, 1)),
-        ("std::list::sort", HandlerFn::eager(sort, 2)),
-        ("std::list::sort_reverse", HandlerFn::eager(sort_reverse, 2)),
+        (
+            "std::list::sort",
+            HandlerFn::into_function_entry(sort, vec![Eager, Lazy]),
+        ),
+        (
+            "std::list::sort_reverse",
+            HandlerFn::into_function_entry(sort_reverse, vec![Eager, Lazy]),
+        ),
         ("std::list::reverse", HandlerFn::eager(reverse, 1)),
         ("std::list::flat", HandlerFn::eager(flat, 1)),
         ("std::list::min", HandlerFn::eager(min, 1)),
@@ -36,6 +63,23 @@ pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::list::sum", HandlerFn::eager(sum, 1)),
         ("std::list::join", HandlerFn::eager(join, 2)),
     ]
+}
+
+fn as_list(value: &Value, err: &'static str) -> Result<ListValue, RuntimeError> {
+    match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
+        Kind::ListValue(lv) => Ok(lv),
+        _ => Err(RuntimeError::simple_str("InvalidArgumentRuntimeError", err)),
+    }
+}
+
+fn as_bool(value: &Value) -> Result<bool, RuntimeError> {
+    match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
+        Kind::BoolValue(b) => Ok(b),
+        _ => Err(RuntimeError::simple_str(
+            "InvalidArgumentRuntimeError",
+            "Expected boolean result from predicate",
+        )),
+    }
 }
 
 fn at(
@@ -98,192 +142,227 @@ fn concat(
 
 fn filter(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array".to_string(),
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans".to_string(),
+            format!(
+                "filter expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<Value> = Vec::new();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+    for (idx, item) in array.values.iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
+        let pred_sig = run(*predicate_node, ctx);
+
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => out.push(item.clone()),
+                Ok(false) => {}
+                Err(e) => return Signal::Failure(e),
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
         }
     }
 
-    let mut i = 0usize;
-    let new_array = array
-        .values
-        .iter()
-        .filter(|_| {
-            let keep = *preds.get(i).unwrap_or(&false);
-            i += 1;
-            keep
-        })
-        .cloned()
-        .collect::<Vec<Value>>();
-
+    ctx.clear_input_type(input_type);
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(ListValue { values: new_array })),
+        kind: Some(Kind::ListValue(ListValue { values: out })),
     })
 }
 
 fn find(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans",
+            format!(
+                "find expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    for (idx, item) in array.values.iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
+        let pred_sig = run(*predicate_node, ctx);
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Success(item.clone());
+                }
+                Ok(false) => continue,
+                Err(e) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(e);
+                }
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
 
-    let mut i = 0usize;
-    let item = array
-        .values
-        .iter()
-        .find(|&_| {
-            let keep = *preds.get(i).unwrap_or(&false);
-            i += 1;
-            keep
-        })
-        .cloned();
-
-    match item {
-        Some(v) => Signal::Success(v),
-        None => Signal::Failure(RuntimeError::simple_str(
-            "NotFoundError",
-            "No item found that satisfies the predicate",
-        )),
-    }
+    ctx.clear_input_type(input_type);
+    Signal::Failure(RuntimeError::simple_str(
+        "NotFoundError",
+        "No item found that satisfies the predicate",
+    ))
 }
-
 fn find_last(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans",
+            format!(
+                "find_last expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let mut array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+    array.values.reverse();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    for (idx, item) in array.values.into_iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(&item)));
+        let pred_sig = run(*predicate_node, ctx);
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Success(item);
+                }
+                Ok(false) => continue,
+                Err(e) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(e);
+                }
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
-
-    let mut i = 0usize;
-    let mut reversed = array.values.clone();
-    reversed.reverse();
-
-    let item = reversed.into_iter().find(|_| {
-        let keep = *preds.get(i).unwrap_or(&false);
-        i += 1;
-        keep
-    });
-
-    match item {
-        Some(v) => Signal::Success(v),
-        None => Signal::Failure(RuntimeError::simple_str(
-            "NotFoundError",
-            "No item found that satisfies the predicate",
-        )),
-    }
+    ctx.clear_input_type(input_type);
+    Signal::Failure(RuntimeError::simple_str(
+        "NotFoundError",
+        "No item found that satisfies the predicate",
+    ))
 }
 
 fn find_index(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, predicate_v: Value);
-    let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(predicate_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(resolved_predicate) =
-        predicate_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of booleans",
+            format!(
+                "find_index expects (array: eager, predicate: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut preds: Vec<bool> = Vec::with_capacity(resolved_predicate.values.len());
-    for v in &resolved_predicate.values {
-        if let Some(Kind::BoolValue(b)) = v.kind {
-            preds.push(b);
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    for (idx, item) in array.values.iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
+        let pred_sig = run(*predicate_node, ctx);
+
+        match pred_sig {
+            Signal::Success(v) => match as_bool(&v) {
+                Ok(true) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Success(Value {
+                        kind: Some(Kind::NumberValue(idx as f64)),
+                    });
+                }
+                Ok(false) => continue,
+                Err(e) => {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(e);
+                }
+            },
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
 
-    let mut idx = 0usize;
-    let found = array.values.iter().find(|_| {
-        let keep = *preds.get(idx).unwrap_or(&false);
-        if !keep {
-            idx += 1;
-        }
-        keep
-    });
-
-    match found {
-        Some(_) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(idx as f64)),
-        }),
-        None => Signal::Failure(RuntimeError::simple_str(
-            "NotFoundError",
-            "No item found that satisfies the predicate",
-        )),
-    }
+    ctx.clear_input_type(input_type);
+    Signal::Failure(RuntimeError::simple_str(
+        "NotFoundError",
+        "No item found that satisfies the predicate",
+    ))
 }
-
 fn first(
     args: &[Argument],
     _ctx: &mut Context,
@@ -315,40 +394,128 @@ fn last(
     }
 }
 
-/// for_each has no implementation
-///
-/// Reason:
-/// The definition itself takes in an array and a node
-/// The node itself will be executed on the arrays elements
-/// If the node is (CONSUMER) resolved it goes in this function --> therefor all code is already executed
 fn for_each(
-    _args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    args: &[Argument],
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    // Already executed by the engine (consumer); return Null
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
+            "InvalidArgumentRuntimeError",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
+        ));
+    };
+
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    for (idx, item) in array.values.iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
+        let sig = run(*transform_node, ctx);
+
+        match sig {
+            Signal::Success(_) => {}
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                return other;
+            }
+        }
+    }
+
+    ctx.clear_input_type(input_type);
     Signal::Success(Value {
         kind: Some(Kind::NullValue(0)),
     })
 }
 
+fn preview_value(value: &Value) -> String {
+    format_value_json(value)
+}
+
+fn format_value_json(value: &Value) -> String {
+    match value.kind.as_ref() {
+        Some(Kind::NumberValue(v)) => v.to_string(),
+        Some(Kind::BoolValue(v)) => v.to_string(),
+        Some(Kind::StringValue(v)) => format!("{:?}", v),
+        Some(Kind::NullValue(_)) | None => "null".to_string(),
+        Some(Kind::ListValue(list)) => {
+            let mut parts = Vec::new();
+            for item in list.values.iter() {
+                parts.push(format_value_json(item));
+            }
+            format!("[{}]", parts.join(", "))
+        }
+        Some(Kind::StructValue(struct_value)) => {
+            let mut keys: Vec<_> = struct_value.fields.keys().collect();
+            keys.sort();
+            let mut parts = Vec::new();
+            for key in keys.iter() {
+                if let Some(v) = struct_value.fields.get(*key) {
+                    parts.push(format!("{:?}: {}", key, format_value_json(v)));
+                }
+            }
+            format!("{{{}}}", parts.join(", "))
+        }
+    }
+}
+
 fn map(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    // (array, transformed_results[])
-    args!(args => _array_v: Value, transform_v: Value);
-    let Kind::ListValue(transform_result) =
-        transform_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0))
-    else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected transform result to be an array",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
+
+    let array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<Value> = Vec::with_capacity(array.values.len());
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    for (idx, item) in array.values.iter().enumerate() {
+        ctx.insert_input_type(input_type, item.clone());
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
+        let sig = run(*transform_node, ctx);
+        match sig {
+            Signal::Success(v) => out.push(v),
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
+        }
+    }
+
+    ctx.clear_input_type(input_type);
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(transform_result.clone())),
+        kind: Some(Kind::ListValue(ListValue { values: out })),
     })
 }
 
@@ -499,34 +666,85 @@ fn to_unique(
 
 fn sort(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    // array, resolved comparator yields -1/0/1 sequence
-    args!(args => array_v: Value, cmp_v: Value);
-    let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(cmp_vals) = cmp_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of numbers",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut comps: Vec<f64> = Vec::new();
-    for v in &cmp_vals.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            comps.push(n);
+    let mut array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<f64> = Vec::new();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    let input_type_next = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 1,
+    };
+
+    let mut signals = Vec::new();
+    let mut cmp_idx = 0usize;
+    array.values.sort_by(|a, b| {
+        ctx.insert_input_type(input_type, a.clone());
+        ctx.insert_input_type(input_type_next, b.clone());
+        ctx.push_runtime_trace_label(format!(
+            "cmp#{} a={} b={}",
+            cmp_idx,
+            preview_value(a),
+            preview_value(b)
+        ));
+        cmp_idx += 1;
+        let sig = run(*transform_node, ctx);
+        signals.push(sig);
+        Ordering::Equal
+    });
+
+    for sig in signals {
+        match sig {
+            Signal::Success(v) => {
+                if let Value {
+                    kind: Some(Kind::NumberValue(i)),
+                } = v
+                {
+                    out.push(i);
+                } else {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(RuntimeError::simple(
+                        "InvalidArgumentRuntimeError",
+                        format!(
+                            "expected return value of comparator to be a number but was {:?}",
+                            v
+                        ),
+                    ));
+                }
+            }
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
 
     let mut i = 0usize;
-    arr.values.sort_by(|_, _| {
-        let comp = *comps.get(i).unwrap_or(&0.0);
+    array.values.sort_by(|_, _| {
+        let comp = *out.get(i).unwrap_or(&0.0);
         i += 1;
         match comp {
             n if n < 0.0 => Ordering::Less,
@@ -536,41 +754,93 @@ fn sort(
     });
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(arr)),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 
 fn sort_reverse(
     args: &[Argument],
-    _ctx: &mut Context,
-    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+    ctx: &mut Context,
+    run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => array_v: Value, cmp_v: Value);
-    let Kind::ListValue(mut arr) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
+    let [Argument::Eval(array_v), Argument::Thunk(transform_node)] = args else {
+        return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
-            "Expected first argument to be an array",
-        ));
-    };
-    let Kind::ListValue(cmp_vals) = cmp_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
-        return Signal::Failure(RuntimeError::simple_str(
-            "InvalidArgumentRuntimeError",
-            "Expected second argument to be an array of numbers",
+            format!(
+                "map expects (array: eager, transform: lazy thunk), got {:?}",
+                args
+            ),
         ));
     };
 
-    let mut comps: Vec<f64> = Vec::new();
-    for v in &cmp_vals.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            comps.push(n);
+    let mut array = match as_list(array_v, "Expected first argument to be an array") {
+        Ok(a) => a,
+        Err(e) => return Signal::Failure(e),
+    };
+
+    let mut out: Vec<f64> = Vec::new();
+    let node_id = ctx.get_current_node_id();
+    let input_type = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 0,
+    };
+
+    let input_type_next = InputType {
+        node_id,
+        parameter_index: 1,
+        input_index: 1,
+    };
+
+    let mut signals = Vec::new();
+    let mut cmp_idx = 0usize;
+    array.values.sort_by(|a, b| {
+        ctx.insert_input_type(input_type, a.clone());
+        ctx.insert_input_type(input_type_next, b.clone());
+        ctx.push_runtime_trace_label(format!(
+            "cmp#{} a={} b={}",
+            cmp_idx,
+            preview_value(a),
+            preview_value(b)
+        ));
+        cmp_idx += 1;
+        let sig = run(*transform_node, ctx);
+        signals.push(sig);
+        Ordering::Equal
+    });
+
+    for sig in signals {
+        match sig {
+            Signal::Success(v) => {
+                if let Value {
+                    kind: Some(Kind::NumberValue(i)),
+                } = v
+                {
+                    out.push(i);
+                } else {
+                    ctx.clear_input_type(input_type);
+                    return Signal::Failure(RuntimeError::simple(
+                        "InvalidArgumentRuntimeError",
+                        format!(
+                            "expected return value of comparator to be a number but was {:?}",
+                            v
+                        ),
+                    ));
+                }
+            }
+            other
+            @ (Signal::Failure(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop) => {
+                ctx.clear_input_type(input_type);
+                return other;
+            }
         }
     }
 
-    arr.values.reverse(); // keep behavior consistent with original
+    array.values.reverse(); // keep behavior consistent with original
 
     let mut i = 0usize;
-    arr.values.sort_by(|_, _| {
-        let comp = *comps.get(i).unwrap_or(&0.0);
+    array.values.sort_by(|_, _| {
+        let comp = *out.get(i).unwrap_or(&0.0);
         i += 1;
         match comp {
             n if n < 0.0 => Ordering::Less,
@@ -580,7 +850,7 @@ fn sort_reverse(
     });
 
     Signal::Success(Value {
-        kind: Some(Kind::ListValue(arr)),
+        kind: Some(Kind::ListValue(array)),
     })
 }
 
@@ -725,6 +995,9 @@ mod tests {
     fn a_val(v: Value) -> Argument {
         Argument::Eval(v)
     }
+    fn a_thunk(id: i64) -> Argument {
+        Argument::Thunk(id)
+    }
     fn v_num(n: f64) -> Value {
         Value {
             kind: Some(Kind::NumberValue(n)),
@@ -783,6 +1056,28 @@ mod tests {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })
+    }
+
+    fn run_from_bools(seq: Vec<bool>) -> impl FnMut(i64, &mut Context) -> Signal {
+        let mut i = 0usize;
+        move |_, _| {
+            let b = *seq.get(i).unwrap_or(&false);
+            i += 1;
+            Signal::Success(Value {
+                kind: Some(Kind::BoolValue(b)),
+            })
+        }
+    }
+
+    fn run_from_values(seq: Vec<Value>) -> impl FnMut(i64, &mut Context) -> Signal {
+        let mut i = 0usize;
+        move |_, _| {
+            let v = seq.get(i).cloned().unwrap_or(Value {
+                kind: Some(Kind::NullValue(0)),
+            });
+            i += 1;
+            Signal::Success(v)
+        }
     }
 
     // --- at ------------------------------------------------------------------
@@ -890,14 +1185,9 @@ mod tests {
     #[test]
     fn test_filter_success() {
         let mut ctx = Context::default();
-        let mut run = dummy_run;
         let array = v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]);
-        let predicate = v_list(vec![v_bool(true), v_bool(false), v_bool(true)]);
-        let out = expect_list(filter(
-            &[a_val(array), a_val(predicate)],
-            &mut ctx,
-            &mut run,
-        ));
+        let mut run = run_from_bools(vec![true, false, true]);
+        let out = expect_list(filter(&[a_val(array), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
         assert_eq!(out[1].kind, Some(Kind::NumberValue(3.0)));
@@ -908,16 +1198,12 @@ mod tests {
         let mut ctx = Context::default();
         let mut run = dummy_run;
         let array = v_list(vec![v_num(1.0)]);
-        let predicate = v_list(vec![v_bool(true)]);
+        let _predicate = v_list(vec![v_bool(true)]);
         match filter(&[a_val(array.clone())], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
             x => panic!("{:?}", x),
         }
-        match filter(
-            &[a_val(v_str("not_array")), a_val(predicate.clone())],
-            &mut ctx,
-            &mut run,
-        ) {
+        match filter(&[a_val(v_str("not_array")), a_thunk(1)], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
             x => panic!("{:?}", x),
         }
@@ -983,19 +1269,31 @@ mod tests {
     #[test]
     fn test_for_each_and_map() {
         let mut ctx = Context::default();
-        let mut run = dummy_run;
-        match for_each(&[], &mut ctx, &mut run) {
+        let mut called = 0usize;
+        let mut run = |_, _ctx: &mut Context| {
+            called += 1;
+            Signal::Success(Value {
+                kind: Some(Kind::NullValue(0)),
+            })
+        };
+        match for_each(
+            &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(1)],
+            &mut ctx,
+            &mut run,
+        ) {
             Signal::Success(Value {
                 kind: Some(Kind::NullValue(_)),
             }) => {}
             x => panic!("expected NullValue, got {:?}", x),
         }
+        assert_eq!(called, 2);
         let transformed = v_list(vec![v_str("X"), v_str("Y")]);
+        let mut run = run_from_values(match transformed.kind.clone() {
+            Some(Kind::ListValue(ListValue { values })) => values,
+            _ => unreachable!(),
+        });
         let out = expect_list(map(
-            &[
-                a_val(v_list(vec![v_num(1.0), v_num(2.0)])),
-                a_val(transformed.clone()),
-            ],
+            &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(2)],
             &mut ctx,
             &mut run,
         ));
@@ -1209,23 +1507,16 @@ mod tests {
     #[test]
     fn test_sort_and_sort_reverse() {
         let mut ctx = Context::default();
-        let mut run = dummy_run;
 
         // We don't rely on actual values; ordering is driven by the comparator sequence.
         let arr = v_list(vec![v_str("a"), v_str("b"), v_str("c"), v_str("d")]);
-        let comps = v_list(vec![v_num(-1.0), v_num(1.0), v_num(0.0), v_num(-1.0)]);
-        let out = expect_list(sort(
-            &[a_val(arr.clone()), a_val(comps.clone())],
-            &mut ctx,
-            &mut run,
-        ));
+        let comps = vec![v_num(-1.0), v_num(1.0), v_num(0.0), v_num(-1.0)];
+        let mut run = run_from_values(comps.clone());
+        let out = expect_list(sort(&[a_val(arr.clone()), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out.len(), 4);
 
-        let out_r = expect_list(sort_reverse(
-            &[a_val(arr), a_val(comps)],
-            &mut ctx,
-            &mut run,
-        ));
+        let mut run = run_from_values(comps);
+        let out_r = expect_list(sort_reverse(&[a_val(arr), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out_r.len(), 4);
     }
 

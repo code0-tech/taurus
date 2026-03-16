@@ -1,0 +1,88 @@
+{
+	"name": "02_return_object",
+	"description": "This flow expects the same output value as the input",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"status_code": 200,
+				"headers": {
+					"Authentication": "X"
+				},
+				"payload": null
+			}
+		},
+		{
+			"input": {
+				"name": "Joe Doe",
+				"age": 51,
+				"pets": [
+					"dog",
+					"cat",
+					"bird"
+				]
+			},
+			"expected_result": {
+				"status_code": 200,
+				"headers": {
+					"Authentication": "X"
+				},
+				"payload": {
+					"name": "Joe Doe",
+					"age": 51,
+					"pets": [
+						"dog",
+						"cat",
+						"bird"
+					]
+				}
+			}
+		}
+	],
+	"flow": {
+		"flowId": "2",
+		"projectId": "1",
+		"startingNodeId": "3",
+		"nodeFunctions": [
+			{
+				"databaseId": "3",
+				"runtimeFunctionId": "http::response::create",
+				"parameters": [
+					{
+						"databaseId": "5",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"stringValue": "200"
+							}
+						}
+					},
+					{
+						"databaseId": "6",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"Authentication": {
+											"stringValue": "X"
+										}
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "7",
+						"runtimeParameterId": "payload",
+						"value": {
+							"referenceValue": {
+								"flowInput": {}
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

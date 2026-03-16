@@ -7,9 +7,9 @@ use crate::debug::tracer::{ExecutionTracer, Tracer};
 use crate::runtime::error::RuntimeError;
 
 use std::collections::HashMap;
-use tucana::shared::{NodeFunction, Value};
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
+use tucana::shared::{NodeFunction, Value};
 
 pub struct Executor<'a> {
     functions: &'a FunctionStore,
@@ -199,7 +199,7 @@ impl<'a> Executor<'a> {
                                 },
                                 preview: format!(
                                     "ctx.get({}) -> {}",
-                                    preview_reference(&r),
+                                    preview_reference(r),
                                     preview_value(&v)
                                 ),
                             },

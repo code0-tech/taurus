@@ -95,19 +95,19 @@ impl ExecutionTracer for Tracer {
 
     fn mark_thunk(&mut self, frame_id: u64, arg_index: usize, eager: bool, executed: bool) {
         let f = self.get_frame_mut(frame_id);
-        if let Some(arg) = f.args.iter_mut().find(|a| a.index == arg_index) {
-            if let ArgTrace {
-                kind: crate::debug::trace::ArgKind::Thunk {
-                    eager: e,
-                    executed: x,
-                    ..
-                },
+        if let Some(arg) = f.args.iter_mut().find(|a| a.index == arg_index)
+            && let ArgTrace {
+                kind:
+                    crate::debug::trace::ArgKind::Thunk {
+                        eager: e,
+                        executed: x,
+                        ..
+                    },
                 ..
             } = arg
-            {
-                *e = eager;
-                *x = executed;
-            }
+        {
+            *e = eager;
+            *x = executed;
         }
     }
 
@@ -119,14 +119,12 @@ impl ExecutionTracer for Tracer {
                 crate::debug::trace::ArgKind::Thunk { node_id: id, executed: false, .. }
                     if id == node_id
             )
-        }) {
-            if let ArgTrace {
-                kind: crate::debug::trace::ArgKind::Thunk { executed: x, .. },
-                ..
-            } = arg
-            {
-                *x = true;
-            }
+        }) && let ArgTrace {
+            kind: crate::debug::trace::ArgKind::Thunk { executed: x, .. },
+            ..
+        } = arg
+        {
+            *x = true;
         }
     }
 

@@ -169,11 +169,7 @@ fn filter(
     };
     for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
-        ctx.push_runtime_trace_label(format!(
-            "iter={} value={}",
-            idx,
-            preview_value(item)
-        ));
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
         let pred_sig = run(*predicate_node, ctx);
 
         match pred_sig {
@@ -223,11 +219,7 @@ fn find(
 
     for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
-        ctx.push_runtime_trace_label(format!(
-            "iter={} value={}",
-            idx,
-            preview_value(item)
-        ));
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
         let pred_sig = run(*predicate_node, ctx);
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
@@ -284,11 +276,7 @@ fn find_last(
 
     for (idx, item) in array.values.into_iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
-        ctx.push_runtime_trace_label(format!(
-            "iter={} value={}",
-            idx,
-            preview_value(&item)
-        ));
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(&item)));
         let pred_sig = run(*predicate_node, ctx);
         match pred_sig {
             Signal::Success(v) => match as_bool(&v) {
@@ -344,11 +332,7 @@ fn find_index(
 
     for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
-        ctx.push_runtime_trace_label(format!(
-            "iter={} value={}",
-            idx,
-            preview_value(item)
-        ));
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
         let pred_sig = run(*predicate_node, ctx);
 
         match pred_sig {
@@ -438,11 +422,7 @@ fn for_each(
 
     for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
-        ctx.push_runtime_trace_label(format!(
-            "iter={} value={}",
-            idx,
-            preview_value(item)
-        ));
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
         let sig = run(*transform_node, ctx);
 
         match sig {
@@ -521,11 +501,7 @@ fn map(
 
     for (idx, item) in array.values.iter().enumerate() {
         ctx.insert_input_type(input_type, item.clone());
-        ctx.push_runtime_trace_label(format!(
-            "iter={} value={}",
-            idx,
-            preview_value(item)
-        ));
+        ctx.push_runtime_trace_label(format!("iter={} value={}", idx, preview_value(item)));
         let sig = run(*transform_node, ctx);
         match sig {
             Signal::Success(v) => out.push(v),
@@ -1211,11 +1187,7 @@ mod tests {
         let mut ctx = Context::default();
         let array = v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)]);
         let mut run = run_from_bools(vec![true, false, true]);
-        let out = expect_list(filter(
-            &[a_val(array), a_thunk(1)],
-            &mut ctx,
-            &mut run,
-        ));
+        let out = expect_list(filter(&[a_val(array), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
         assert_eq!(out[1].kind, Some(Kind::NumberValue(3.0)));
@@ -1231,11 +1203,7 @@ mod tests {
             Signal::Failure(_) => {}
             x => panic!("{:?}", x),
         }
-        match filter(
-            &[a_val(v_str("not_array")), a_thunk(1)],
-            &mut ctx,
-            &mut run,
-        ) {
+        match filter(&[a_val(v_str("not_array")), a_thunk(1)], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
             x => panic!("{:?}", x),
         }
@@ -1309,10 +1277,7 @@ mod tests {
             })
         };
         match for_each(
-            &[
-                a_val(v_list(vec![v_num(1.0), v_num(2.0)])),
-                a_thunk(1),
-            ],
+            &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(1)],
             &mut ctx,
             &mut run,
         ) {
@@ -1328,10 +1293,7 @@ mod tests {
             _ => unreachable!(),
         });
         let out = expect_list(map(
-            &[
-                a_val(v_list(vec![v_num(1.0), v_num(2.0)])),
-                a_thunk(2),
-            ],
+            &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(2)],
             &mut ctx,
             &mut run,
         ));
@@ -1550,19 +1512,11 @@ mod tests {
         let arr = v_list(vec![v_str("a"), v_str("b"), v_str("c"), v_str("d")]);
         let comps = vec![v_num(-1.0), v_num(1.0), v_num(0.0), v_num(-1.0)];
         let mut run = run_from_values(comps.clone());
-        let out = expect_list(sort(
-            &[a_val(arr.clone()), a_thunk(1)],
-            &mut ctx,
-            &mut run,
-        ));
+        let out = expect_list(sort(&[a_val(arr.clone()), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out.len(), 4);
 
         let mut run = run_from_values(comps);
-        let out_r = expect_list(sort_reverse(
-            &[a_val(arr), a_thunk(1)],
-            &mut ctx,
-            &mut run,
-        ));
+        let out_r = expect_list(sort_reverse(&[a_val(arr), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out_r.len(), 4);
     }
 

@@ -1,4 +1,5 @@
 mod config;
+mod client;
 
 use crate::config::Config;
 use code0_flow::flow_service::FlowUpdateService;

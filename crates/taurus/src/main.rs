@@ -92,7 +92,7 @@ async fn main() {
         .send()
         .await;
 
-        let client = TaurusRuntimeStatusService::from_url(
+        let status_service = TaurusRuntimeStatusService::from_url(
             config.aquila_url.clone(),
             "taurus".into(),
             vec![RuntimeFeature {
@@ -108,10 +108,10 @@ async fn main() {
         )
         .await;
 
-        client
+        status_service
             .update_runtime_status(tucana::shared::execution_runtime_status::Status::Running)
             .await;
-        runtime_status_service = Some(client);
+        runtime_status_service = Some(status_service);
     }
 
     let mut worker_task = tokio::spawn(async move {

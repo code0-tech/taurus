@@ -236,8 +236,9 @@ async fn main() {
         }
     }
 
-    if let Some(ser) = &runtime_status_service {
-        ser.update_runtime_status(tucana::shared::execution_runtime_status::Status::Stopped)
+    if let Some(status_service) = &runtime_status_service {
+        status_service
+            .update_runtime_status(tucana::shared::execution_runtime_status::Status::Stopped)
             .await;
     };
 

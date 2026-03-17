@@ -12,7 +12,7 @@ use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use taurus_core::context::context::Context;
 use taurus_core::context::executor::Executor;
 use taurus_core::context::registry::FunctionStore;
@@ -25,7 +25,7 @@ use tucana::shared::{
 };
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> (Signal, RuntimeUsage) {
-    let now = SystemTime::now();
+    let start = Instant::now();
     let mut context = Context::default();
 
     let node_functions: HashMap<i64, NodeFunction> = flow
@@ -36,19 +36,13 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> (Signal, Runtim
 
     let signal =
         Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context, true);
-    let timestamp = match now.duration_since(UNIX_EPOCH) {
-        Ok(time) => time.as_millis(),
-        Err(err) => {
-            log::error!("cannot get current system time: {:?}", err);
-            0
-        }
-    };
+    let duration_millis = start.elapsed().as_millis() as i64;
 
     (
         signal,
         RuntimeUsage {
             flow_id: flow.flow_id,
-            duration: timestamp as i64,
+            duration: duration_millis,
         },
     )
 }

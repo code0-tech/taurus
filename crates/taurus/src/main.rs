@@ -193,16 +193,16 @@ async fn main() {
 
             log::info!("For the flow_id {} returing the value {:?}", flow_id, value);
 
-            if let Some(usage_service) = &runtime_usage_service {
-                usage_service.update_runtime_usage(result.1).await;
-            }
-
             // Send a response to the reply subject
             if let Some(reply) = msg.reply {
                 match client.publish(reply, value.encode_to_vec().into()).await {
                     Ok(_) => log::debug!("Response sent"),
                     Err(err) => log::error!("Failed to send response: {:?}", err),
                 }
+            }
+
+            if let Some(usage_service) = &runtime_usage_service {
+                usage_service.update_runtime_usage(result.1).await;
             }
         }
 

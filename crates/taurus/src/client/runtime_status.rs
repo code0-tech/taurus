@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use code0_flow::flow_service::retry::create_channel_with_retry;
 use tonic::transport::Channel;
 use tucana::{
     aquila::{
@@ -25,11 +26,7 @@ impl TaurusRuntimeStatusService {
         Self::new(channel, identifier, features)
     }
 
-    pub fn new(
-        channel: Channel,
-        identifier: String,
-        features: Vec<RuntimeFeature>,
-    ) -> Self {
+    pub fn new(channel: Channel, identifier: String, features: Vec<RuntimeFeature>) -> Self {
         TaurusRuntimeStatusService {
             channel,
             identifier,

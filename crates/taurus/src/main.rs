@@ -1,6 +1,7 @@
-mod config;
 mod client;
+mod config;
 
+use crate::client::runtime_status::TaurusRuntimeStatusService;
 use crate::config::Config;
 use code0_flow::flow_service::FlowUpdateService;
 
@@ -17,7 +18,7 @@ use taurus_core::context::signal::Signal;
 use tokio::signal;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
-use tucana::shared::{ExecutionFlow, NodeFunction, Value};
+use tucana::shared::{ExecutionFlow, NodeFunction, RuntimeFeature, Translation, Value};
 
 fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> Signal {
     let mut context = Context::default();
@@ -41,6 +42,7 @@ async fn main() {
 
     let config = Config::new();
     let store = FunctionStore::default();
+    let mut runtime_status_service: Option<TaurusRuntimeStatusService> = None;
 
     let client = match async_nats::connect(config.nats_url.clone()).await {
         Ok(client) => {
@@ -89,6 +91,27 @@ async fn main() {
         .await
         .send()
         .await;
+
+        let client = TaurusRuntimeStatusService::from_url(
+            config.aquila_url.clone(),
+            "taurus".into(),
+            vec![RuntimeFeature {
+                name: vec![Translation {
+                    code: "en-US".to_string(),
+                    content: "Runtime".to_string(),
+                }],
+                description: vec![Translation {
+                    code: "en-US".to_string(),
+                    content: "Will execute incoming flows.".to_string(),
+                }],
+            }],
+        )
+        .await;
+
+        client
+            .update_runtime_status(tucana::shared::execution_runtime_status::Status::Running)
+            .await;
+        runtime_status_service = Some(client);
     }
 
     let mut worker_task = tokio::spawn(async move {
@@ -212,6 +235,11 @@ async fn main() {
             }
         }
     }
+
+    if let Some(ser) = &runtime_status_service {
+        ser.update_runtime_status(tucana::shared::execution_runtime_status::Status::Stopped)
+            .await;
+    };
 
     log::info!("Taurus shutdown complete");
 }

@@ -1,6 +1,7 @@
 use std::f64;
 
-use tucana::shared::{number_value, NumberValue, Value, value::Kind};
+use tucana::shared::helper::value::ToValue;
+use tucana::shared::{NumberValue, Value, number_value, value::Kind};
 
 use crate::context::argument::Argument;
 use crate::context::context::Context;
@@ -8,7 +9,7 @@ use crate::context::macros::{args, no_args};
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
-use crate::value::{number_to_f64, value_from_f64, value_from_i64};
+use crate::value::{number_to_f64, number_to_i64_lossy, value_from_f64, value_from_i64};
 
 fn num_f64(n: &NumberValue) -> Result<f64, Signal> {
     number_to_f64(n).ok_or_else(|| {
@@ -59,7 +60,50 @@ pub fn collect_number_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::number::cosh", HandlerFn::eager(cosh, 1)),
         ("std::number::clamp", HandlerFn::eager(clamp, 3)),
         ("std::number::is_equal", HandlerFn::eager(is_equal, 2)),
+        ("std::number::has_digits", HandlerFn::eager(has_digits, 2)),
+        (
+            "std::number::remove_digits",
+            HandlerFn::eager(remove_digits, 2),
+        ),
     ]
+}
+
+fn has_digits(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
+    args!(args => value: NumberValue);
+
+    match value.number {
+        Some(number) => match number {
+            number_value::Number::Integer(_) => return Signal::Success(false.to_value()),
+            number_value::Number::Float(_) => return Signal::Success(true.to_value()),
+        },
+        None => {
+            return Signal::Failure(RuntimeError::simple_str(
+                "InvlaidArgumentExeption",
+                "Had NumberValue but no inner number value (was null)",
+            ));
+        }
+    }
+}
+
+fn remove_digits(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
+    args!(args => value: NumberValue);
+    match number_to_i64_lossy(&value) {
+        Some(number) => return Signal::Success(value_from_i64(number)),
+        None => {
+            return Signal::Failure(RuntimeError::simple_str(
+                "InvlaidArgumentExeption",
+                "Had NumberValue but no inner number value (was null)",
+            ));
+        }
+    }
 }
 
 fn add(
@@ -792,12 +836,15 @@ mod tests {
     use super::*;
     use crate::context::argument::Argument;
     use crate::context::context::Context;
-    use crate::value::{number_to_f64, value_from_f64};
-    use tucana::shared::{Value, value::Kind};
+    use crate::value::{number_to_f64, value_from_f64, value_from_i64};
+    use tucana::shared::{number_value, Value, value::Kind};
 
     // ---- helpers: Arguments ----
     fn a_num(n: f64) -> Argument {
         Argument::Eval(value_from_f64(n))
+    }
+    fn a_int(n: i64) -> Argument {
+        Argument::Eval(value_from_i64(n))
     }
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {
@@ -820,6 +867,20 @@ mod tests {
                 kind: Some(Kind::BoolValue(b)),
             }) => b,
             other => panic!("Expected BoolValue, got {:?}", other),
+        }
+    }
+    fn expect_int(sig: Signal) -> i64 {
+        match sig {
+            Signal::Success(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => match n.number {
+                Some(number_value::Number::Integer(i)) => i,
+                Some(number_value::Number::Float(f)) => {
+                    panic!("Expected Integer NumberValue, got Float({})", f)
+                }
+                None => panic!("Expected Integer NumberValue, got None"),
+            },
+            other => panic!("Expected NumberValue, got {:?}", other),
         }
     }
     fn expect_str(sig: Signal) -> String {
@@ -851,6 +912,29 @@ mod tests {
         assert_eq!(
             expect_num(multiply(&[a_num(4.0), a_num(2.5)], &mut ctx, &mut run)),
             10.0
+        );
+    }
+
+    #[test]
+    fn test_has_digits_and_remove_digits() {
+        let mut ctx = Context::default();
+
+        let mut run = dummy_run;
+        assert!(!expect_bool(has_digits(&[a_int(42)], &mut ctx, &mut run)));
+
+        let mut run = dummy_run;
+        assert!(expect_bool(has_digits(&[a_num(42.5)], &mut ctx, &mut run)));
+
+        let mut run = dummy_run;
+        assert_eq!(
+            expect_int(remove_digits(&[a_int(123)], &mut ctx, &mut run)),
+            123
+        );
+
+        let mut run = dummy_run;
+        assert_eq!(
+            expect_int(remove_digits(&[a_num(12.99)], &mut ctx, &mut run)),
+            12
         );
     }
 

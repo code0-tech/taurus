@@ -22,22 +22,34 @@
 								"listValue": {
 									"values": [
 										{
-											"numberValue": 1.0
+											"numberValue": {
+												"integer": "1"
+											}
 										},
 										{
-											"numberValue": 2.0
+											"numberValue": {
+												"integer": "2"
+											}
 										},
 										{
-											"numberValue": 3.0
+											"numberValue": {
+												"integer": "3"
+											}
 										},
 										{
-											"numberValue": 4.0
+											"numberValue": {
+												"integer": "4"
+											}
 										},
 										{
-											"numberValue": 5.0
+											"numberValue": {
+												"integer": "5"
+											}
 										},
 										{
-											"numberValue": 6.0
+											"numberValue": {
+												"integer": "6"
+											}
 										}
 									]
 								}
@@ -74,7 +86,9 @@
 						"runtimeParameterId": "second",
 						"value": {
 							"literalValue": {
-								"numberValue": 2.0
+								"numberValue": {
+									"integer": "2"
+								}
 							}
 						}
 					}

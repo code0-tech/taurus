@@ -371,7 +371,17 @@ fn preview_value(value: &Value) -> String {
 
 fn format_value_json(value: &Value) -> String {
     match value.kind.as_ref() {
-        Some(Kind::NumberValue(v)) => v.to_string(),
+        Some(Kind::NumberValue(v)) => {
+            match v.number {
+                Some(kind) => {
+                    match kind {
+                        tucana::shared::number_value::Number::Integer(i) => i.to_string(),
+                        tucana::shared::number_value::Number::Float(f) => f.to_string(),
+                    }
+                }
+                _ => "null".to_string(),
+            } 
+        },
         Some(Kind::BoolValue(v)) => v.to_string(),
         Some(Kind::StringValue(v)) => format!("{:?}", v),
         Some(Kind::NullValue(_)) | None => "null".to_string(),

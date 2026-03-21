@@ -4,6 +4,7 @@ use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
+use crate::value::value_from_i64;
 use tucana::shared::value::Kind;
 use tucana::shared::{Struct, Value};
 
@@ -116,20 +117,18 @@ fn create_response(
     args!(args => http_status_code: String, headers: Struct, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
-    let code = match http_status_code.as_str().parse::<f64>() {
+    let code = match http_status_code.as_str().parse::<i64>() {
         Ok(c) => c,
         Err(_) => {
             return Signal::Failure(RuntimeError::simple_str(
                 "InvalidArgumentExeption",
-                "Expected http_status_code to be parsed to float",
+                "Expected http_status_code to be parsed to integer",
             ));
         }
     };
     fields.insert(
         "status_code".to_string(),
-        Value {
-            kind: Some(Kind::NumberValue(code)),
-        },
+        value_from_i64(code),
     );
 
     fields.insert(

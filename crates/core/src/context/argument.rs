@@ -2,8 +2,9 @@ use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
 use std::convert::Infallible;
 use tucana::shared::value::Kind;
-use tucana::shared::{ListValue, Struct, Value};
+use tucana::shared::{ListValue, NumberValue, Struct, Value};
 
+use crate::value::number_to_f64;
 #[derive(Clone, Debug)]
 pub enum Argument {
     // Eval => Evaluated Value
@@ -40,12 +41,23 @@ impl TryFromArgument for Value {
     }
 }
 
+impl TryFromArgument for NumberValue {
+    fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
+        match a {
+            Argument::Eval(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => Ok(n.clone()),
+            _ => Err(type_err("Expected number", a)),
+        }
+    }
+}
+
 impl TryFromArgument for f64 {
     fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
         match a {
             Argument::Eval(Value {
                 kind: Some(Kind::NumberValue(n)),
-            }) => Ok(*n),
+            }) => number_to_f64(n).ok_or_else(|| type_err("Expected number", a)),
             _ => Err(type_err("Expected number", a)),
         }
     }

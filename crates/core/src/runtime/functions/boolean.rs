@@ -4,6 +4,7 @@ use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
+use crate::value::value_from_i64;
 use tucana::shared::{Value, value::Kind};
 
 pub fn collect_boolean_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
@@ -26,9 +27,7 @@ fn as_number(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: bool);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue((value as i64) as f64)),
-    })
+    Signal::Success(value_from_i64(if value { 1 } else { 0 }))
 }
 
 fn as_text(
@@ -97,6 +96,7 @@ fn negate(
 mod tests {
     use super::*;
     use crate::context::context::Context;
+    use crate::value::{number_to_f64, value_from_f64};
     use tucana::shared::{Value, value::Kind};
 
     // ---- helpers: make Arguments ----
@@ -106,9 +106,7 @@ mod tests {
         })
     }
     fn a_num(n: f64) -> Argument {
-        Argument::Eval(Value {
-            kind: Some(Kind::NumberValue(n)),
-        })
+        Argument::Eval(value_from_f64(n))
     }
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {
@@ -121,7 +119,7 @@ mod tests {
         match sig {
             Signal::Success(Value {
                 kind: Some(Kind::NumberValue(n)),
-            }) => n,
+            }) => number_to_f64(&n).unwrap_or_default(),
             other => panic!("Expected NumberValue, got {:?}", other),
         }
     }

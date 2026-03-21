@@ -1,6 +1,6 @@
 use std::f64;
 
-use tucana::shared::{Value, value::Kind};
+use tucana::shared::{number_value, NumberValue, Value, value::Kind};
 
 use crate::context::argument::Argument;
 use crate::context::context::Context;
@@ -8,6 +8,16 @@ use crate::context::macros::{args, no_args};
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
+use crate::value::{number_to_f64, value_from_f64, value_from_i64};
+
+fn num_f64(n: &NumberValue) -> Result<f64, Signal> {
+    number_to_f64(n).ok_or_else(|| {
+        Signal::Failure(RuntimeError::simple_str(
+            "InvalidArgumentRuntimeError",
+            "Expected number",
+        ))
+    })
+}
 
 pub fn collect_number_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -57,10 +67,24 @@ fn add(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs + rhs)),
-    })
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            if let Some(sum) = a.checked_add(b) {
+                return Signal::Success(value_from_i64(sum));
+            }
+        }
+        _ => {}
+    }
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs + rhs))
 }
 
 fn multiply(
@@ -68,10 +92,24 @@ fn multiply(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs * rhs)),
-    })
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            if let Some(prod) = a.checked_mul(b) {
+                return Signal::Success(value_from_i64(prod));
+            }
+        }
+        _ => {}
+    }
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs * rhs))
 }
 
 fn substract(
@@ -79,10 +117,24 @@ fn substract(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs - rhs)),
-    })
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            if let Some(diff) = a.checked_sub(b) {
+                return Signal::Success(value_from_i64(diff));
+            }
+        }
+        _ => {}
+    }
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs - rhs))
 }
 
 fn divide(
@@ -90,18 +142,34 @@ fn divide(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
+    args!(args => lhs: NumberValue, rhs: NumberValue);
 
-    if rhs == 0.0 {
+    let rhs_f = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+
+    if rhs_f == 0.0 {
         return Signal::Failure(RuntimeError::simple_str(
             "DivisionByZero",
             "You cannot divide by zero",
         ));
     }
 
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs / rhs)),
-    })
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            if b != 0 && a % b == 0 {
+                return Signal::Success(value_from_i64(a / b));
+            }
+        }
+        _ => {}
+    }
+
+    let lhs_f = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs_f / rhs_f))
 }
 
 fn modulo(
@@ -109,18 +177,34 @@ fn modulo(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
+    args!(args => lhs: NumberValue, rhs: NumberValue);
 
-    if rhs == 0.0 {
+    let rhs_f = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+
+    if rhs_f == 0.0 {
         return Signal::Failure(RuntimeError::simple_str(
             "DivisionByZero",
             "You cannot divide by zero",
         ));
     }
 
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs % rhs)),
-    })
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            if b != 0 {
+                return Signal::Success(value_from_i64(a % b));
+            }
+        }
+        _ => {}
+    }
+
+    let lhs_f = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs_f % rhs_f))
 }
 
 fn abs(
@@ -128,10 +212,20 @@ fn abs(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.abs())),
-    })
+    args!(args => value: NumberValue);
+    match value.number {
+        Some(number_value::Number::Integer(i)) => {
+            if let Some(abs) = i.checked_abs() {
+                return Signal::Success(value_from_i64(abs));
+            }
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.abs()))
 }
 
 fn is_positive(
@@ -139,7 +233,11 @@ fn is_positive(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(!value.is_sign_negative())),
     })
@@ -150,7 +248,15 @@ fn is_greater(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs > rhs)),
     })
@@ -161,7 +267,15 @@ fn is_less(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs < rhs)),
     })
@@ -172,7 +286,11 @@ fn is_zero(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(value == 0.0)),
     })
@@ -183,10 +301,20 @@ fn square(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.powf(2.0))),
-    })
+    args!(args => value: NumberValue);
+    match value.number {
+        Some(number_value::Number::Integer(i)) => {
+            if let Some(prod) = i.checked_mul(i) {
+                return Signal::Success(value_from_i64(prod));
+            }
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.powf(2.0)))
 }
 
 fn exponential(
@@ -194,10 +322,28 @@ fn exponential(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => base: f64, exponent: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(base.powf(exponent))),
-    })
+    args!(args => base: NumberValue, exponent: NumberValue);
+    match (base.number, exponent.number) {
+        (Some(number_value::Number::Integer(b)), Some(number_value::Number::Integer(e)))
+            if e >= 0 =>
+        {
+            if let Ok(exp) = u32::try_from(e) {
+                if let Some(pow) = b.checked_pow(exp) {
+                    return Signal::Success(value_from_i64(pow));
+                }
+            }
+        }
+        _ => {}
+    }
+    let base = match num_f64(&base) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let exponent = match num_f64(&exponent) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(base.powf(exponent)))
 }
 
 fn pi(
@@ -206,9 +352,7 @@ fn pi(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     no_args!(args);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(f64::consts::PI)),
-    })
+    Signal::Success(value_from_f64(f64::consts::PI))
 }
 
 fn euler(
@@ -217,9 +361,7 @@ fn euler(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     no_args!(args);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(f64::consts::E)),
-    })
+    Signal::Success(value_from_f64(f64::consts::E))
 }
 
 fn infinity(
@@ -228,9 +370,7 @@ fn infinity(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     no_args!(args);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(f64::INFINITY)),
-    })
+    Signal::Success(value_from_f64(f64::INFINITY))
 }
 
 fn round_up(
@@ -238,11 +378,23 @@ fn round_up(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64, decimal_places: f64);
+    args!(args => value: NumberValue, decimal_places: NumberValue);
+    let decimal_places = match num_f64(&decimal_places) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    match value.number {
+        Some(number_value::Number::Integer(i)) if decimal_places <= 0.0 => {
+            return Signal::Success(value_from_i64(i));
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     let factor = 10_f64.powi(decimal_places as i32);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue((value * factor).ceil() / factor)),
-    })
+    Signal::Success(value_from_f64((value * factor).ceil() / factor))
 }
 
 fn round_down(
@@ -250,11 +402,23 @@ fn round_down(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64, decimal_places: f64);
+    args!(args => value: NumberValue, decimal_places: NumberValue);
+    let decimal_places = match num_f64(&decimal_places) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    match value.number {
+        Some(number_value::Number::Integer(i)) if decimal_places <= 0.0 => {
+            return Signal::Success(value_from_i64(i));
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     let factor = 10_f64.powi(decimal_places as i32);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue((value * factor).floor() / factor)),
-    })
+    Signal::Success(value_from_f64((value * factor).floor() / factor))
 }
 
 fn round(
@@ -262,11 +426,23 @@ fn round(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64, decimal_places: f64);
+    args!(args => value: NumberValue, decimal_places: NumberValue);
+    let decimal_places = match num_f64(&decimal_places) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    match value.number {
+        Some(number_value::Number::Integer(i)) if decimal_places <= 0.0 => {
+            return Signal::Success(value_from_i64(i));
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     let factor = 10_f64.powi(decimal_places as i32);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue((value * factor).round() / factor)),
-    })
+    Signal::Success(value_from_f64((value * factor).round() / factor))
 }
 
 fn square_root(
@@ -274,10 +450,12 @@ fn square_root(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.sqrt())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.sqrt()))
 }
 
 fn root(
@@ -285,10 +463,16 @@ fn root(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64, root: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.powf(root))),
-    })
+    args!(args => value: NumberValue, root: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let root = match num_f64(&root) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.powf(root)))
 }
 
 fn log(
@@ -296,10 +480,16 @@ fn log(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64, base: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.log(base))),
-    })
+    args!(args => value: NumberValue, base: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let base = match num_f64(&base) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.log(base)))
 }
 
 fn ln(
@@ -307,10 +497,12 @@ fn ln(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.ln())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.ln()))
 }
 
 fn from_text(
@@ -320,10 +512,11 @@ fn from_text(
 ) -> Signal {
     args!(args => string_value: String);
 
+    if let Ok(v) = string_value.parse::<i64>() {
+        return Signal::Success(value_from_i64(v));
+    }
     match string_value.parse::<f64>() {
-        Ok(v) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(v)),
-        }),
+        Ok(v) => Signal::Success(value_from_f64(v)),
         Err(_) => Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             format!("Failed to parse string as number: {}", string_value),
@@ -336,7 +529,11 @@ fn as_text(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     Signal::Success(Value {
         kind: Some(Kind::StringValue(value.to_string())),
     })
@@ -347,10 +544,22 @@ fn min(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs.min(rhs))),
-    })
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            return Signal::Success(value_from_i64(a.min(b)));
+        }
+        _ => {}
+    }
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs.min(rhs)))
 }
 
 fn max(
@@ -358,10 +567,22 @@ fn max(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(lhs.max(rhs))),
-    })
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    match (lhs.number, rhs.number) {
+        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
+            return Signal::Success(value_from_i64(a.max(b)));
+        }
+        _ => {}
+    }
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(lhs.max(rhs)))
 }
 
 fn negate(
@@ -369,10 +590,20 @@ fn negate(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(-value)),
-    })
+    args!(args => value: NumberValue);
+    match value.number {
+        Some(number_value::Number::Integer(i)) => {
+            if let Some(neg) = i.checked_neg() {
+                return Signal::Success(value_from_i64(neg));
+            }
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(-value))
 }
 
 fn random(
@@ -380,20 +611,27 @@ fn random(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => min: f64, max: f64);
+    args!(args => min: NumberValue, max: NumberValue);
 
-    if min > max {
+    let min_f = match num_f64(&min) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let max_f = match num_f64(&max) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+
+    if min_f > max_f {
         return Signal::Failure(RuntimeError::simple_str(
             "InvalidRange",
             "First number can't be bigger then second when creating a range for std::math::random",
         ));
     }
 
-    let value = rand::random_range(min..=max);
+    let value = rand::random_range(min_f..=max_f);
 
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value)),
-    })
+    Signal::Success(value_from_f64(value))
 }
 
 fn sin(
@@ -401,10 +639,12 @@ fn sin(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.sin())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.sin()))
 }
 
 fn cos(
@@ -412,10 +652,12 @@ fn cos(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.cos())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.cos()))
 }
 
 fn tan(
@@ -423,10 +665,12 @@ fn tan(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.tan())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.tan()))
 }
 
 fn arcsin(
@@ -434,10 +678,12 @@ fn arcsin(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.asin())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.asin()))
 }
 
 fn arccos(
@@ -445,10 +691,12 @@ fn arccos(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.acos())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.acos()))
 }
 
 fn arctan(
@@ -456,10 +704,12 @@ fn arctan(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.atan())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.atan()))
 }
 
 fn sinh(
@@ -467,10 +717,12 @@ fn sinh(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.sinh())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.sinh()))
 }
 
 fn cosh(
@@ -478,10 +730,12 @@ fn cosh(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.cosh())),
-    })
+    args!(args => value: NumberValue);
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.cosh()))
 }
 
 fn clamp(
@@ -489,10 +743,30 @@ fn clamp(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: f64, min: f64, max: f64);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.clamp(min, max))),
-    })
+    args!(args => value: NumberValue, min: NumberValue, max: NumberValue);
+    match (value.number, min.number, max.number) {
+        (
+            Some(number_value::Number::Integer(v)),
+            Some(number_value::Number::Integer(min)),
+            Some(number_value::Number::Integer(max)),
+        ) => {
+            return Signal::Success(value_from_i64(v.clamp(min, max)));
+        }
+        _ => {}
+    }
+    let value = match num_f64(&value) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let min = match num_f64(&min) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let max = match num_f64(&max) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    Signal::Success(value_from_f64(value.clamp(min, max)))
 }
 
 fn is_equal(
@@ -500,7 +774,15 @@ fn is_equal(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => lhs: f64, rhs: f64);
+    args!(args => lhs: NumberValue, rhs: NumberValue);
+    let lhs = match num_f64(&lhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let rhs = match num_f64(&rhs) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(lhs == rhs)),
     })
@@ -510,13 +792,12 @@ mod tests {
     use super::*;
     use crate::context::argument::Argument;
     use crate::context::context::Context;
+    use crate::value::{number_to_f64, value_from_f64};
     use tucana::shared::{Value, value::Kind};
 
     // ---- helpers: Arguments ----
     fn a_num(n: f64) -> Argument {
-        Argument::Eval(Value {
-            kind: Some(Kind::NumberValue(n)),
-        })
+        Argument::Eval(value_from_f64(n))
     }
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {
@@ -529,7 +810,7 @@ mod tests {
         match sig {
             Signal::Success(Value {
                 kind: Some(Kind::NumberValue(n)),
-            }) => n,
+            }) => number_to_f64(&n).unwrap_or_default(),
             other => panic!("Expected NumberValue, got {:?}", other),
         }
     }

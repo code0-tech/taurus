@@ -4,6 +4,7 @@ use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
+use crate::value::{number_to_f64, number_to_i64_lossy, value_from_i64};
 use base64::Engine;
 use tucana::shared::{ListValue, Value, value::Kind};
 
@@ -62,9 +63,7 @@ fn as_bytes(
     let bytes: Vec<Value> = value
         .as_bytes()
         .iter()
-        .map(|b| Value {
-            kind: Some(Kind::NumberValue(*b as f64)),
-        })
+        .map(|b| value_from_i64(*b as i64))
         .collect();
 
     Signal::Success(Value {
@@ -78,9 +77,7 @@ fn byte_size(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: String);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.len() as f64)),
-    })
+    Signal::Success(value_from_i64(value.len() as i64))
 }
 
 fn capitalize(
@@ -192,9 +189,13 @@ fn at(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: String, index: f64);
+    args!(args => value: String, index: tucana::shared::NumberValue);
+    let index = match number_to_i64_lossy(&index) {
+        Some(v) => v,
+        None => return arg_err("Expected a number index"),
+    };
 
-    if index < 0.0 {
+    if index < 0 {
         return arg_err("Expected a non-negative index");
     }
 
@@ -241,9 +242,13 @@ fn insert(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: String, position: f64, text: String);
+    args!(args => value: String, position: tucana::shared::NumberValue, text: String);
+    let position = match number_to_i64_lossy(&position) {
+        Some(v) => v,
+        None => return arg_err("Expected a number position"),
+    };
 
-    if position < 0.0 {
+    if position < 0 {
         return arg_err("Expected a non-negative position");
     }
 
@@ -270,9 +275,7 @@ fn length(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: String);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(value.chars().count() as f64)),
-    })
+    Signal::Success(value_from_i64(value.chars().count() as i64))
 }
 
 fn remove(
@@ -280,9 +283,17 @@ fn remove(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => value: String, from: f64, to: f64);
+    args!(args => value: String, from: tucana::shared::NumberValue, to: tucana::shared::NumberValue);
+    let from = match number_to_i64_lossy(&from) {
+        Some(v) => v,
+        None => return arg_err("Expected number 'from'"),
+    };
+    let to = match number_to_i64_lossy(&to) {
+        Some(v) => v,
+        None => return arg_err("Expected number 'to'"),
+    };
 
-    if from < 0.0 || to < 0.0 {
+    if from < 0 || to < 0 {
         return arg_err("Expected non-negative indices");
     }
 
@@ -408,12 +419,8 @@ fn index_of(
     args!(args => value: String, sub: String);
 
     match value.find(&sub) {
-        Some(idx) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(idx as f64)),
-        }),
-        None => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(-1.0)),
-        }),
+        Some(idx) => Signal::Success(value_from_i64(idx as i64)),
+        None => Signal::Success(value_from_i64(-1)),
     }
 }
 
@@ -491,9 +498,7 @@ fn to_ascii(
 
     let ascii = value
         .bytes()
-        .map(|b| Value {
-            kind: Some(Kind::NumberValue(b as f64)),
-        })
+        .map(|b| value_from_i64(b as i64))
         .collect::<Vec<Value>>();
 
     Signal::Success(Value {
@@ -515,7 +520,10 @@ fn from_ascii(
         .map(|v| match v {
             Value {
                 kind: Some(Kind::NumberValue(n)),
-            } if *n >= 0.0 && *n <= 127.0 => Some(*n as u8 as char),
+            } => match number_to_f64(n) {
+                Some(n) if n >= 0.0 && n <= 127.0 => Some(n as u8 as char),
+                _ => None,
+            },
             _ => None,
         })
         .collect::<Option<String>>();
@@ -596,6 +604,7 @@ fn is_equal(
 mod tests {
     use super::*;
     use crate::context::context::Context;
+    use crate::value::{number_to_f64, value_from_f64, value_from_i64};
     use tucana::shared::{ListValue, Value, value::Kind};
 
     // ---------- helpers: build Arguments ----------
@@ -605,9 +614,7 @@ mod tests {
         })
     }
     fn a_num(n: f64) -> Argument {
-        Argument::Eval(Value {
-            kind: Some(Kind::NumberValue(n)),
-        })
+        Argument::Eval(value_from_f64(n))
     }
     fn a_list(vals: Vec<Value>) -> Argument {
         Argument::Eval(Value {
@@ -621,10 +628,8 @@ mod tests {
             kind: Some(Kind::StringValue(s.to_string())),
         }
     }
-    fn v_num(n: f64) -> Value {
-        Value {
-            kind: Some(Kind::NumberValue(n)),
-        }
+    fn v_num(n: i64) -> Value {
+        value_from_i64(n)
     }
 
     // ---------- helpers: extract from Signal ----------
@@ -632,7 +637,7 @@ mod tests {
         match sig {
             Signal::Success(Value {
                 kind: Some(Kind::NumberValue(n)),
-            }) => n,
+            }) => number_to_f64(&n).unwrap_or_default(),
             other => panic!("Expected NumberValue, got {:?}", other),
         }
     }
@@ -678,7 +683,7 @@ mod tests {
         // "hello" -> 5 bytes
         let bytes = expect_list(as_bytes(&[a_str("hello")], &mut ctx, &mut run));
         assert_eq!(bytes.len(), 5);
-        assert_eq!(bytes[0], v_num(104.0)); // 'h'
+        assert_eq!(bytes[0], v_num(104)); // 'h'
 
         let mut run = dummy_run;
         assert_eq!(
@@ -926,10 +931,10 @@ mod tests {
 
         let mut run = dummy_run;
         let ascii_vals = expect_list(to_ascii(&[a_str("AB")], &mut ctx, &mut run));
-        assert_eq!(ascii_vals, vec![v_num(65.0), v_num(66.0)]);
+        assert_eq!(ascii_vals, vec![v_num(65), v_num(66)]);
 
         let mut run = dummy_run;
-        let list_arg = a_list(vec![v_num(65.0), v_num(66.0), v_num(67.0)]);
+        let list_arg = a_list(vec![v_num(65), v_num(66), v_num(67)]);
         assert_eq!(
             expect_str(from_ascii(&[list_arg], &mut ctx, &mut run)),
             "ABC"
@@ -937,7 +942,7 @@ mod tests {
 
         // invalid element
         let mut run = dummy_run;
-        let list_arg = a_list(vec![v_num(65.0), v_num(128.0)]);
+        let list_arg = a_list(vec![v_num(65), v_num(128)]);
         match from_ascii(&[list_arg], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
             s => panic!("Expected Failure for invalid ASCII, got {:?}", s),

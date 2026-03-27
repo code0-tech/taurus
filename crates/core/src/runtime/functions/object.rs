@@ -5,6 +5,7 @@ use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
+use crate::value::value_from_i64;
 
 pub fn collect_object_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -37,9 +38,7 @@ fn size(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => object: Struct);
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(object.fields.len() as f64)),
-    })
+    Signal::Success(value_from_i64(object.fields.len() as i64))
 }
 
 fn keys(
@@ -80,6 +79,7 @@ mod tests {
     use super::*;
     use crate::context::argument::Argument;
     use crate::context::context::Context;
+    use crate::value::{number_to_f64, value_from_f64};
     use std::collections::HashMap;
     use tucana::shared::{Struct as TcStruct, Value, value::Kind};
 
@@ -90,9 +90,7 @@ mod tests {
         }
     }
     fn v_number(n: f64) -> Value {
-        Value {
-            kind: Some(Kind::NumberValue(n)),
-        }
+        value_from_f64(n)
     }
     fn v_bool(b: bool) -> Value {
         Value {
@@ -206,7 +204,7 @@ mod tests {
             _ => panic!("Expected Success"),
         };
         match v.kind {
-            Some(Kind::NumberValue(n)) => assert_eq!(n, 3.0),
+            Some(Kind::NumberValue(n)) => assert_eq!(number_to_f64(&n).unwrap_or_default(), 3.0),
             _ => panic!("Expected NumberValue"),
         }
 
@@ -219,7 +217,7 @@ mod tests {
             _ => panic!("Expected Success"),
         };
         match v.kind {
-            Some(Kind::NumberValue(n)) => assert_eq!(n, 0.0),
+            Some(Kind::NumberValue(n)) => assert_eq!(number_to_f64(&n).unwrap_or_default(), 0.0),
             _ => panic!("Expected NumberValue"),
         }
     }
@@ -322,7 +320,7 @@ mod tests {
                     Some(Value {
                         kind: Some(Kind::NumberValue(n)),
                         ..
-                    }) => assert_eq!(*n, 31.0),
+                    }) => assert_eq!(number_to_f64(n).unwrap_or_default(), 31.0),
                     _ => panic!("Expected age to be a number"),
                 }
             }

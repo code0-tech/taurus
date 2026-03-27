@@ -10,6 +10,7 @@ use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
+use crate::value::{number_to_f64, number_to_string, value_from_f64, value_from_i64};
 
 pub fn collect_array_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
     vec![
@@ -339,9 +340,7 @@ fn find_index(
             Signal::Success(v) => match as_bool(&v) {
                 Ok(true) => {
                     ctx.clear_input_type(input_type);
-                    return Signal::Success(Value {
-                        kind: Some(Kind::NumberValue(idx as f64)),
-                    });
+                    return Signal::Success(value_from_i64(idx as i64));
                 }
                 Ok(false) => continue,
                 Err(e) => {
@@ -446,7 +445,7 @@ fn preview_value(value: &Value) -> String {
 
 fn format_value_json(value: &Value) -> String {
     match value.kind.as_ref() {
-        Some(Kind::NumberValue(v)) => v.to_string(),
+        Some(Kind::NumberValue(v)) => number_to_string(v),
         Some(Kind::BoolValue(v)) => v.to_string(),
         Some(Kind::StringValue(v)) => format!("{:?}", v),
         Some(Kind::NullValue(_)) | None => "null".to_string(),
@@ -610,9 +609,7 @@ fn size(
             "Expected an array as an argument",
         ));
     };
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(array.values.len() as f64)),
-    })
+    Signal::Success(value_from_i64(array.values.len() as i64))
 }
 
 fn index_of(
@@ -629,9 +626,7 @@ fn index_of(
     };
 
     match array.values.iter().position(|x| *x == item) {
-        Some(i) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(i as f64)),
-        }),
+        Some(i) => Signal::Success(value_from_i64(i as i64)),
         None => Signal::Failure(RuntimeError::simple(
             "ValueNotFoundRuntimeError",
             format!("Item {:?} not found in array", item),
@@ -722,7 +717,19 @@ fn sort(
                     kind: Some(Kind::NumberValue(i)),
                 } = v
                 {
-                    out.push(i);
+                    match number_to_f64(&i) {
+                        Some(i) => out.push(i),
+                        None => {
+                            ctx.clear_input_type(input_type);
+                            return Signal::Failure(RuntimeError::simple(
+                                "InvalidArgumentRuntimeError",
+                                format!(
+                                    "expected return value of comparator to be a number but was {:?}",
+                                    v
+                                ),
+                            ));
+                        }
+                    }
                 } else {
                     ctx.clear_input_type(input_type);
                     return Signal::Failure(RuntimeError::simple(
@@ -816,7 +823,19 @@ fn sort_reverse(
                     kind: Some(Kind::NumberValue(i)),
                 } = v
                 {
-                    out.push(i);
+                    match number_to_f64(&i) {
+                        Some(i) => out.push(i),
+                        None => {
+                            ctx.clear_input_type(input_type);
+                            return Signal::Failure(RuntimeError::simple(
+                                "InvalidArgumentRuntimeError",
+                                format!(
+                                    "expected return value of comparator to be a number but was {:?}",
+                                    v
+                                ),
+                            ));
+                        }
+                    }
                 } else {
                     ctx.clear_input_type(input_type);
                     return Signal::Failure(RuntimeError::simple(
@@ -906,16 +925,30 @@ fn min(
     args!(args => array: ListValue);
 
     let mut nums: Vec<f64> = Vec::new();
+    let mut all_int = true;
+    let mut min_i64: Option<i64> = None;
     for v in &array.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            nums.push(n);
+        if let Some(Kind::NumberValue(n)) = &v.kind {
+            match n.number {
+                Some(tucana::shared::number_value::Number::Integer(i)) => {
+                    min_i64 = Some(match min_i64 {
+                        Some(curr) => curr.min(i),
+                        None => i,
+                    });
+                    nums.push(i as f64);
+                }
+                Some(tucana::shared::number_value::Number::Float(f)) => {
+                    all_int = false;
+                    nums.push(f);
+                }
+                None => {}
+            }
         }
     }
 
     match nums.iter().min_by(|a, b| a.total_cmp(b)) {
-        Some(m) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(*m)),
-        }),
+        Some(m) if all_int => Signal::Success(value_from_i64(min_i64.unwrap_or(*m as i64))),
+        Some(m) => Signal::Success(value_from_f64(*m)),
         None => Signal::Failure(RuntimeError::simple_str(
             "ArrayEmptyRuntimeError",
             "Array is empty",
@@ -931,16 +964,30 @@ fn max(
     args!(args => array: ListValue);
 
     let mut nums: Vec<f64> = Vec::new();
+    let mut all_int = true;
+    let mut max_i64: Option<i64> = None;
     for v in &array.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            nums.push(n);
+        if let Some(Kind::NumberValue(n)) = &v.kind {
+            match n.number {
+                Some(tucana::shared::number_value::Number::Integer(i)) => {
+                    max_i64 = Some(match max_i64 {
+                        Some(curr) => curr.max(i),
+                        None => i,
+                    });
+                    nums.push(i as f64);
+                }
+                Some(tucana::shared::number_value::Number::Float(f)) => {
+                    all_int = false;
+                    nums.push(f);
+                }
+                None => {}
+            }
         }
     }
 
     match nums.iter().max_by(|a, b| a.total_cmp(b)) {
-        Some(m) => Signal::Success(Value {
-            kind: Some(Kind::NumberValue(*m)),
-        }),
+        Some(m) if all_int => Signal::Success(value_from_i64(max_i64.unwrap_or(*m as i64))),
+        Some(m) => Signal::Success(value_from_f64(*m)),
         None => Signal::Failure(RuntimeError::simple_str(
             "ArrayEmptyRuntimeError",
             "Array is empty",
@@ -955,16 +1002,37 @@ fn sum(
 ) -> Signal {
     args!(args => array: ListValue);
 
-    let mut s = 0.0;
+    let mut s_f = 0.0;
+    let mut s_i: i64 = 0;
+    let mut all_int = true;
     for v in &array.values {
-        if let Some(Kind::NumberValue(n)) = v.kind {
-            s += n;
+        if let Some(Kind::NumberValue(n)) = &v.kind {
+            match n.number {
+                Some(tucana::shared::number_value::Number::Integer(i)) => {
+                    if let Some(next) = s_i.checked_add(i) {
+                        s_i = next;
+                        s_f += i as f64;
+                    } else {
+                        all_int = false;
+                        if let Some(f) = number_to_f64(n) {
+                            s_f += f;
+                        }
+                    }
+                }
+                Some(tucana::shared::number_value::Number::Float(f)) => {
+                    all_int = false;
+                    s_f += f;
+                }
+                None => {}
+            }
         }
     }
 
-    Signal::Success(Value {
-        kind: Some(Kind::NumberValue(s)),
-    })
+    if all_int {
+        Signal::Success(value_from_i64(s_i))
+    } else {
+        Signal::Success(value_from_f64(s_f))
+    }
 }
 
 fn join(
@@ -989,6 +1057,7 @@ fn join(
 mod tests {
     use super::*;
     use crate::context::context::Context;
+    use crate::value::{number_to_f64, number_value_from_f64, value_from_f64};
     use tucana::shared::{ListValue, Value, value::Kind};
 
     // --- helpers -------------------------------------------------------------
@@ -999,9 +1068,7 @@ mod tests {
         Argument::Thunk(id)
     }
     fn v_num(n: f64) -> Value {
-        Value {
-            kind: Some(Kind::NumberValue(n)),
-        }
+        value_from_f64(n)
     }
     fn v_str(s: &str) -> Value {
         Value {
@@ -1018,12 +1085,15 @@ mod tests {
             kind: Some(Kind::ListValue(ListValue { values })),
         }
     }
+    fn k_num(n: f64) -> Option<Kind> {
+        Some(Kind::NumberValue(number_value_from_f64(n)))
+    }
 
     fn expect_num(sig: Signal) -> f64 {
         match sig {
             Signal::Success(Value {
                 kind: Some(Kind::NumberValue(n)),
-            }) => n,
+            }) => number_to_f64(&n).unwrap_or_default(),
             x => panic!("Expected NumberValue, got {:?}", x),
         }
     }
@@ -1154,8 +1224,8 @@ mod tests {
         let b = v_list(vec![v_num(3.0), v_num(4.0)]);
         let out = expect_list(concat(&[a_val(a), a_val(b)], &mut ctx, &mut run));
         assert_eq!(out.len(), 4);
-        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
-        assert_eq!(out[3].kind, Some(Kind::NumberValue(4.0)));
+        assert_eq!(out[0].kind, k_num(1.0));
+        assert_eq!(out[3].kind, k_num(4.0));
     }
 
     #[test]
@@ -1189,8 +1259,8 @@ mod tests {
         let mut run = run_from_bools(vec![true, false, true]);
         let out = expect_list(filter(&[a_val(array), a_thunk(1)], &mut ctx, &mut run));
         assert_eq!(out.len(), 2);
-        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
-        assert_eq!(out[1].kind, Some(Kind::NumberValue(3.0)));
+        assert_eq!(out[0].kind, k_num(1.0));
+        assert_eq!(out[1].kind, k_num(3.0));
     }
 
     #[test]
@@ -1318,7 +1388,7 @@ mod tests {
             &mut run,
         ));
         assert_eq!(out.len(), 3);
-        assert_eq!(out[2].kind, Some(Kind::NumberValue(3.0)));
+        assert_eq!(out[2].kind, k_num(3.0));
     }
 
     #[test]
@@ -1349,8 +1419,8 @@ mod tests {
             &mut run,
         ));
         assert_eq!(out.len(), 2);
-        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
-        assert_eq!(out[1].kind, Some(Kind::NumberValue(2.0)));
+        assert_eq!(out[0].kind, k_num(1.0));
+        assert_eq!(out[1].kind, k_num(2.0));
     }
 
     #[test]
@@ -1480,9 +1550,9 @@ mod tests {
 
         let uniq = expect_list(to_unique(&[a_val(arr)], &mut ctx, &mut run));
         assert_eq!(uniq.len(), 3);
-        assert_eq!(uniq[0].kind, Some(Kind::NumberValue(10.0)));
-        assert_eq!(uniq[1].kind, Some(Kind::NumberValue(42.0)));
-        assert_eq!(uniq[2].kind, Some(Kind::NumberValue(30.0)));
+        assert_eq!(uniq[0].kind, k_num(10.0));
+        assert_eq!(uniq[1].kind, k_num(42.0));
+        assert_eq!(uniq[2].kind, k_num(30.0));
     }
 
     #[test]
@@ -1530,8 +1600,8 @@ mod tests {
             &mut ctx,
             &mut run,
         ));
-        assert_eq!(out[0].kind, Some(Kind::NumberValue(3.0)));
-        assert_eq!(out[2].kind, Some(Kind::NumberValue(1.0)));
+        assert_eq!(out[0].kind, k_num(3.0));
+        assert_eq!(out[2].kind, k_num(1.0));
 
         match reverse(&[a_val(v_str("nope"))], &mut ctx, &mut run) {
             Signal::Failure(_) => {}
@@ -1555,10 +1625,10 @@ mod tests {
         ]);
         let out = expect_list(flat(&[a_val(nested)], &mut ctx, &mut run));
         assert_eq!(out.len(), 4);
-        assert_eq!(out[0].kind, Some(Kind::NumberValue(1.0)));
-        assert_eq!(out[1].kind, Some(Kind::NumberValue(2.0)));
-        assert_eq!(out[2].kind, Some(Kind::NumberValue(3.0)));
-        assert_eq!(out[3].kind, Some(Kind::NumberValue(4.0)));
+        assert_eq!(out[0].kind, k_num(1.0));
+        assert_eq!(out[1].kind, k_num(2.0));
+        assert_eq!(out[2].kind, k_num(3.0));
+        assert_eq!(out[3].kind, k_num(4.0));
     }
 
     // --- min / max / sum -----------------------------------------------------

@@ -1,12 +1,13 @@
-use std::future::Future;
-use std::pin::Pin;
-use tucana::aquila::{ActionRuntimeError, ExecutionRequest, ExecutionResult};
+use async_trait::async_trait;
+use tucana::{aquila::ExecutionRequest, shared::Value};
 
+use crate::runtime::error::RuntimeError;
+
+#[async_trait]
 pub trait RemoteRuntime {
-    fn supports(&self, function_identifier: &str) -> bool;
-
-    fn execute_remote(
+    async fn execute_remote(
         &self,
+        remote_name: String,
         request: ExecutionRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<ExecutionResult, ActionRuntimeError>> + Send + '_>>;
+    ) -> Result<Value, RuntimeError>;
 }

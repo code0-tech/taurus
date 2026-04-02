@@ -215,10 +215,11 @@ impl<'a> Executor<'a> {
                 }
             };
 
-            let remote_result = block_on(remote.execute_remote(request));
+            let remote_result =
+                block_on(remote.execute_remote(node.runtime_function_id.clone(), request));
             let signal = match remote_result {
-                Ok(result) => self.map_remote_result(result),
-                Err(err) => Signal::Failure(self.map_remote_error(err)),
+                Ok(value) => Signal::Success(value),
+                Err(err) => Signal::Failure(err),
             };
 
             let final_signal = self.commit_result(&node, signal, ctx, tracer, frame_id);
@@ -582,28 +583,6 @@ impl<'a> Executor<'a> {
             parameters: Some(Struct { fields }),
             project_id: 0,
         })
-    }
-
-    /// Map a remote execution result into a local `Signal`.
-    fn map_remote_result(&self, result: ExecutionResult) -> Signal {
-        match result.result {
-            Some(ExecutionOutcome::Success(v)) => Signal::Success(v),
-            Some(ExecutionOutcome::Error(err)) => Signal::Failure(self.map_remote_error(err)),
-            None => Signal::Failure(RuntimeError::simple_str(
-                "RemoteExecutionError",
-                "Remote execution returned no result",
-            )),
-        }
-    }
-
-    /// Map a remote runtime error into a local `RuntimeError`.
-    fn map_remote_error(&self, err: ActionRuntimeError) -> RuntimeError {
-        RuntimeError::new(
-            err.code,
-            err.description
-                .unwrap_or_else(|| "Remote runtime error".to_string()),
-            None,
-        )
     }
 }
 

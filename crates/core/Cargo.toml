@@ -9,4 +9,5 @@ base64 = { workspace = true }
 rand = { workspace = true }
 log = { workspace = true }
 futures-lite = { workspace = true }
-async-trait = "0.1.89"
+async-trait = { workspace = true }
+

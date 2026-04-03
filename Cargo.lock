@@ -1722,7 +1722,9 @@ dependencies = [
 name = "taurus-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64",
+ "futures-lite",
  "log",
  "rand 0.10.0",
  "tucana 0.0.65",

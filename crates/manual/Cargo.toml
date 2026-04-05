@@ -15,4 +15,5 @@ prost = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
 async-nats = { workspace = true }
-clap ={ version = "4.6.0", features= ["derive"] }
+clap = { version = "4.6.0", features= ["derive"] }
+async-trait = { workspace = true }

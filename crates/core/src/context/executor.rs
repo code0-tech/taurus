@@ -538,11 +538,13 @@ impl<'a> Executor<'a> {
                 Argument::Thunk(id) => {
                     tracer.mark_thunk(parent_frame, i, true, true);
                     let (child_sig, child_root) = self.execute_call(*id, ctx, tracer);
-                    tracer.link_child(
-                        parent_frame,
-                        child_root,
-                        EdgeKind::EagerCall { arg_index: i },
-                    );
+                    if child_root != 0 {
+                        tracer.link_child(
+                            parent_frame,
+                            child_root,
+                            EdgeKind::EagerCall { arg_index: i },
+                        );
+                    }
 
                     match child_sig {
                         Signal::Success(v) => {

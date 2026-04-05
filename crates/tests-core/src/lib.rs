@@ -91,6 +91,14 @@ fn get_test_cases(path: &str) -> Cases {
     Cases { cases: items }
 }
 
+impl Case {
+    pub fn from_path(path: &str) -> Self {
+        match get_test_case(path) {
+            Some(s) => s,
+            None => panic!("flow was not found"),
+        }
+    }
+}
 
 impl Cases {
     pub fn from_path(path: &str) -> Self {

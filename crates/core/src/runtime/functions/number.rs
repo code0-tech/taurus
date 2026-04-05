@@ -77,14 +77,14 @@ fn has_digits(
 
     match value.number {
         Some(number) => match number {
-            number_value::Number::Integer(_) => return Signal::Success(false.to_value()),
-            number_value::Number::Float(_) => return Signal::Success(true.to_value()),
+            number_value::Number::Integer(_) => Signal::Success(false.to_value()),
+            number_value::Number::Float(_) => Signal::Success(true.to_value()),
         },
         None => {
-            return Signal::Failure(RuntimeError::simple_str(
+            Signal::Failure(RuntimeError::simple_str(
                 "InvlaidArgumentExeption",
                 "Had NumberValue but no inner number value (was null)",
-            ));
+            ))
         }
     }
 }
@@ -96,12 +96,12 @@ fn remove_digits(
 ) -> Signal {
     args!(args => value: NumberValue);
     match number_to_i64_lossy(&value) {
-        Some(number) => return Signal::Success(value_from_i64(number)),
+        Some(number) => Signal::Success(value_from_i64(number)),
         None => {
-            return Signal::Failure(RuntimeError::simple_str(
+            Signal::Failure(RuntimeError::simple_str(
                 "InvlaidArgumentExeption",
                 "Had NumberValue but no inner number value (was null)",
-            ));
+            ))
         }
     }
 }
@@ -112,13 +112,10 @@ fn add(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            if let Some(sum) = a.checked_add(b) {
-                return Signal::Success(value_from_i64(sum));
-            }
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        if let Some(sum) = a.checked_add(b) {
+            return Signal::Success(value_from_i64(sum));
         }
-        _ => {}
     }
     let lhs = match num_f64(&lhs) {
         Ok(v) => v,
@@ -137,13 +134,10 @@ fn multiply(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            if let Some(prod) = a.checked_mul(b) {
-                return Signal::Success(value_from_i64(prod));
-            }
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        if let Some(prod) = a.checked_mul(b) {
+            return Signal::Success(value_from_i64(prod));
         }
-        _ => {}
     }
     let lhs = match num_f64(&lhs) {
         Ok(v) => v,
@@ -162,13 +156,10 @@ fn substract(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            if let Some(diff) = a.checked_sub(b) {
-                return Signal::Success(value_from_i64(diff));
-            }
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        if let Some(diff) = a.checked_sub(b) {
+            return Signal::Success(value_from_i64(diff));
         }
-        _ => {}
     }
     let lhs = match num_f64(&lhs) {
         Ok(v) => v,
@@ -200,13 +191,10 @@ fn divide(
         ));
     }
 
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            if b != 0 && a % b == 0 {
-                return Signal::Success(value_from_i64(a / b));
-            }
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        if b != 0 && a % b == 0 {
+            return Signal::Success(value_from_i64(a / b));
         }
-        _ => {}
     }
 
     let lhs_f = match num_f64(&lhs) {
@@ -235,13 +223,10 @@ fn modulo(
         ));
     }
 
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            if b != 0 {
-                return Signal::Success(value_from_i64(a % b));
-            }
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        if b != 0 {
+            return Signal::Success(value_from_i64(a % b));
         }
-        _ => {}
     }
 
     let lhs_f = match num_f64(&lhs) {
@@ -257,13 +242,10 @@ fn abs(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: NumberValue);
-    match value.number {
-        Some(number_value::Number::Integer(i)) => {
-            if let Some(abs) = i.checked_abs() {
-                return Signal::Success(value_from_i64(abs));
-            }
+    if let Some(number_value::Number::Integer(i)) = value.number {
+        if let Some(abs) = i.checked_abs() {
+            return Signal::Success(value_from_i64(abs));
         }
-        _ => {}
     }
     let value = match num_f64(&value) {
         Ok(v) => v,
@@ -346,13 +328,10 @@ fn square(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: NumberValue);
-    match value.number {
-        Some(number_value::Number::Integer(i)) => {
-            if let Some(prod) = i.checked_mul(i) {
-                return Signal::Success(value_from_i64(prod));
-            }
+    if let Some(number_value::Number::Integer(i)) = value.number {
+        if let Some(prod) = i.checked_mul(i) {
+            return Signal::Success(value_from_i64(prod));
         }
-        _ => {}
     }
     let value = match num_f64(&value) {
         Ok(v) => v,
@@ -371,11 +350,10 @@ fn exponential(
         (Some(number_value::Number::Integer(b)), Some(number_value::Number::Integer(e)))
             if e >= 0 =>
         {
-            if let Ok(exp) = u32::try_from(e) {
-                if let Some(pow) = b.checked_pow(exp) {
+            if let Ok(exp) = u32::try_from(e)
+                && let Some(pow) = b.checked_pow(exp) {
                     return Signal::Success(value_from_i64(pow));
                 }
-            }
         }
         _ => {}
     }
@@ -589,11 +567,8 @@ fn min(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            return Signal::Success(value_from_i64(a.min(b)));
-        }
-        _ => {}
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        return Signal::Success(value_from_i64(a.min(b)));
     }
     let lhs = match num_f64(&lhs) {
         Ok(v) => v,
@@ -612,11 +587,8 @@ fn max(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
-    match (lhs.number, rhs.number) {
-        (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) => {
-            return Signal::Success(value_from_i64(a.max(b)));
-        }
-        _ => {}
+    if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) = (lhs.number, rhs.number) {
+        return Signal::Success(value_from_i64(a.max(b)));
     }
     let lhs = match num_f64(&lhs) {
         Ok(v) => v,
@@ -635,13 +607,10 @@ fn negate(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: NumberValue);
-    match value.number {
-        Some(number_value::Number::Integer(i)) => {
-            if let Some(neg) = i.checked_neg() {
-                return Signal::Success(value_from_i64(neg));
-            }
+    if let Some(number_value::Number::Integer(i)) = value.number {
+        if let Some(neg) = i.checked_neg() {
+            return Signal::Success(value_from_i64(neg));
         }
-        _ => {}
     }
     let value = match num_f64(&value) {
         Ok(v) => v,
@@ -788,15 +757,12 @@ fn clamp(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => value: NumberValue, min: NumberValue, max: NumberValue);
-    match (value.number, min.number, max.number) {
-        (
+    if let (
             Some(number_value::Number::Integer(v)),
             Some(number_value::Number::Integer(min)),
             Some(number_value::Number::Integer(max)),
-        ) => {
-            return Signal::Success(value_from_i64(v.clamp(min, max)));
-        }
-        _ => {}
+        ) = (value.number, min.number, max.number) {
+        return Signal::Success(value_from_i64(v.clamp(min, max)));
     }
     let value = match num_f64(&value) {
         Ok(v) => v,
@@ -837,7 +803,7 @@ mod tests {
     use crate::context::argument::Argument;
     use crate::context::context::Context;
     use crate::value::{number_to_f64, value_from_f64, value_from_i64};
-    use tucana::shared::{number_value, Value, value::Kind};
+    use tucana::shared::{Value, number_value, value::Kind};
 
     // ---- helpers: Arguments ----
     fn a_num(n: f64) -> Argument {

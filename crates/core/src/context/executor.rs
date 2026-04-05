@@ -56,7 +56,7 @@ pub struct Executor<'a> {
 /// The current policy treats any node whose `definition_source` is not `"taurus"`
 /// as a remote node.
 fn is_remote(node: &NodeFunction) -> bool {
-    if node.definition_source == "" {
+    if node.definition_source.is_empty() {
         log::warn!(
             "Found empty definition source, taking runtime as origin for node id: {}",
             node.database_id

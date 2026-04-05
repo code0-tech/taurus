@@ -1,3 +1,3 @@
 pub mod error;
-pub mod remote;
 pub mod functions;
+pub mod remote;

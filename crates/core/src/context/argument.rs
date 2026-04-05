@@ -46,7 +46,7 @@ impl TryFromArgument for NumberValue {
         match a {
             Argument::Eval(Value {
                 kind: Some(Kind::NumberValue(n)),
-            }) => Ok(n.clone()),
+            }) => Ok(*n),
             _ => Err(type_err("Expected number", a)),
         }
     }

@@ -1,4 +1,4 @@
-use tucana::shared::{number_value, value::Kind, NumberValue, Value};
+use tucana::shared::{NumberValue, Value, number_value, value::Kind};
 
 pub fn number_value_from_f64(n: f64) -> NumberValue {
     NumberValue {

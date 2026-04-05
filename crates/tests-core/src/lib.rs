@@ -57,7 +57,7 @@ fn get_test_case<P: AsRef<Path> + std::fmt::Debug>(path: P) -> Option<Case> {
         Ok(it) => it,
         Err(err) => {
             log::error!("Cannot read json ({:?}): {:?}", path, err);
-            return None;
+            None
         }
     }
 }

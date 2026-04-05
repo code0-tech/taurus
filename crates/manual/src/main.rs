@@ -152,7 +152,7 @@ async fn main() {
             let pretty = serde_json::to_string_pretty(&json).unwrap();
             println!("{}", pretty);
         }
-        taurus_core::context::signal::Signal::Stop => println!("Revieved Stop signal"),
+        taurus_core::context::signal::Signal::Stop => println!("Received Stop signal"),
         taurus_core::context::signal::Signal::Failure(runtime_error) => {
             println!("RuntimeError: {:?}", runtime_error);
         }

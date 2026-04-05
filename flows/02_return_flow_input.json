@@ -45,6 +45,7 @@
 		"startingNodeId": "3",
 		"nodeFunctions": [
 			{
+				"definition_source": "taurus",
 				"databaseId": "3",
 				"runtimeFunctionId": "http::response::create",
 				"parameters": [

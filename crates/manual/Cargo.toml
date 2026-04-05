@@ -1,13 +1,18 @@
 [package]
-name = "tests"
+name = "manual"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
+tests-core = { workspace = true }
 tucana = { workspace = true }
 taurus-core = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 serde_json = { workspace = true }
-tests-core = { workspace = true }
 serde = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+tokio = { workspace = true }
+async-nats = { workspace = true }
+clap ={ version = "4.6.0", features= ["derive"] }

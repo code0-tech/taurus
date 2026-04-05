@@ -1,5 +1,5 @@
 [package]
-name = "tests"
+name = "tests-core"
 version.workspace = true
 edition.workspace = true
 
@@ -9,5 +9,5 @@ taurus-core = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 serde_json = { workspace = true }
-tests-core = { workspace = true }
 serde = { workspace = true }
+

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use async_nats::Client;
+use async_trait::async_trait;
 use clap::{Parser, arg, command};
 use prost::Message;
 use taurus_core::context::{context::Context, executor::Executor, registry::FunctionStore};
 use taurus_core::runtime::{error::RuntimeError, remote::RemoteRuntime};
 use tests_core::Case;
-use tonic::async_trait;
 use tucana::shared::helper::value::to_json_value;
 use tucana::shared::{NodeFunction, helper::value::from_json_value};
 use tucana::{

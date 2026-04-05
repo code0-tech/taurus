@@ -15,10 +15,10 @@ pub trait Testable {
 }
 
 fn run_tests(cases: Cases) {
-    for case in cases.cases.clone() {
+    for case in &cases.cases {
         match case.run() {
-            CaseResult::Success => print_success(&case),
-            CaseResult::Failure(input, result) => print_failure(&case, &input, result),
+            CaseResult::Success => print_success(case),
+            CaseResult::Failure(input, result) => print_failure(case, &input, result),
         }
     }
 }

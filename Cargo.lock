@@ -988,6 +988,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
+name = "manual"
+version = "0.1.0"
+
+[[package]]
 name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1822,6 +1826,19 @@ dependencies = [
 
 [[package]]
 name = "tests"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+ "taurus-core",
+ "tests-core",
+ "tucana",
+]
+
+[[package]]
+name = "tests-core"
 version = "0.1.0"
 dependencies = [
  "env_logger",

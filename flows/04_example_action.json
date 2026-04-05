@@ -27,7 +27,7 @@
 						"value": {
 							"literalValue": {
 								"numberValue": {
-									"integer": 10
+									"integer": "10"
 								}
 							}
 						}

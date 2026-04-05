@@ -36,6 +36,7 @@ use tucana::aquila::ExecutionRequest;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{NodeFunction, Struct, Value};
+use uuid::Uuid;
 
 /// Executes a flow graph by repeatedly evaluating nodes.
 ///
@@ -223,7 +224,7 @@ impl<'a> Executor<'a> {
             };
 
             let remote_result =
-                block_on(remote.execute_remote(node.runtime_function_id.clone(), request));
+                block_on(remote.execute_remote(node.definition_source.clone(), request));
             let signal = match remote_result {
                 Ok(value) => Signal::Success(value),
                 Err(err) => Signal::Failure(err),
@@ -583,9 +584,9 @@ impl<'a> Executor<'a> {
         for (param, value) in node.parameters.iter().zip(values.into_iter()) {
             fields.insert(param.runtime_parameter_id.clone(), value);
         }
-
+        let id = Uuid::new_v4();
         Ok(ExecutionRequest {
-            execution_identifier: format!("node-{}", node.database_id),
+            execution_identifier: id.to_string(),
             function_identifier: node.runtime_function_id.clone(),
             parameters: Some(Struct { fields }),
             project_id: 0,

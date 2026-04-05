@@ -10,4 +10,5 @@ rand = { workspace = true }
 log = { workspace = true }
 futures-lite = { workspace = true }
 async-trait = { workspace = true }
+uuid = { workspace = true }
 

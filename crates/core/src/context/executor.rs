@@ -32,8 +32,7 @@ use crate::runtime::remote::RemoteRuntime;
 
 use futures_lite::future::block_on;
 use std::collections::HashMap;
-use tucana::aquila::execution_result::Result as ExecutionOutcome;
-use tucana::aquila::{ActionRuntimeError, ExecutionRequest, ExecutionResult};
+use tucana::aquila::ExecutionRequest;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{NodeFunction, Struct, Value};
@@ -56,6 +55,14 @@ pub struct Executor<'a> {
 /// The current policy treats any node whose `definition_source` is not `"taurus"`
 /// as a remote node.
 fn is_remote(node: &NodeFunction) -> bool {
+    if node.definition_source == "" {
+        log::warn!(
+            "Found empty definition source, taking runtime as origin for node id: {}",
+            node.database_id
+        );
+        return false;
+    }
+
     node.definition_source != "taurus"
 }
 

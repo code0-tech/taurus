@@ -1,6 +1,8 @@
 target
 .idea
-
+./definitions
+.definitions
+definitions
 .DS_Store
 ./out
 out

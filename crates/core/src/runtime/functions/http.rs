@@ -126,10 +126,7 @@ fn create_response(
             ));
         }
     };
-    fields.insert(
-        "status_code".to_string(),
-        value_from_i64(code),
-    );
+    fields.insert("status_code".to_string(), value_from_i64(code));
 
     fields.insert(
         "headers".to_string(),

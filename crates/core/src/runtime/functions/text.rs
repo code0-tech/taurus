@@ -521,7 +521,7 @@ fn from_ascii(
             Value {
                 kind: Some(Kind::NumberValue(n)),
             } => match number_to_f64(n) {
-                Some(n) if n >= 0.0 && n <= 127.0 => Some(n as u8 as char),
+                Some(n) if (0.0..=127.0).contains(&n) => Some(n as u8 as char),
                 _ => None,
             },
             _ => None,

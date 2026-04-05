@@ -1,9 +1,11 @@
 mod client;
 mod config;
+mod remote;
 
 use crate::client::runtime_status::TaurusRuntimeStatusService;
 use crate::client::runtime_usage::TaurusRuntimeUsageService;
 use crate::config::Config;
+use crate::remote::RemoteNatsClient;
 use code0_flow::flow_service::FlowUpdateService;
 
 use code0_flow::flow_config::load_env_file;
@@ -12,7 +14,7 @@ use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
 use std::collections::HashMap;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 use taurus_core::context::context::Context;
 use taurus_core::context::executor::Executor;
 use taurus_core::context::registry::FunctionStore;
@@ -24,7 +26,11 @@ use tucana::shared::{
     ExecutionFlow, NodeFunction, RuntimeFeature, RuntimeUsage, Translation, Value,
 };
 
-fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> (Signal, RuntimeUsage) {
+fn handle_message(
+    flow: ExecutionFlow,
+    store: &FunctionStore,
+    nats_remote: &RemoteNatsClient,
+) -> (Signal, RuntimeUsage) {
     let start = Instant::now();
     let mut context = Context::default();
 
@@ -34,8 +40,9 @@ fn handle_message(flow: ExecutionFlow, store: &FunctionStore) -> (Signal, Runtim
         .map(|node| (node.database_id, node))
         .collect();
 
-    let signal =
-        Executor::new(store, node_functions).execute(flow.starting_node_id, &mut context, true);
+    let signal = Executor::new(store, node_functions)
+        .with_remote_runtime(nats_remote)
+        .execute(flow.starting_node_id, &mut context, true);
     let duration_millis = start.elapsed().as_millis() as i64;
 
     (
@@ -133,6 +140,7 @@ async fn main() {
         runtime_status_service = Some(status_service);
     }
 
+    let nats_client = RemoteNatsClient::new(client.clone());
     let mut worker_task = tokio::spawn(async move {
         let mut sub = match client
             .queue_subscribe(String::from("execution.*"), "taurus".into())
@@ -162,7 +170,7 @@ async fn main() {
             };
 
             let flow_id = flow.flow_id;
-            let result = handle_message(flow, &store);
+            let result = handle_message(flow, &store, &nats_client);
             let value = match result.0 {
                 Signal::Failure(error) => {
                     log::error!(

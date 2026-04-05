@@ -1,0 +1,39 @@
+{
+	"name": "04_example_action",
+	"description": "This flow expects a simple http response object as the return value",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"status_code": 200,
+				"headers": {
+					"Header": "X"
+				},
+				"payload": "Hello World"
+			}
+		}
+	],
+	"flow": {
+		"starting_node_id": "1",
+		"node_functions": [
+			{
+				"definition_source": "example",
+				"databaseId": "1",
+				"runtimeFunctionId": "fib",
+				"parameters": [
+					{
+						"databaseId": "4",
+						"runtimeParameterId": "number",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "10"
+								}
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

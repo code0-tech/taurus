@@ -17,6 +17,7 @@
 		"starting_node_id": "1",
 		"node_functions": [
 			{
+				"definition_source": "taurus",
 				"databaseId": "2",
 				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
@@ -33,6 +34,7 @@
 			},
 			{
 				"databaseId": "1",
+				"definition_source": "taurus",
 				"runtimeFunctionId": "http::response::create",
 				"parameters": [
 					{

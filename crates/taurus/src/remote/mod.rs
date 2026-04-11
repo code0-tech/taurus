@@ -26,13 +26,18 @@ impl RemoteRuntime for RemoteNatsClient {
     ) -> Result<Value, RuntimeError> {
         let topic = format!("action.{}.{}", remote_name, request.execution_identifier);
         let payload = request.encode_to_vec();
+        log::info!("Publishing to topic: {}", topic);
         let res = self.client.request(topic, payload.into()).await;
         let message = match res {
             Ok(r) => r,
-            Err(_) => {
+            Err(err) => {
+                log::error!(
+                    "RemoteRuntimeExeption: failed to handle NATS message: {}",
+                    err
+                );
                 return Err(RuntimeError::simple_str(
                     "RemoteRuntimeExeption",
-                    "Failed to handle NATS message",
+                    "Failed to receive any response messages from a remote runtime.",
                 ));
             }
         };
@@ -40,10 +45,14 @@ impl RemoteRuntime for RemoteNatsClient {
         let decode_result = ExecutionResult::decode(message.payload);
         let execution_result = match decode_result {
             Ok(r) => r,
-            Err(_) => {
+            Err(err) => {
+                log::error!(
+                    "RemoteRuntimeExeption: failed to decode NATS message: {}",
+                    err
+                );
                 return Err(RuntimeError::simple_str(
                     "RemoteRuntimeExeption",
-                    "Failed to decode NATS message",
+                    "Failed to read Remote Response",
                 ));
             }
         };

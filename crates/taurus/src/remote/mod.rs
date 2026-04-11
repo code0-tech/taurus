@@ -37,7 +37,7 @@ impl RemoteRuntime for RemoteNatsClient {
                 );
                 return Err(RuntimeError::simple_str(
                     "RemoteRuntimeExeption",
-                    "Failed to recieve any response messages from a remote runtime.",
+                    "Failed to receive any response messages from a remote runtime.",
                 ));
             }
         };

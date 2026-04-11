@@ -508,7 +508,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1012,7 +1012,7 @@ dependencies = [
  "tests-core",
  "tokio",
  "tonic",
- "tucana 0.0.66",
+ "tucana 0.0.68",
 ]
 
 [[package]]
@@ -1467,7 +1467,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1775,7 +1775,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana 0.0.66",
+ "tucana 0.0.68",
 ]
 
 [[package]]
@@ -1787,7 +1787,7 @@ dependencies = [
  "futures-lite",
  "log",
  "rand 0.10.1",
- "tucana 0.0.66",
+ "tucana 0.0.68",
  "uuid",
 ]
 
@@ -1801,7 +1801,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1814,7 +1814,7 @@ dependencies = [
  "serde_json",
  "taurus-core",
  "tests-core",
- "tucana 0.0.66",
+ "tucana 0.0.68",
 ]
 
 [[package]]
@@ -1824,7 +1824,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "tucana 0.0.66",
+ "tucana 0.0.68",
 ]
 
 [[package]]
@@ -2152,9 +2152,9 @@ dependencies = [
 
 [[package]]
 name = "tucana"
-version = "0.0.66"
+version = "0.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b01670c573a1860b047d9ed7aa2b0a242e4f30ce8354d44f57e459465d74a75f"
+checksum = "abae78f798d1203bbcce361ba4cb4c500f8fe64e56d16ba3a5a0854e285377eb"
 dependencies = [
  "pbjson",
  "pbjson-build",
@@ -2387,7 +2387,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -26,8 +26,8 @@ impl RemoteRuntime for RemoteNatsClient {
     ) -> Result<Value, RuntimeError> {
         let topic = format!("action.{}.{}", remote_name, request.execution_identifier);
         let payload = request.encode_to_vec();
-        let res = self.client.request(topic.clone(), payload.into()).await;
         log::info!("Publishing to topic: {}", topic);
+        let res = self.client.request(topic, payload.into()).await;
         let message = match res {
             Ok(r) => r,
             Err(err) => {

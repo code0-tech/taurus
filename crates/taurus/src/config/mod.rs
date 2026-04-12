@@ -21,6 +21,8 @@ pub struct Config {
 
     pub aquila_url: String,
 
+    pub aquila_token: String,
+
     pub with_health_service: bool,
 
     pub grpc_host: String,
@@ -41,6 +43,7 @@ impl Config {
             mode: env_with_default("MODE", Mode::DYNAMIC),
             nats_url: env_with_default("NATS_URL", String::from("nats://localhost:4222")),
             aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:50051")),
+            aquila_token: env_with_default("AQUILA_TOKEN", String::from("token")),
             with_health_service: env_with_default("WITH_HEALTH_SERVICE", false),
             grpc_host: env_with_default("GRPC_HOST", "127.0.0.1".to_string()),
             grpc_port: env_with_default("GRPC_PORT", 50051),

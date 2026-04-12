@@ -110,6 +110,7 @@ async fn main() {
         FlowUpdateService::from_url(
             config.aquila_url.clone(),
             config.definitions.clone().as_str(),
+            config.aquila_token.clone(),
         )
         .await
         .send()

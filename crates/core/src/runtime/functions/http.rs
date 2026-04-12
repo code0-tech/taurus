@@ -114,19 +114,9 @@ fn create_response(
     _ctx: &mut Context,
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
-    args!(args => http_status_code: String, headers: Struct, payload: Value);
+    args!(args => http_status_code: i64, headers: Struct, payload: Value);
     let mut fields = std::collections::HashMap::new();
-
-    let code = match http_status_code.as_str().parse::<i64>() {
-        Ok(c) => c,
-        Err(_) => {
-            return Signal::Failure(RuntimeError::simple_str(
-                "InvalidArgumentExeption",
-                "Expected http_status_code to be parsed to integer",
-            ));
-        }
-    };
-    fields.insert("status_code".to_string(), value_from_i64(code));
+    fields.insert("status_code".to_string(), value_from_i64(http_status_code));
 
     fields.insert(
         "headers".to_string(),

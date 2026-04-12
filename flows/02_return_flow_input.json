@@ -54,7 +54,9 @@
 						"runtimeParameterId": "http_status_code",
 						"value": {
 							"literalValue": {
-								"stringValue": "200"
+								"numberValue": {
+									"integer": "200"
+								}
 							}
 						}
 					},

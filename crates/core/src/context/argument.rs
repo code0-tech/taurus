@@ -4,7 +4,7 @@ use std::convert::Infallible;
 use tucana::shared::value::Kind;
 use tucana::shared::{ListValue, NumberValue, Struct, Value};
 
-use crate::value::number_to_f64;
+use crate::value::{number_to_f64, number_to_i64_lossy};
 #[derive(Clone, Debug)]
 pub enum Argument {
     // Eval => Evaluated Value
@@ -47,6 +47,17 @@ impl TryFromArgument for NumberValue {
             Argument::Eval(Value {
                 kind: Some(Kind::NumberValue(n)),
             }) => Ok(*n),
+            _ => Err(type_err("Expected number", a)),
+        }
+    }
+}
+
+impl TryFromArgument for i64 {
+    fn try_from_argument(a: &Argument) -> Result<Self, Signal> {
+        match a {
+            Argument::Eval(Value {
+                kind: Some(Kind::NumberValue(n)),
+            }) => number_to_i64_lossy(n).ok_or_else(|| type_err("Expected number", a)),
             _ => Err(type_err("Expected number", a)),
         }
     }

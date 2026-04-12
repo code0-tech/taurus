@@ -22,7 +22,7 @@ impl TaurusRuntimeUsageService {
     }
 
     pub async fn update_runtime_usage(&self, runtime_usage: RuntimeUsage) {
-        log::info!("Updating the current Runtime Status!");
+        log::info!("Updating the current Runtime Usage!");
         let mut client = RuntimeUsageServiceClient::new(self.channel.clone());
 
         let request = Request::from_parts(
@@ -36,12 +36,12 @@ impl TaurusRuntimeUsageService {
         match client.update(request).await {
             Ok(response) => {
                 log::info!(
-                    "Was the update of the RuntimeStatus accepted by Sagittarius? {}",
+                    "Was the update of the RuntimeUsage accepted by Sagittarius? {}",
                     response.into_inner().success
                 );
             }
             Err(err) => {
-                log::error!("Failed to update RuntimeStatus: {:?}", err);
+                log::error!("Failed to update RuntimeUsage: {:?}", err);
             }
         }
     }

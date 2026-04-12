@@ -1,7 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use code0_flow::flow_service::retry::create_channel_with_retry;
-use tonic::transport::Channel;
+use code0_flow::flow_service::{
+    auth::get_authorization_metadata, retry::create_channel_with_retry,
+};
+use tonic::{Extensions, Request, transport::Channel};
 use tucana::{
     aquila::{
         RuntimeStatusUpdateRequest, runtime_status_service_client::RuntimeStatusServiceClient,
@@ -14,23 +16,31 @@ pub struct TaurusRuntimeStatusService {
     channel: Channel,
     identifier: String,
     features: Vec<RuntimeFeature>,
+    aquila_token: String,
 }
 
 impl TaurusRuntimeStatusService {
     pub async fn from_url(
         aquila_url: String,
+        aquila_token: String,
         identifier: String,
         features: Vec<RuntimeFeature>,
     ) -> Self {
         let channel = create_channel_with_retry("Aquila", aquila_url).await;
-        Self::new(channel, identifier, features)
+        Self::new(channel, aquila_token, identifier, features)
     }
 
-    pub fn new(channel: Channel, identifier: String, features: Vec<RuntimeFeature>) -> Self {
+    pub fn new(
+        channel: Channel,
+        aquila_token: String,
+        identifier: String,
+        features: Vec<RuntimeFeature>,
+    ) -> Self {
         TaurusRuntimeStatusService {
             channel,
             identifier,
             features,
+            aquila_token,
         }
     }
 
@@ -50,14 +60,18 @@ impl TaurusRuntimeStatusService {
             }
         };
 
-        let request = RuntimeStatusUpdateRequest {
-            status: Some(Status::ExecutionRuntimeStatus(ExecutionRuntimeStatus {
-                status: status.into(),
-                timestamp: timestamp as i64,
-                identifier: self.identifier.clone(),
-                features: self.features.clone(),
-            })),
-        };
+        let request = Request::from_parts(
+            get_authorization_metadata(&self.aquila_token),
+            Extensions::new(),
+            RuntimeStatusUpdateRequest {
+                status: Some(Status::ExecutionRuntimeStatus(ExecutionRuntimeStatus {
+                    status: status.into(),
+                    timestamp: timestamp as i64,
+                    identifier: self.identifier.clone(),
+                    features: self.features.clone(),
+                })),
+            },
+        );
 
         match client.update(request).await {
             Ok(response) => {

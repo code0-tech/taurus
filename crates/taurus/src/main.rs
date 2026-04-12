@@ -116,11 +116,16 @@ async fn main() {
         .send()
         .await;
 
-        let usage_service = TaurusRuntimeUsageService::from_url(config.aquila_url.clone()).await;
+        let usage_service = TaurusRuntimeUsageService::from_url(
+            config.aquila_url.clone(),
+            config.aquila_token.clone(),
+        )
+        .await;
         runtime_usage_service = Some(usage_service);
 
         let status_service = TaurusRuntimeStatusService::from_url(
             config.aquila_url.clone(),
+            config.aquila_token.clone(),
             "taurus".into(),
             vec![RuntimeFeature {
                 name: vec![Translation {

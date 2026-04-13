@@ -58,6 +58,7 @@ impl Context {
 
         if let ContextResult::Success(value) = res {
             let mut curr = value;
+            log::debug!("Tracing down value: {:?}", curr);
 
             for path in reference.paths {
                 if let Some(index) = path.array_index {
@@ -75,23 +76,20 @@ impl Context {
                     }
                 }
 
-                if let Some(path) = path.path {
-                    let splits = path.split(".");
-
-                    for part in splits {
-                        match curr.kind {
-                            Some(ref kind) => {
-                                if let Kind::StructValue(struct_value) = &kind {
-                                    match struct_value.fields.get(part) {
-                                        Some(x) => {
-                                            curr = x.clone();
-                                        }
-                                        None => return ContextResult::NotFound,
+                if let Some(field_name) = path.path {
+                    match curr.kind {
+                        Some(ref kind) => {
+                            if let Kind::StructValue(struct_value) = &kind {
+                                match struct_value.fields.get(&field_name) {
+                                    Some(x) => {
+                                        log::debug!("Updating trace value to: {:?}", x);
+                                        curr = x.clone();
                                     }
+                                    None => return ContextResult::NotFound,
                                 }
                             }
-                            None => return ContextResult::NotFound,
                         }
+                        None => return ContextResult::NotFound,
                     }
                 }
             }

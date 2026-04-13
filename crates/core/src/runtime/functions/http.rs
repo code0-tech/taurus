@@ -4,7 +4,7 @@ use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
 use crate::runtime::error::RuntimeError;
-use crate::value::value_from_i64;
+use tucana::shared::helper::value::ToValue;
 use tucana::shared::value::Kind;
 use tucana::shared::{Struct, Value};
 
@@ -34,7 +34,7 @@ fn respond(
         ));
     };
 
-    let Some(status_code_val) = fields.get("status_code") else {
+    let Some(status_code_val) = fields.get("http_status_code") else {
         return Signal::Failure(RuntimeError::simple(
             "InvalidArgumentRuntimeError",
             "Missing 'status_code' field".to_string(),
@@ -82,27 +82,15 @@ fn create_request(
     args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
     let mut fields = std::collections::HashMap::new();
 
+    fields.insert(String::from("http_method"), http_method.to_value());
+    fields.insert(String::from("url"), http_url.to_value());
+    fields.insert(String::from("payload"), payload.clone());
     fields.insert(
-        "method".to_string(),
-        Value {
-            kind: Some(Kind::StringValue(http_method.clone())),
-        },
-    );
-
-    fields.insert(
-        "url".to_string(),
-        Value {
-            kind: Some(Kind::StringValue(http_url.clone())),
-        },
-    );
-
-    fields.insert(
-        "headers".to_string(),
+        String::from("headers"),
         Value {
             kind: Some(Kind::StructValue(headers.clone())),
         },
     );
-    fields.insert("body".to_string(), payload.clone());
 
     Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),
@@ -116,15 +104,19 @@ fn create_response(
 ) -> Signal {
     args!(args => http_status_code: i64, headers: Struct, payload: Value);
     let mut fields = std::collections::HashMap::new();
-    fields.insert("status_code".to_string(), value_from_i64(http_status_code));
 
     fields.insert(
-        "headers".to_string(),
+        String::from("http_status_code"),
+        http_status_code.to_value(),
+    );
+    fields.insert(String::from("payload"), payload.clone());
+
+    fields.insert(
+        String::from("headers"),
         Value {
             kind: Some(Kind::StructValue(headers.clone())),
         },
     );
-    fields.insert("payload".to_string(), payload.clone());
 
     Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),

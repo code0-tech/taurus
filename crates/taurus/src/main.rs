@@ -32,7 +32,13 @@ fn handle_message(
     nats_remote: &RemoteNatsClient,
 ) -> (Signal, RuntimeUsage) {
     let start = Instant::now();
-    let mut context = Context::default();
+    let mut context = match flow.input_value {
+        Some(v) => {
+            log::debug!("Input Value for flow: {:?}", v);
+            Context::new(v)
+        }
+        None => Context::default(),
+    };
 
     let node_functions: HashMap<i64, NodeFunction> = flow
         .node_functions

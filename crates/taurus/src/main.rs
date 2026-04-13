@@ -36,7 +36,7 @@ fn handle_message(
         Some(v) => {
             log::debug!("Input Value for flow: {:?}", v);
             Context::new(v)
-        },
+        }
         None => Context::default(),
     };
 

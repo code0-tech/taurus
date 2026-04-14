@@ -62,7 +62,8 @@ fn r#if(
         ctx.push_runtime_trace_label("branch=if".to_string());
         run(*if_pointer, ctx)
     } else {
-        Signal::Return(Value {
+        ctx.push_runtime_trace_label("branch=else".to_string());
+        Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })
     }

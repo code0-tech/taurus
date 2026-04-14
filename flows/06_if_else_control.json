@@ -1,0 +1,218 @@
+{
+	"name": "06_if_else_control",
+	"description": "This flow expects an object as input (from http request) structured payload.test = bool which the flow will return",
+	"inputs": [
+		{
+			"input": {
+				"http_method": "GET",
+				"headers": {
+					"Content-Type": "text/plain"
+				},
+				"payload": {
+					"test": 1
+				}
+			},
+			"expected_result": {
+				"message": "Expected a bool value but received [Eval(Value { kind: Some(NumberValue(NumberValue { number: Some(Integer(1)) })) }), Thunk(19), Thunk(17)]",
+				"name": "InvalidArgumentRuntimeError"
+			}
+		},
+		{
+			"input": {
+				"http_method": "GET",
+				"headers": {
+					"Content-Type": "text/plain"
+				},
+				"payload": {
+					"test": true
+				}
+			},
+			"expected_result": {
+				"http_status_code": 200,
+				"headers": {},
+				"payload": "Blub"
+			}
+		},
+		{
+			"input": {
+				"http_method": "GET",
+				"headers": {
+					"Content-Type": "text/plain"
+				},
+				"payload": {
+					"test": false
+				}
+			},
+			"expected_result": {
+				"http_status_code": 200,
+				"headers": {},
+				"payload": "Blob"
+			}
+		}
+	],
+	"flow": {
+		"flowId": "3",
+		"projectId": "1",
+		"type": "REST",
+		"settings": [
+			{
+				"databaseId": "5",
+				"flowSettingId": "httpURL",
+				"value": {
+					"stringValue": "/test3"
+				}
+			},
+			{
+				"databaseId": "6",
+				"flowSettingId": "httpMethod",
+				"value": {
+					"stringValue": "GET"
+				}
+			}
+		],
+		"startingNodeId": "16",
+		"nodeFunctions": [
+			{
+				"databaseId": "19",
+				"runtimeFunctionId": "http::response::create",
+				"parameters": [
+					{
+						"databaseId": "51",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "78",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {}
+							}
+						}
+					},
+					{
+						"databaseId": "79",
+						"runtimeParameterId": "payload",
+						"value": {
+							"literalValue": {
+								"stringValue": "Blub"
+							}
+						}
+					}
+				],
+				"nextNodeId": "20"
+			},
+			{
+				"databaseId": "20",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "76",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "19"
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "16",
+				"runtimeFunctionId": "std::control::if_else",
+				"parameters": [
+					{
+						"databaseId": "62",
+						"runtimeParameterId": "condition",
+						"value": {
+							"referenceValue": {
+								"paths": [
+									{
+										"path": "payload"
+									},
+									{
+										"path": "test"
+									}
+								],
+								"flowInput": {}
+							}
+						}
+					},
+					{
+						"databaseId": "63",
+						"runtimeParameterId": "runnable",
+						"value": {
+							"nodeFunctionId": "19"
+						}
+					},
+					{
+						"databaseId": "68",
+						"runtimeParameterId": "else_runnable",
+						"value": {
+							"nodeFunctionId": "17"
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "17",
+				"runtimeFunctionId": "http::response::create",
+				"parameters": [
+					{
+						"databaseId": "72",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "73",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {}
+							}
+						}
+					},
+					{
+						"databaseId": "75",
+						"runtimeParameterId": "payload",
+						"value": {
+							"literalValue": {
+								"stringValue": "Blob"
+							}
+						}
+					}
+				],
+				"nextNodeId": "18"
+			},
+			{
+				"databaseId": "18",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "64",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "17"
+							}
+						}
+					}
+				]
+			}
+		],
+		"projectSlug": "codezero-project",
+		"signature": "(httpURL: HTTP_URL, httpMethod: HTTP_METHOD): { payload: { test: BOOLEAN }, headers: { test: TEXT } }"
+	}
+}

@@ -51,29 +51,25 @@ impl Testable for Case {
                         "name": err.name,
                         "message": err.message,
                     });
-                    return CaseResult::Failure(input, json);
+                    if json != input.clone().expected_result {
+                        return CaseResult::Failure(input, json);
+                    }
                 }
                 taurus_core::context::signal::Signal::Success(value) => {
                     let json = to_json_value(value);
-                    if json == input.clone().expected_result {
-                        return CaseResult::Success;
-                    } else {
+                    if json != input.clone().expected_result {
                         return CaseResult::Failure(input, json);
                     }
                 }
                 taurus_core::context::signal::Signal::Return(value) => {
                     let json = to_json_value(value);
-                    if json == input.clone().expected_result {
-                        return CaseResult::Success;
-                    } else {
+                    if json != input.clone().expected_result {
                         return CaseResult::Failure(input, json);
                     }
                 }
                 taurus_core::context::signal::Signal::Respond(value) => {
                     let json = to_json_value(value);
-                    if json == input.clone().expected_result {
-                        return CaseResult::Success;
-                    } else {
+                    if json != input.clone().expected_result {
                         return CaseResult::Failure(input, json);
                     }
                 }

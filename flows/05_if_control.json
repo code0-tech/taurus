@@ -1,6 +1,6 @@
 {
 	"name": "05_if_control",
-	"description": "This flow expects a object as input (from http request) structured payload.test = bool which the flow will return",
+	"description": "This flow expects an object as input (from http request) structured payload.test = bool which the flow will return",
 	"inputs": [
 		{
 			"input": {

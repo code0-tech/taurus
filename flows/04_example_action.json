@@ -5,11 +5,8 @@
 		{
 			"input": null,
 			"expected_result": {
-				"status_code": 200,
-				"headers": {
-					"Header": "X"
-				},
-				"payload": "Hello World"
+				"message": "Remote runtime not configured",
+				"name": "RemoteRuntimeNotConfigured"
 			}
 		}
 	],

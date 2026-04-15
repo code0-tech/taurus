@@ -14,12 +14,13 @@ use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use taurus_core::context::context::Context;
 use taurus_core::context::executor::Executor;
 use taurus_core::context::registry::FunctionStore;
 use taurus_core::context::signal::Signal;
 use tokio::signal;
+use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
 use tucana::shared::{
@@ -111,16 +112,29 @@ async fn main() {
         None
     };
 
-    // Optional: dynamic mode sync at startup
     if config.mode == DYNAMIC {
-        FlowUpdateService::from_url(
+        let definition_service = FlowUpdateService::from_url(
             config.aquila_url.clone(),
             config.definitions.clone().as_str(),
             config.aquila_token.clone(),
         )
-        .await
-        .send()
         .await;
+
+        let mut success = false;
+        let mut count = 1;
+        while !success {
+            success = definition_service.send_with_status().await;
+            if success {
+                break;
+            }
+
+            log::warn!(
+                "Updating definitions failed, trying again in 2 secs (retry number {})",
+                count
+            );
+            count += 1;
+            sleep(Duration::from_secs(3)).await;
+        }
 
         let usage_service = TaurusRuntimeUsageService::from_url(
             config.aquila_url.clone(),

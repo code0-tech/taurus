@@ -5,6 +5,7 @@ use crate::context::context::Context;
 use crate::context::macros::args;
 use crate::context::registry::{HandlerFn, HandlerFunctionEntry, IntoFunctionEntry};
 use crate::context::signal::Signal;
+use crate::runtime::error::RuntimeError;
 use crate::value::value_from_i64;
 
 pub fn collect_object_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
@@ -16,6 +17,7 @@ pub fn collect_object_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
         ("std::object::keys", HandlerFn::eager(keys, 1)),
         ("std::object::size", HandlerFn::eager(size, 1)),
         ("std::object::set", HandlerFn::eager(set, 3)),
+        ("std::object::get", HandlerFn::eager(get, 2)),
     ]
 }
 
@@ -74,6 +76,22 @@ fn set(
         kind: Some(Kind::StructValue(new_object)),
     })
 }
+
+fn get(
+    args: &[Argument],
+    _ctx: &mut Context,
+    _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
+) -> Signal {
+    args!(args => object: Struct, key: String);
+    match object.fields.get(&key) {
+        Some(v) => Signal::Success(v.clone()),
+        None => Signal::Failure(RuntimeError::simple(
+            "FieldNotPresent",
+            format!("field {} not present", key),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,5 +427,95 @@ mod tests {
         // ensure original (captured clone) unchanged
         assert_eq!(orig_clone.fields.len(), original_len);
         assert!(!orig_clone.fields.contains_key("new_key"));
+    }
+
+    #[test]
+    fn test_get_success_string_field() {
+        let mut ctx = Context::default();
+        let mut run = dummy_run;
+        let args = vec![a_struct(s_test()), a_string("name")];
+
+        let signal = get(&args, &mut ctx, &mut run);
+        let v = match signal {
+            Signal::Success(v) => v,
+            s => panic!("Expected Success, got {:?}", s),
+        };
+
+        match v.kind {
+            Some(Kind::StringValue(s)) => assert_eq!(s, "John"),
+            _ => panic!("Expected StringValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_success_nested_struct_field() {
+        let mut ctx = Context::default();
+        let nested = {
+            let mut nf = HashMap::new();
+            nf.insert("street".to_string(), v_string("123 Main St"));
+            v_struct(nf)
+        };
+        let object = s_from(vec![("address", nested)]);
+        let mut run = dummy_run;
+        let args = vec![a_struct(object), a_string("address")];
+
+        let signal = get(&args, &mut ctx, &mut run);
+        let v = match signal {
+            Signal::Success(v) => v,
+            s => panic!("Expected Success, got {:?}", s),
+        };
+
+        match v.kind {
+            Some(Kind::StructValue(st)) => {
+                match st.fields.get("street") {
+                    Some(Value {
+                        kind: Some(Kind::StringValue(s)),
+                        ..
+                    }) => assert_eq!(s, "123 Main St"),
+                    _ => panic!("Expected nested 'street' string"),
+                }
+            }
+            _ => panic!("Expected StructValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_missing_field_returns_field_not_present() {
+        let mut ctx = Context::default();
+        let mut run = dummy_run;
+        let args = vec![a_struct(s_test()), a_string("email")];
+
+        let signal = get(&args, &mut ctx, &mut run);
+        let err = match signal {
+            Signal::Failure(err) => err,
+            s => panic!("Expected Failure, got {:?}", s),
+        };
+
+        assert_eq!(err.name, "FieldNotPresent");
+        assert_eq!(err.message, "field email not present");
+    }
+
+    #[test]
+    fn test_collect_object_functions_registers_get_handler() {
+        let mut ctx = Context::default();
+        let mut run = dummy_run;
+        let args = vec![a_struct(s_test()), a_string("age")];
+
+        let entry = collect_object_functions()
+            .into_iter()
+            .find(|(id, _)| *id == "std::object::get")
+            .map(|(_, entry)| entry)
+            .expect("std::object::get should be registered");
+
+        let signal = (entry.handler)(&args, &mut ctx, &mut run);
+        let v = match signal {
+            Signal::Success(v) => v,
+            s => panic!("Expected Success, got {:?}", s),
+        };
+
+        match v.kind {
+            Some(Kind::NumberValue(n)) => assert_eq!(number_to_f64(&n).unwrap_or_default(), 30.0),
+            _ => panic!("Expected NumberValue"),
+        }
     }
 }

@@ -46,7 +46,7 @@ fn handle_message(
         let duration_millis = start.elapsed().as_millis() as i64;
         return (
             Signal::Failure(RuntimeError::simple_str(
-                "InvlaidFlow",
+                "InvalidFlow",
                 "This flow has no nodes to execute!",
             )),
             RuntimeUsage {

@@ -19,6 +19,7 @@ use taurus_core::context::context::Context;
 use taurus_core::context::executor::Executor;
 use taurus_core::context::registry::FunctionStore;
 use taurus_core::context::signal::Signal;
+use taurus_core::runtime::error::RuntimeError;
 use tokio::signal;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
@@ -40,6 +41,20 @@ fn handle_message(
         }
         None => Context::default(),
     };
+
+    if flow.node_functions.len() == 0 {
+        let duration_millis = start.elapsed().as_millis() as i64;
+        return (
+            Signal::Failure(RuntimeError::simple_str(
+                "InvlaidFlow",
+                "This flow has no nodes to execute!",
+            )),
+            RuntimeUsage {
+                flow_id: flow.flow_id,
+                duration: duration_millis,
+            },
+        );
+    }
 
     let node_functions: HashMap<i64, NodeFunction> = flow
         .node_functions

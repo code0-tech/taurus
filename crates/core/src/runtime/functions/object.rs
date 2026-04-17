@@ -491,7 +491,7 @@ mod tests {
             s => panic!("Expected Failure, got {:?}", s),
         };
 
-        assert_eq!(err.name, "FieldNotPresent");
+        assert_eq!(err.name, "FieldNotPresentRuntimeError");
         assert_eq!(err.message, "field email not present");
     }
 

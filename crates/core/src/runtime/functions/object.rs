@@ -86,7 +86,7 @@ fn get(
     match object.fields.get(&key) {
         Some(v) => Signal::Success(v.clone()),
         None => Signal::Failure(RuntimeError::simple(
-            "FieldNotPresent",
+            "FieldNotPresentRuntimeError",
             format!("field {} not present", key),
         )),
     }

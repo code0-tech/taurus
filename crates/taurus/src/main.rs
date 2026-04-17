@@ -14,6 +14,8 @@ use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use taurus_core::context::context::Context;
 use taurus_core::context::executor::Executor;
@@ -21,6 +23,7 @@ use taurus_core::context::registry::FunctionStore;
 use taurus_core::context::signal::Signal;
 use taurus_core::runtime::error::RuntimeError;
 use tokio::signal;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
@@ -32,6 +35,7 @@ fn handle_message(
     flow: ExecutionFlow,
     store: &FunctionStore,
     nats_remote: &RemoteNatsClient,
+    respond_emitter: Option<&dyn Fn(Value)>,
 ) -> (Signal, RuntimeUsage) {
     let start = Instant::now();
     let mut context = match flow.input_value {
@@ -62,9 +66,12 @@ fn handle_message(
         .map(|node| (node.database_id, node))
         .collect();
 
-    let signal = Executor::new(store, node_functions)
-        .with_remote_runtime(nats_remote)
-        .execute(flow.starting_node_id, &mut context, true);
+    let mut executor = Executor::new(store, node_functions).with_remote_runtime(nats_remote);
+    if let Some(emitter) = respond_emitter {
+        executor = executor.with_respond_emitter(emitter);
+    }
+
+    let signal = executor.execute(flow.starting_node_id, &mut context, true);
     let duration_millis = start.elapsed().as_millis() as i64;
 
     (
@@ -211,47 +218,94 @@ async fn main() {
             };
 
             let flow_id = flow.flow_id;
-            let result = handle_message(flow, &store, &nats_client);
-            let value = match result.0 {
+            let reply = msg.reply.clone();
+            let (respond_tx, mut respond_rx) = mpsc::unbounded_channel::<Value>();
+            let respond_publisher = reply.clone().map(|reply_subject| {
+                let publish_client = client.clone();
+                tokio::spawn(async move {
+                    while let Some(value) = respond_rx.recv().await {
+                        match publish_client
+                            .publish(reply_subject.clone(), value.encode_to_vec().into())
+                            .await
+                        {
+                            Ok(_) => log::debug!("Respond signal value sent"),
+                            Err(err) => {
+                                log::error!("Failed to send respond signal value: {:?}", err)
+                            }
+                        }
+                    }
+                })
+            });
+
+            let emit_tx = respond_tx.clone();
+            let respond_count = Arc::new(AtomicUsize::new(0));
+            let respond_count_for_emitter = respond_count.clone();
+            let respond_emitter = move |value: Value| {
+                respond_count_for_emitter.fetch_add(1, Ordering::Relaxed);
+                if let Err(err) = emit_tx.send(value) {
+                    log::debug!(
+                        "Dropped respond signal value because publisher is unavailable: {:?}",
+                        err
+                    );
+                }
+            };
+
+            let (signal, runtime_usage) =
+                handle_message(flow, &store, &nats_client, Some(&respond_emitter));
+            drop(respond_emitter);
+            drop(respond_tx);
+
+            if let Some(publisher) = respond_publisher
+                && let Err(err) = publisher.await
+            {
+                log::error!("Respond publisher task failed: {:?}", err);
+            }
+            let has_responded = respond_count.load(Ordering::Relaxed) > 0;
+
+            let final_value = match signal {
                 Signal::Failure(error) => {
                     log::error!(
                         "RuntimeError occurred, execution failed because: {:?}",
                         error
                     );
-                    error.as_value()
+                    Some(error.as_value())
                 }
                 Signal::Success(v) => {
                     log::debug!("Execution ended on a success signal");
-                    v
+                    Some(v)
                 }
                 Signal::Return(v) => {
                     log::debug!("Execution ended on a return signal");
-                    v
+                    Some(v)
                 }
-                Signal::Respond(v) => {
+                Signal::Respond(_) => {
                     log::debug!("Execution ended on a respond signal");
-                    v
+                    None
                 }
                 Signal::Stop => {
                     log::debug!("Revied stop signal as last signal");
-                    Value {
+                    Some(Value {
                         kind: Some(Kind::NullValue(0)),
-                    }
+                    })
                 }
             };
 
-            log::info!("For the flow_id {} returing the value {:?}", flow_id, value);
+            if let Some(value) = final_value
+                && !has_responded
+            {
+                log::info!("For the flow_id {} returing the value {:?}", flow_id, value);
 
-            // Send a response to the reply subject
-            if let Some(reply) = msg.reply {
-                match client.publish(reply, value.encode_to_vec().into()).await {
-                    Ok(_) => log::debug!("Response sent"),
-                    Err(err) => log::error!("Failed to send response: {:?}", err),
+                // Send a terminal response to the reply subject.
+                if let Some(reply) = reply {
+                    match client.publish(reply, value.encode_to_vec().into()).await {
+                        Ok(_) => log::debug!("Response sent"),
+                        Err(err) => log::error!("Failed to send response: {:?}", err),
+                    }
                 }
             }
 
             if let Some(usage_service) = &runtime_usage_service {
-                usage_service.update_runtime_usage(result.1).await;
+                usage_service.update_runtime_usage(runtime_usage).await;
             }
         }
 

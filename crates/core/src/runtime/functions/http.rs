@@ -15,7 +15,7 @@ pub fn collect_http_functions() -> Vec<(&'static str, HandlerFunctionEntry)> {
             "http::response::create",
             HandlerFn::eager(create_response, 4),
         ),
-        ("rest::control::respond", HandlerFn::eager(respond, 3)),
+        ("rest::control::respond", HandlerFn::eager(respond, 1)),
     ]
 }
 
@@ -25,6 +25,7 @@ fn respond(
     _run: &mut dyn FnMut(i64, &mut Context) -> Signal,
 ) -> Signal {
     args!(args => struct_val: Struct);
+
     let fields = &struct_val.fields;
 
     let Some(headers_val) = fields.get("headers") else {

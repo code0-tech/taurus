@@ -16,8 +16,8 @@ pub enum Signal {
     // - will break the current context and return the value to the upper node
     Return(Value),
     // Will be signaled if the `respond` function has been executed
-    // - will stop the execution of the flow completely
-    // - will return the value to the adapter
+    // - will not stop (will continue) the execution of the flow
+    // - will emit a respond signal which can be handled by the runtime holder
     Respond(Value),
     // Will be signaled if the `stop` function has been executed
     // - will stop the execution of the flow completely

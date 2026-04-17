@@ -42,7 +42,7 @@ fn handle_message(
         None => Context::default(),
     };
 
-    if flow.node_functions.len() == 0 {
+    if flow.node_functions.is_empty() {
         let duration_millis = start.elapsed().as_millis() as i64;
         return (
             Signal::Failure(RuntimeError::simple_str(

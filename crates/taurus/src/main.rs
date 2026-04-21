@@ -13,71 +13,33 @@ use code0_flow::flow_config::mode::Mode::DYNAMIC;
 use futures_lite::StreamExt;
 use log::error;
 use prost::Message;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use taurus_core::context::context::Context;
-use taurus_core::context::executor::Executor;
-use taurus_core::context::registry::FunctionStore;
-use taurus_core::context::signal::Signal;
-use taurus_core::runtime::error::RuntimeError;
+use taurus_core::runtime::engine::{EmitType, ExecutionEngine, RespondEmitter};
+use taurus_core::types::signal::Signal;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::value::Kind;
-use tucana::shared::{
-    ExecutionFlow, NodeFunction, RuntimeFeature, RuntimeUsage, Translation, Value,
-};
+use tucana::shared::{ExecutionFlow, RuntimeFeature, RuntimeUsage, Translation, Value};
 
 fn handle_message(
     flow: ExecutionFlow,
-    store: &FunctionStore,
+    engine: &ExecutionEngine,
     nats_remote: &RemoteNatsClient,
-    respond_emitter: Option<&dyn Fn(Value)>,
+    respond_emitter: Option<&dyn RespondEmitter>,
 ) -> (Signal, RuntimeUsage) {
     let start = Instant::now();
-    let mut context = match flow.input_value {
-        Some(v) => {
-            log::debug!("Input Value for flow: {:?}", v);
-            Context::new(v)
-        }
-        None => Context::default(),
-    };
-
-    if flow.node_functions.is_empty() {
-        let duration_millis = start.elapsed().as_millis() as i64;
-        return (
-            Signal::Failure(RuntimeError::simple_str(
-                "InvalidFlow",
-                "This flow has no nodes to execute!",
-            )),
-            RuntimeUsage {
-                flow_id: flow.flow_id,
-                duration: duration_millis,
-            },
-        );
-    }
-
-    let node_functions: HashMap<i64, NodeFunction> = flow
-        .node_functions
-        .into_iter()
-        .map(|node| (node.database_id, node))
-        .collect();
-
-    let mut executor = Executor::new(store, node_functions).with_remote_runtime(nats_remote);
-    if let Some(emitter) = respond_emitter {
-        executor = executor.with_respond_emitter(emitter);
-    }
-
-    let signal = executor.execute(flow.starting_node_id, &mut context, true);
+   let flow_id = flow.flow_id;
+    let (signal, _reason) = engine.execute_flow(flow, Some(nats_remote), respond_emitter, true);
     let duration_millis = start.elapsed().as_millis() as i64;
 
     (
         signal,
         RuntimeUsage {
-            flow_id: flow.flow_id,
+            flow_id,
             duration: duration_millis,
         },
     )
@@ -92,7 +54,7 @@ async fn main() {
     load_env_file();
 
     let config = Config::new();
-    let store = FunctionStore::default();
+    let engine = ExecutionEngine::new();
     let mut runtime_status_service: Option<TaurusRuntimeStatusService> = None;
     let mut runtime_usage_service: Option<TaurusRuntimeUsageService> = None;
 
@@ -240,18 +202,23 @@ async fn main() {
             let emit_tx = respond_tx.clone();
             let respond_count = Arc::new(AtomicUsize::new(0));
             let respond_count_for_emitter = respond_count.clone();
-            let respond_emitter = move |value: Value| {
-                respond_count_for_emitter.fetch_add(1, Ordering::Relaxed);
-                if let Err(err) = emit_tx.send(value) {
-                    log::debug!(
-                        "Dropped respond signal value because publisher is unavailable: {:?}",
-                        err
-                    );
+            let respond_emitter = move |emit_type: EmitType, value: Value| match emit_type {
+                EmitType::OngoingExec => {
+                    respond_count_for_emitter.fetch_add(1, Ordering::Relaxed);
+                    if let Err(err) = emit_tx.send(value) {
+                        log::debug!(
+                            "Dropped respond signal value because publisher is unavailable: {:?}",
+                            err
+                        );
+                    }
                 }
+                EmitType::StartingExec => log::debug!("Flow execution started"),
+                EmitType::FinishedExec => log::debug!("Flow execution finished"),
+                EmitType::FailedExec => log::debug!("Flow execution failed"),
             };
 
             let (signal, runtime_usage) =
-                handle_message(flow, &store, &nats_client, Some(&respond_emitter));
+                handle_message(flow, &engine, &nats_client, Some(&respond_emitter));
             drop(respond_emitter);
             drop(respond_tx);
 

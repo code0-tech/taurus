@@ -4,6 +4,9 @@ use std::collections::HashMap;
 
 use tucana::shared::{InputType, ReferenceValue, Value, value::Kind};
 
+use crate::runtime::execution::trace::{
+    StoreInputSlotEntry, StoreResultEntry, StoreResultStatus, StoreSnapshot,
+};
 use crate::types::errors::runtime_error::RuntimeError;
 
 #[derive(Clone)]
@@ -33,7 +36,7 @@ impl ValueStore {
         }
     }
 
-    pub fn get_current_node_id(&mut self) -> i64 {
+    pub fn get_current_node_id(&self) -> i64 {
         self.current_node_id
     }
 
@@ -141,5 +144,70 @@ impl ValueStore {
 
     pub fn pop_runtime_trace_label(&mut self) -> Option<String> {
         self.runtime_trace_labels.pop()
+    }
+
+    pub fn trace_snapshot(&self) -> StoreSnapshot {
+        let mut results = Vec::with_capacity(self.results.len());
+        for (node_id, result) in &self.results {
+            match result {
+                ValueStoreResult::Success(value) => results.push(StoreResultEntry {
+                    node_id: *node_id,
+                    status: StoreResultStatus::Success,
+                    preview: preview_value(value),
+                }),
+                ValueStoreResult::Error(err) => results.push(StoreResultEntry {
+                    node_id: *node_id,
+                    status: StoreResultStatus::Error,
+                    preview: format!("{}:{} {}", err.code, err.category, err.message),
+                }),
+                ValueStoreResult::NotFound => {}
+            }
+        }
+        results.sort_by_key(|entry| entry.node_id);
+
+        let mut input_slots = Vec::with_capacity(self.input_types.len());
+        for (input, value) in &self.input_types {
+            input_slots.push(StoreInputSlotEntry {
+                node_id: input.node_id,
+                parameter_index: input.parameter_index,
+                input_index: input.input_index,
+                preview: preview_value(value),
+            });
+        }
+        input_slots.sort_by_key(|entry| (entry.node_id, entry.parameter_index, entry.input_index));
+
+        StoreSnapshot {
+            current_node_id: self.current_node_id,
+            flow_input_preview: preview_value(&self.flow_input),
+            results,
+            input_slots,
+        }
+    }
+}
+
+fn preview_value(value: &Value) -> String {
+    match value.kind.as_ref() {
+        Some(Kind::NumberValue(v)) => crate::value::number_to_string(v),
+        Some(Kind::BoolValue(v)) => v.to_string(),
+        Some(Kind::StringValue(v)) => format!("{:?}", v),
+        Some(Kind::NullValue(_)) | None => "null".to_string(),
+        Some(Kind::ListValue(list)) => {
+            let mut parts = Vec::with_capacity(list.values.len());
+            for item in &list.values {
+                parts.push(preview_value(item));
+            }
+            format!("[{}]", parts.join(", "))
+        }
+        Some(Kind::StructValue(struct_value)) => {
+            let mut keys: Vec<_> = struct_value.fields.keys().collect();
+            keys.sort();
+            let mut parts = Vec::with_capacity(keys.len());
+            for key in keys {
+                if let Some(field_value) = struct_value.fields.get(key) {
+                    parts.push(format!("{:?}: {}", key, preview_value(field_value)));
+                }
+            }
+            format!("{{{}}}", parts.join(", "))
+        }
     }
 }

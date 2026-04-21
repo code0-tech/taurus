@@ -156,14 +156,14 @@ impl<'a> EngineExecutor<'a> {
         // InputType references resolve against the currently running node.
         value_store.set_current_node_id(node.id);
 
-        let frame_id = self.trace_enter(node);
+        let frame_id = self.trace_enter(node, value_store);
         let signal = match &node.execution_target {
             NodeExecutionTarget::Local => self.execute_local_node(node, value_store, frame_id),
             NodeExecutionTarget::Remote { service } => {
                 self.execute_remote_node(node, service, value_store, frame_id)
             }
         };
-        self.trace_exit(frame_id, &signal);
+        self.trace_exit(frame_id, &signal, value_store);
 
         NodeExecutionResult { signal, frame_id }
     }
@@ -519,15 +519,17 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn trace_enter(&self, node: &CompiledNode) -> Option<u64> {
+    fn trace_enter(&self, node: &CompiledNode, value_store: &ValueStore) -> Option<u64> {
         self.tracer.map(|tracer| {
-            tracer
-                .borrow_mut()
-                .enter_node(node.id, node.handler_id.as_str())
+            tracer.borrow_mut().enter_node(
+                node.id,
+                node.handler_id.as_str(),
+                value_store.trace_snapshot(),
+            )
         })
     }
 
-    fn trace_exit(&self, frame_id: Option<u64>, signal: &Signal) {
+    fn trace_exit(&self, frame_id: Option<u64>, signal: &Signal, value_store: &ValueStore) {
         let Some(frame_id) = frame_id else {
             return;
         };
@@ -550,7 +552,9 @@ impl<'a> EngineExecutor<'a> {
             },
             Signal::Stop => Outcome::Stop,
         };
-        tracer.borrow_mut().exit_node(frame_id, outcome);
+        tracer
+            .borrow_mut()
+            .exit_node(frame_id, outcome, value_store.trace_snapshot());
     }
 
     fn trace_record_arg(&self, frame_id: Option<u64>, arg: ArgTrace) {

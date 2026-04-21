@@ -1009,7 +1009,6 @@ dependencies = [
  "serde",
  "serde_json",
  "taurus-core",
- "tests-core",
  "tokio",
  "tonic",
  "tucana",
@@ -1813,17 +1812,6 @@ dependencies = [
  "serde",
  "serde_json",
  "taurus-core",
- "tests-core",
- "tucana",
-]
-
-[[package]]
-name = "tests-core"
-version = "0.1.0"
-dependencies = [
- "log",
- "serde",
- "serde_json",
  "tucana",
 ]
 

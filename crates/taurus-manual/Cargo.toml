@@ -4,7 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-tests-core = { workspace = true }
 tucana = { workspace = true }
 taurus-core = { workspace = true }
 log = { workspace = true }

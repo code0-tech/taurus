@@ -151,7 +151,10 @@ pub fn compile_flow(
 }
 
 fn execution_target_for(node: &NodeFunction) -> NodeExecutionTarget {
-    if node.definition_source.is_empty() || node.definition_source == "taurus" {
+    if node.definition_source.is_empty()
+        || node.definition_source == "taurus"
+        || node.definition_source.starts_with("draco")
+    {
         NodeExecutionTarget::Local
     } else {
         NodeExecutionTarget::Remote {

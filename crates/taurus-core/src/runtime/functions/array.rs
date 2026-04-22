@@ -51,7 +51,7 @@ fn as_list(value: &Value, err: &'static str) -> Result<ListValue, RuntimeError> 
     match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
         Kind::ListValue(lv) => Ok(lv),
         _ => Err(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             err,
         )),
@@ -62,7 +62,7 @@ fn as_bool(value: &Value) -> Result<bool, RuntimeError> {
     match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
         Kind::BoolValue(b) => Ok(b),
         _ => Err(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected boolean result from predicate",
         )),
@@ -70,7 +70,7 @@ fn as_bool(value: &Value) -> Result<bool, RuntimeError> {
 }
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {
-    Signal::Failure(RuntimeError::new("T-LST-000000", category, message))
+    Signal::Failure(RuntimeError::new("T-STD-00001", category, message))
 }
 
 fn parse_array_and_thunk<'a>(
@@ -185,7 +185,7 @@ fn at(
 
     if index < 0.0 {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "IndexOutOfBoundsRuntimeError",
             "Negative index",
         ));
@@ -300,7 +300,7 @@ fn find(
     }
 
     Signal::Failure(RuntimeError::new(
-        "T-RT-000000",
+        "T-STD-00001",
         "NotFoundError",
         "No item found that satisfies the predicate",
     ))
@@ -335,7 +335,7 @@ fn find_last(
     }
 
     Signal::Failure(RuntimeError::new(
-        "T-RT-000000",
+        "T-STD-00001",
         "NotFoundError",
         "No item found that satisfies the predicate",
     ))
@@ -372,7 +372,7 @@ fn find_index(
     }
 
     Signal::Failure(RuntimeError::new(
-        "T-RT-000000",
+        "T-STD-00001",
         "NotFoundError",
         "No item found that satisfies the predicate",
     ))
@@ -387,7 +387,7 @@ fn first(
     match array.values.first() {
         Some(v) => Signal::Success(v.clone()),
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "ArrayEmptyRuntimeError",
             "This array is empty",
         )),
@@ -403,7 +403,7 @@ fn last(
     match array.values.last() {
         Some(v) => Signal::Success(v.clone()),
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "ArrayEmptyRuntimeError",
             "This array is empty",
         )),
@@ -510,7 +510,7 @@ fn push(
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected first argument to be an array",
         ));
@@ -529,7 +529,7 @@ fn pop(
     args!(args => array_v: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected an array as an argument",
         ));
@@ -548,7 +548,7 @@ fn remove(
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected first argument to be an array",
         ));
@@ -575,7 +575,7 @@ fn is_empty(
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected an array as an argument",
         ));
@@ -593,7 +593,7 @@ fn size(
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected an array as an argument",
         ));
@@ -609,7 +609,7 @@ fn index_of(
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected first argument to be an array",
         ));
@@ -632,7 +632,7 @@ fn to_unique(
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected an array as an argument",
         ));
@@ -788,7 +788,7 @@ fn reverse(
     args!(args => array_v: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected an array as an argument",
         ));
@@ -807,7 +807,7 @@ fn flat(
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected an array as an argument",
         ));
@@ -859,7 +859,7 @@ fn min(
         Some(m) if all_int => Signal::Success(value_from_i64(min_i64.unwrap_or(*m as i64))),
         Some(m) => Signal::Success(value_from_f64(*m)),
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "ArrayEmptyRuntimeError",
             "Array is empty",
         )),
@@ -899,7 +899,7 @@ fn max(
         Some(m) if all_int => Signal::Success(value_from_i64(max_i64.unwrap_or(*m as i64))),
         Some(m) => Signal::Success(value_from_f64(*m)),
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "ArrayEmptyRuntimeError",
             "Array is empty",
         )),

@@ -33,12 +33,12 @@ impl CompileError {
     pub fn as_runtime_error(&self) -> RuntimeError {
         match self {
             CompileError::DuplicateNodeId { node_id } => RuntimeError::new(
-                "T-RT-000000",
+                "T-CORE-000101",
                 "FlowCompileError",
                 format!("Duplicate node id in flow: {}", node_id),
             ),
             CompileError::StartNodeMissing { node_id } => RuntimeError::new(
-                "T-RT-000000",
+                "T-CORE-000102",
                 "FlowCompileError",
                 format!("Start node not found in flow: {}", node_id),
             ),
@@ -46,7 +46,7 @@ impl CompileError {
                 node_id,
                 next_node_id,
             } => RuntimeError::new(
-                "T-RT-000000",
+                "T-CORE-000103",
                 "FlowCompileError",
                 format!(
                     "Node {} points to missing next node {}",
@@ -57,7 +57,7 @@ impl CompileError {
                 node_id,
                 parameter_index,
             } => RuntimeError::new(
-                "T-RT-000000",
+                "T-CORE-000104",
                 "FlowCompileError",
                 format!(
                     "Node {} parameter {} does not contain a value",

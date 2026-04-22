@@ -17,7 +17,7 @@ use tucana::shared::{NumberValue as ProtoNumberValue, Struct, Value, number_valu
 /// Runtime execution failure representation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeError {
-    /// Three-part error code (example: `T-STD-000123`).
+    /// Three-part error code (examples: `T-STD-00001`, `T-CORE-000001`).
     pub code: String,
     /// Logical category of the error (example: `InvalidArgument`).
     pub category: String,
@@ -144,7 +144,7 @@ impl RuntimeError {
 
 impl Default for RuntimeError {
     fn default() -> Self {
-        Self::new("T-RT-000000", "RuntimeError", "Unknown runtime error")
+        Self::new("T-CORE-999999", "RuntimeError", "Unknown runtime error")
     }
 }
 

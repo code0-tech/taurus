@@ -51,7 +51,7 @@ fn r#if(
     ] = args
     else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             format!("Expected a bool value but received {:?}", args),
         ));
@@ -82,7 +82,7 @@ fn if_else(
     ] = args
     else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             format!("Expected a bool value but received {:?}", args),
         ));

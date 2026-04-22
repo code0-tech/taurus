@@ -106,7 +106,7 @@ impl From<Error> for RuntimeError {
         match value {
             Error::Configuration { message, details } => {
                 let mut err = RuntimeError::with_code(
-                    "T-APP-000001".to_string(),
+                    "T-CORE-000301".to_string(),
                     "Configuration".to_string(),
                     message,
                 );
@@ -115,7 +115,7 @@ impl From<Error> for RuntimeError {
             }
             Error::State { message, details } => {
                 let mut err = RuntimeError::with_code(
-                    "T-APP-000002".to_string(),
+                    "T-CORE-000302".to_string(),
                     "State".to_string(),
                     message,
                 );
@@ -128,7 +128,7 @@ impl From<Error> for RuntimeError {
                 details,
             } => {
                 let mut err = RuntimeError::with_code(
-                    "T-APP-000003".to_string(),
+                    "T-CORE-000303".to_string(),
                     "Transport".to_string(),
                     message,
                 )
@@ -147,7 +147,7 @@ impl From<Error> for RuntimeError {
                 details,
             } => {
                 let mut err = RuntimeError::with_code(
-                    "T-APP-000004".to_string(),
+                    "T-CORE-000304".to_string(),
                     "Serialization".to_string(),
                     message,
                 )
@@ -162,7 +162,7 @@ impl From<Error> for RuntimeError {
             }
             Error::Internal { message, details } => {
                 let mut err = RuntimeError::with_code(
-                    "T-APP-999999".to_string(),
+                    "T-CORE-000399".to_string(),
                     "Internal".to_string(),
                     message,
                 );
@@ -209,7 +209,7 @@ mod tests {
 
         let runtime_error: RuntimeError = app_err.into();
 
-        assert_eq!(runtime_error.code, "T-APP-000003");
+        assert_eq!(runtime_error.code, "T-CORE-000303");
         assert_eq!(runtime_error.category, "Transport");
         assert_eq!(runtime_error.message, "connection lost");
         assert!(runtime_error.details.contains_key("dependency"));

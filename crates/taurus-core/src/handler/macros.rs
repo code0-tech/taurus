@@ -1,14 +1,14 @@
 //! Handler argument parsing macros.
 
 /// Pulls typed parameters from a slice of `Argument` using your `TryFromArgument`
-/// impls. Fails early with your `Signal::Failure(RuntimeError::new("T-RT-000000", ...))`.
+/// impls. Fails early with your `Signal::Failure(RuntimeError::new("T-CORE-000201", ...))`.
 macro_rules! args {
     ($args_ident:ident => $( $name:ident : $ty:ty ),+ $(,)?) => {
         // Arity check
         let __expected: usize = 0usize $(+ { let _ = ::core::any::type_name::<$ty>(); 1usize })*;
         if $args_ident.len() != __expected {
             return $crate::types::signal::Signal::Failure(
-                $crate::types::errors::runtime_error::RuntimeError::new("T-RT-000000",
+                $crate::types::errors::runtime_error::RuntimeError::new("T-CORE-000201",
                     "InvalidArgumentRuntimeError",
                     format!("Expected {__expected} args but received {}", $args_ident.len()),
                 )
@@ -43,7 +43,7 @@ macro_rules! no_args {
         if !$args_ident.is_empty() {
             return $crate::types::signal::Signal::Failure(
                 $crate::types::errors::runtime_error::RuntimeError::new(
-                    "T-RT-000000",
+                    "T-CORE-000201",
                     "InvalidArgumentRuntimeError",
                     format!("Expected 0 args but received {}", $args_ident.len()),
                 ),

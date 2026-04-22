@@ -138,7 +138,7 @@ impl<'a> EngineExecutor<'a> {
             Some(idx) => self.execute_from_index(idx, value_store),
             None => ExecutionResult {
                 signal: Signal::Failure(RuntimeError::new(
-                    "T-ENG-000001",
+                    "T-CORE-000001",
                     "NodeNotFound",
                     format!("Node {} not found", node_id),
                 )),
@@ -178,7 +178,7 @@ impl<'a> EngineExecutor<'a> {
             Some(entry) => entry,
             None => {
                 return Signal::Failure(RuntimeError::new(
-                    "T-ENG-000002",
+                    "T-CORE-000002",
                     "FunctionNotFound",
                     format!("Function {} not found", node.handler_id),
                 ));
@@ -223,7 +223,7 @@ impl<'a> EngineExecutor<'a> {
             Some(remote) => remote,
             None => {
                 return Signal::Failure(RuntimeError::new(
-                    "T-ENG-000003",
+                    "T-CORE-000003",
                     "RemoteRuntimeNotConfigured",
                     "Remote runtime not configured",
                 ));
@@ -376,7 +376,7 @@ impl<'a> EngineExecutor<'a> {
                             },
                         );
                         return Err(RuntimeError::new(
-                            "T-ENG-000004",
+                            "T-CORE-000004",
                             "ReferenceValueNotFound",
                             "Reference not found in execution value store",
                         ));
@@ -485,7 +485,7 @@ impl<'a> EngineExecutor<'a> {
     ) -> Result<ExecutionRequest, RuntimeError> {
         if node.parameters.len() != values.len() {
             return Err(RuntimeError::new(
-                "T-ENG-000005",
+                "T-CORE-000005",
                 "RemoteParameterMismatch",
                 "Remote parameter count mismatch",
             ));

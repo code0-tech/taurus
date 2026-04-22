@@ -30,7 +30,7 @@ pub trait TryFromArgument: Sized {
 
 fn type_err(msg: &str, a: &Argument) -> Signal {
     Signal::Failure(RuntimeError::new(
-        "T-RT-000000",
+        "T-CORE-000202",
         "InvalidArgumentRuntimeError",
         format!("{} but it was the arugment: {:?}", msg, a),
     ))
@@ -118,7 +118,7 @@ impl TryFromArgument for ListValue {
                 kind: Some(Kind::ListValue(list)),
             }) => Ok(list.clone()),
             _ => Err(Signal::Failure(RuntimeError::new(
-                "T-RT-000000",
+                "T-CORE-000202",
                 "InvalidArgumentRuntimeError",
                 format!("Expected array (ListValue) but it was: {:?}", a),
             ))),

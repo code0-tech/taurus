@@ -66,7 +66,7 @@ fn from_text(
             kind: Some(Kind::BoolValue(b)),
         }),
         Err(_) => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             format!("Failed to parse boolean from string: {:?}", text),
         )),

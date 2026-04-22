@@ -19,7 +19,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
 ];
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {
-    Signal::Failure(RuntimeError::new("T-HTTP-000000", category, message))
+    Signal::Failure(RuntimeError::new("T-STD-00001", category, message))
 }
 
 fn respond(
@@ -33,7 +33,7 @@ fn respond(
 
     let Some(headers_val) = fields.get("headers") else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Missing 'headers' field".to_string(),
         ));
@@ -48,7 +48,7 @@ fn respond(
 
     let Some(payload_val) = fields.get("payload") else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Missing 'payload' field".to_string(),
         ));
@@ -63,7 +63,7 @@ fn respond(
 
     let Some(Kind::NumberValue(_status_code_str)) = &status_code_val.kind else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected 'status_code' to be NumberValue".to_string(),
         ));
@@ -71,7 +71,7 @@ fn respond(
 
     let Some(_payload_kind) = &payload_val.kind else {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected 'payload' to have a value".to_string(),
         ));

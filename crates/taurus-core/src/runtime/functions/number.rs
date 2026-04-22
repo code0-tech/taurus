@@ -20,7 +20,7 @@ fn num_f64(n: &NumberValue) -> Result<f64, Signal> {
     // Centralized conversion keeps all numeric argument failures consistent.
     number_to_f64(n).ok_or_else(|| {
         Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             "Expected number",
         ))
@@ -83,7 +83,7 @@ fn has_digits(
             number_value::Number::Float(_) => Signal::Success(true.to_value()),
         },
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvlaidArgumentExeption",
             "Had NumberValue but no inner number value (was null)",
         )),
@@ -99,7 +99,7 @@ fn remove_digits(
     match number_to_i64_lossy(&value) {
         Some(number) => Signal::Success(value_from_i64(number)),
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvlaidArgumentExeption",
             "Had NumberValue but no inner number value (was null)",
         )),
@@ -190,7 +190,7 @@ fn divide(
 
     if rhs_f == 0.0 {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "DivisionByZero",
             "You cannot divide by zero",
         ));
@@ -225,7 +225,7 @@ fn modulo(
 
     if rhs_f == 0.0 {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "DivisionByZero",
             "You cannot divide by zero",
         ));
@@ -550,7 +550,7 @@ fn from_text(
     match string_value.parse::<f64>() {
         Ok(v) => Signal::Success(value_from_f64(v)),
         Err(_) => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidArgumentRuntimeError",
             format!("Failed to parse string as number: {}", string_value),
         )),
@@ -652,7 +652,7 @@ fn random(
 
     if min_f > max_f {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "InvalidRange",
             "First number can't be bigger then second when creating a range for std::math::random",
         ));

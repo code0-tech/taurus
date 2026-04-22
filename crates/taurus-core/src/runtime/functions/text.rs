@@ -50,7 +50,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
 
 fn arg_err<S: Into<String>>(msg: S) -> Signal {
     Signal::Failure(RuntimeError::new(
-        "T-RT-000000",
+        "T-STD-00001",
         "InvalidArgumentRuntimeError",
         msg.into(),
     ))
@@ -208,7 +208,7 @@ fn at(
             kind: Some(Kind::StringValue(c.to_string())),
         }),
         None => Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "IndexOutOfBoundsRuntimeError",
             format!(
                 "Index {} is out of bounds for string of length {}",
@@ -260,7 +260,7 @@ fn insert(
     // Byte-wise position is kept intentionally to match existing flow behavior.
     if pos > value.len() {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "IndexOutOfBoundsRuntimeError",
             format!("Position {} exceeds byte length {}", pos, value.len()),
         ));
@@ -308,7 +308,7 @@ fn remove(
     let chars = value.chars().collect::<Vec<char>>();
     if from_u > chars.len() || to_u > chars.len() {
         return Signal::Failure(RuntimeError::new(
-            "T-RT-000000",
+            "T-STD-00001",
             "IndexOutOfBoundsRuntimeError",
             format!(
                 "Indices [{}, {}) out of bounds for length {}",
@@ -575,7 +575,7 @@ fn decode(
                 Ok(s) => s,
                 Err(err) => {
                     return Signal::Failure(RuntimeError::new(
-                        "T-RT-000000",
+                        "T-STD-00001",
                         "DecodeError",
                         format!("Failed to decode base64 bytes to UTF-8: {:?}", err),
                     ));
@@ -583,7 +583,7 @@ fn decode(
             },
             Err(err) => {
                 return Signal::Failure(RuntimeError::new(
-                    "T-RT-000000",
+                    "T-STD-00001",
                     "DecodeError",
                     format!("Failed to decode base64 string: {:?}", err),
                 ));

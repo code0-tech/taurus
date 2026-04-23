@@ -1,0 +1,234 @@
+{
+	"name": "07_simple_return",
+	"description": "This Flow tries to test the control flow function `return`",
+	"inputs": [
+		{
+			"input": {
+				"http_method": "GET",
+				"headers": {
+					"Content-Type": "text/plain"
+				},
+				"payload": {
+					"user": {
+						"age": 42,
+						"email": "joe@text.com",
+						"username": "joe doe"
+					}
+				}
+			},
+			"expected_result": {
+				"http_status_code": 200,
+				"headers": {},
+				"payload": [null, null, "username"]
+			}
+		}
+	],
+	"flow": {
+		"flowId": "4",
+		"projectId": "1",
+		"type": "REST",
+		"settings": [
+			{
+				"databaseId": "10",
+				"flowSettingId": "httpURL",
+				"value": {
+					"stringValue": "/test4"
+				}
+			},
+			{
+				"databaseId": "11",
+				"flowSettingId": "httpMethod",
+				"value": {
+					"stringValue": "POST"
+				}
+			}
+		],
+		"startingNodeId": "11",
+		"nodeFunctions": [
+			{
+				"databaseId": "11",
+				"runtimeFunctionId": "std::object::keys",
+				"parameters": [
+					{
+						"databaseId": "21",
+						"runtimeParameterId": "object",
+						"value": {
+							"referenceValue": {
+								"paths": [
+									{
+										"path": "payload"
+									},
+									{
+										"path": "user"
+									}
+								],
+								"flowInput": {}
+							}
+						}
+					}
+				],
+				"nextNodeId": "9"
+			},
+			{
+				"databaseId": "9",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "22",
+						"runtimeParameterId": "list",
+						"value": {
+							"referenceValue": {
+								"nodeId": "11"
+							}
+						}
+					},
+					{
+						"databaseId": "31",
+						"runtimeParameterId": "transform",
+						"value": {
+							"nodeFunctionId": "10"
+						}
+					}
+				],
+				"nextNodeId": "8"
+			},
+			{
+				"databaseId": "10",
+				"runtimeFunctionId": "std::text::is_equal",
+				"parameters": [
+					{
+						"databaseId": "19",
+						"runtimeParameterId": "first",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "9",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "34",
+						"runtimeParameterId": "second",
+						"value": {
+							"literalValue": {
+								"stringValue": "username"
+							}
+						}
+					}
+				],
+				"nextNodeId": "14"
+			},
+			{
+				"databaseId": "14",
+				"runtimeFunctionId": "std::control::if",
+				"parameters": [
+					{
+						"databaseId": "28",
+						"runtimeParameterId": "condition",
+						"value": {
+							"referenceValue": {
+								"nodeId": "10"
+							}
+						}
+					},
+					{
+						"databaseId": "35",
+						"runtimeParameterId": "runnable",
+						"value": {
+							"nodeFunctionId": "7"
+						}
+					}
+				],
+				"nextNodeId": "12"
+			},
+			{
+				"databaseId": "7",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "15",
+						"runtimeParameterId": "value",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "9",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "12",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "24",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"nullValue": "NULL_VALUE"
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "13",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "25",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "8"
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "8",
+				"runtimeFunctionId": "http::response::create",
+				"parameters": [
+					{
+						"databaseId": "16",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "36",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {}
+							}
+						}
+					},
+					{
+						"databaseId": "37",
+						"runtimeParameterId": "payload",
+						"value": {
+							"referenceValue": {
+								"nodeId": "9"
+							}
+						}
+					}
+				],
+				"nextNodeId": "13"
+			}
+		],
+		"projectSlug": "codezero-project",
+		"signature": "(httpURL: HTTP_URL, httpMethod: HTTP_METHOD): { payload: { user: { username: TEXT, email: TEXT } }, headers: I }"
+	}
+}

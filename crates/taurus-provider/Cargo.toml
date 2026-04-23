@@ -1,5 +1,5 @@
 [package]
-name = "taurus"
+name = "taurus-provider"
 version.workspace = true
 edition.workspace = true
 
@@ -8,7 +8,7 @@ code0-flow = { workspace = true, features = ["flow_service"] }
 tucana = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
-futures-lite ={ workspace = true }
+futures-lite = { workspace = true }
 rand = { workspace = true }
 base64 = { workspace = true }
 env_logger = { workspace = true }
@@ -17,4 +17,3 @@ prost = { workspace = true }
 tonic-health = { workspace = true }
 tonic = { workspace = true }
 taurus-core = { workspace = true }
-taurus-provider = { workspace = true }

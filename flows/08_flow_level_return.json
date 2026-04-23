@@ -1,0 +1,48 @@
+{
+	"name": "08_flow_level_return",
+	"description": "Checks if return on a Root level will return the flow",
+	"inputs": [
+		{
+			"input": "Test",
+			"expected_result": "Test"
+		}
+	],
+	"flow": {
+		"flowId": "4",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"databaseId": "1",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "21",
+						"runtimeParameterId": "object",
+						"value": {
+							"literalValue": {
+								"stringValue": "Test"
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "21",
+						"runtimeParameterId": "object",
+						"value": {
+							"literalValue": {
+								"nullValue": "NULL_VALUE"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

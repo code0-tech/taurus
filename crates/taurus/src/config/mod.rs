@@ -1,15 +1,8 @@
 use code0_flow::flow_config::env_with_default;
-use code0_flow::flow_config::environment::Environment;
 use code0_flow::flow_config::mode::Mode;
 
 /// Struct for all relevant `Taurus` startup configurations
 pub struct Config {
-    /// Options:
-    /// `development` (default)
-    /// `staging`
-    /// `production`
-    pub environment: Environment,
-
     /// Aquila mode
     ///
     /// Options:
@@ -39,7 +32,6 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         Config {
-            environment: env_with_default("ENVIRONMENT", Environment::Development),
             mode: env_with_default("MODE", Mode::DYNAMIC),
             nats_url: env_with_default("NATS_URL", String::from("nats://localhost:4222")),
             aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:50051")),

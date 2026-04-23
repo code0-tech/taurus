@@ -1,6 +1,6 @@
 {
 	"name": "05_if_control",
-	"description": "This flow expects an object as input (from http request) structured payload.test = bool which the flow will return",
+	"description": "This flow expects an object as input (from http request) structured payload.test = bool which the flow will return (remeber: respond does not stop the flow so only the adapter will have `Blub` or `true` but the flow always results into `Blub`)",
 	"inputs": [
 		{
 			"input": {
@@ -46,7 +46,7 @@
 			"expected_result": {
 				"http_status_code": 200,
 				"headers": {},
-				"payload": true
+				"payload": "Blub"
 			}
 		}
 	],

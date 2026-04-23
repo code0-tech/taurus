@@ -289,9 +289,9 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "code0-flow"
-version = "0.0.31"
+version = "0.0.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa74faab97705675a1288230e0861d8a61a5456a4adc81387c8fc0505c11df5c"
+checksum = "bb7d74d62174eb76c90d7c1642a05f20084bb563ec8a1249c0f05bbd7ed03023"
 dependencies = [
  "async-nats",
  "async-trait",

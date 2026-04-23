@@ -13,6 +13,7 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 | Code | Layer | Description | Typical Trigger | Primary Source |
 | --- | --- | --- | --- | --- |
 | `T-STD-00001` | Standard Functions | A standard runtime function failed due to invalid input shape/type, unsupported value semantics, or function-specific runtime constraints. | Wrong argument type, invalid value conversion, out-of-range operation, malformed function input. | `runtime/functions/*` |
+| `T-STD-00002` | Standard Functions | Object key was not present. | Referenced field/key does not exist in the object. | `runtime/functions/object.rs` |
 | `T-CORE-000001` | Engine | Requested node id does not exist in the compiled flow plan. | Thunk/reference points to a node id not present in `CompiledFlow`. | `runtime/engine/executor.rs` |
 | `T-CORE-000002` | Engine | Handler registry has no implementation for the node's runtime function id. | Function id was not registered in `FunctionStore`. | `runtime/engine/executor.rs` |
 | `T-CORE-000003` | Engine | Flow requires remote execution but no remote runtime adapter was configured. | Node execution target is remote while `RemoteRuntime` is `None`. | `runtime/engine/executor.rs` |

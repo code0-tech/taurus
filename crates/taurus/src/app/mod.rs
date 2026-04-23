@@ -6,6 +6,7 @@ use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
 use code0_flow::flow_service::FlowUpdateService;
 use taurus_core::runtime::engine::ExecutionEngine;
+use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::signal;
 use tokio::task::JoinHandle;
@@ -30,7 +31,14 @@ pub async fn run() {
         setup_dynamic_services_if_needed(&config).await;
 
     let nats_remote = NATSRemoteRuntime::new(client.clone());
-    let mut worker_task = worker::spawn_worker(client, engine, nats_remote, runtime_usage_service);
+    let runtime_emitter = NATSRespondEmitter::new(client.clone());
+    let mut worker_task = worker::spawn_worker(
+        client,
+        engine,
+        nats_remote,
+        runtime_emitter,
+        runtime_usage_service,
+    );
 
     wait_for_shutdown(&mut worker_task, &mut health_task).await;
     update_stopped_status(runtime_status_service.as_ref()).await;

@@ -1,5 +1,7 @@
 //! Respond emitter abstraction used by the engine.
 
+use std::fmt::{Display, Formatter};
+
 use tucana::shared::Value;
 use uuid::Uuid;
 
@@ -30,5 +32,18 @@ where
 {
     fn emit(&self, execution_id: ExecutionId, emit_type: EmitType, value: Value) {
         self(execution_id, emit_type, value);
+    }
+}
+
+impl Display for EmitType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            EmitType::StartingExec => "started_execution",
+            EmitType::OngoingExec => "ongoing_execution",
+            EmitType::FinishedExec => "finished_execution",
+            EmitType::FailedExec => "failed_execution",
+        };
+
+        write!(f, "{label}")
     }
 }

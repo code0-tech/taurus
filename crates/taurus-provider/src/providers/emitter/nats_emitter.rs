@@ -10,6 +10,7 @@ const DEFAULT_TOPIC_PREFIX: &str = "runtime.emitter";
 
 pub struct NATSRespondEmitter {
     tx: mpsc::UnboundedSender<NATSEmitMessage>,
+    worker_task: tokio::task::JoinHandle<()>,
 }
 
 struct NATSEmitMessage {
@@ -31,8 +32,12 @@ impl NATSRespondEmitter {
         // This worker serializes outbound lifecycle events to one NATS topic per execution:
         // `<topic_prefix>.<execution_id>`.
         // Event type is embedded in the payload so subscribers do not need four topic bindings.
-        tokio::spawn(async move {
+        let worker_task = tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
+                log::debug!(
+                    "Emitter has been called for Emitter Signal: {}",
+                    message.emit_type
+                );
                 let topic = format!("{}.{}", topic_prefix, message.execution_id);
                 let encoded_payload = encode_emit_message(message.emit_type, message.value);
 
@@ -45,11 +50,25 @@ impl NATSRespondEmitter {
                         topic,
                         err
                     );
+                } else {
+                    log::info!(
+                        "Published runtime emit message on '{}' (type={})",
+                        topic,
+                        emit_type_as_str(message.emit_type)
+                    );
                 }
             }
         });
 
-        Self { tx }
+        Self { tx, worker_task }
+    }
+
+    /// Gracefully stop the emitter worker after all queued messages are published.
+    pub async fn shutdown(self) {
+        drop(self.tx);
+        if let Err(err) = self.worker_task.await {
+            log::error!("NATS emitter worker join failed: {:?}", err);
+        }
     }
 }
 

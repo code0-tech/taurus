@@ -1,18 +1,16 @@
 use std::path::Path;
 
-use async_nats::Client;
-use async_trait::async_trait;
 use clap::{Parser, arg, command};
-use log::{error, info};
-use prost::Message;
+use log::error;
+use log::info;
 use serde::Deserialize;
 use taurus_core::runtime::engine::ExecutionEngine;
-use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
-use taurus_core::types::errors::runtime_error::RuntimeError;
-use tucana::aquila::ExecutionResult;
+use taurus_core::types::signal::Signal;
+use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
+use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
+use tucana::shared::ValidationFlow;
 use tucana::shared::helper::value::from_json_value;
 use tucana::shared::helper::value::to_json_value;
-use tucana::shared::{ValidationFlow, Value};
 
 #[derive(Clone, Deserialize)]
 pub struct Input {
@@ -115,78 +113,6 @@ impl Cases {
         get_test_cases(path)
     }
 }
-pub struct RemoteNatsClient {
-    client: Client,
-}
-
-impl RemoteNatsClient {
-    pub fn new(client: Client) -> Self {
-        RemoteNatsClient { client }
-    }
-}
-
-#[async_trait]
-impl RemoteRuntime for RemoteNatsClient {
-    async fn execute_remote(&self, execution: RemoteExecution) -> Result<Value, RuntimeError> {
-        let topic = format!(
-            "action.{}.{}",
-            execution.target_service, execution.request.execution_identifier
-        );
-        let payload = execution.request.encode_to_vec();
-        let res = self.client.request(topic.clone(), payload.into()).await;
-        log::info!("Publishing to topic: {}", topic);
-        let message = match res {
-            Ok(r) => r,
-            Err(err) => {
-                log::error!(
-                    "RemoteRuntimeExeption: failed to handle NATS message: {}",
-                    err
-                );
-                return Err(RuntimeError::new(
-                    "T-RMT-000001",
-                    "RemoteRuntimeExeption",
-                    "Failed to receive any response messages from a remote runtime.",
-                ));
-            }
-        };
-
-        let decode_result = ExecutionResult::decode(message.payload);
-        let execution_result = match decode_result {
-            Ok(r) => r,
-            Err(err) => {
-                log::error!(
-                    "RemoteRuntimeExeption: failed to decode NATS message: {}",
-                    err
-                );
-                return Err(RuntimeError::new(
-                    "T-RMT-000002",
-                    "RemoteRuntimeExeption",
-                    "Failed to read Remote Response",
-                ));
-            }
-        };
-
-        match execution_result.result {
-            Some(result) => match result {
-                tucana::aquila::execution_result::Result::Success(value) => Ok(value),
-                tucana::aquila::execution_result::Result::Error(err) => {
-                    let code = err.code.to_string();
-                    let description = match err.description {
-                        Some(string) => string,
-                        None => "Unknown Error".to_string(),
-                    };
-                    let error = RuntimeError::new(code, "RemoteExecutionError", description);
-                    Err(error)
-                }
-            },
-            None => Err(RuntimeError::new(
-                "T-RMT-000003",
-                "RemoteRuntimeExeption",
-                "Result of Remote Response was empty.",
-            )),
-        }
-    }
-}
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about)]
@@ -233,35 +159,37 @@ async fn main() {
             panic!("Failed to connect to NATS server: {}", err);
         }
     };
-    let remote = RemoteNatsClient::new(client);
+    let remote = NATSRemoteRuntime::new(client.clone());
+    let emitter = NATSRespondEmitter::new(client);
     let engine = ExecutionEngine::new();
     let (result, _) = engine.execute_graph(
         case.flow.starting_node_id,
         case.flow.node_functions.clone(),
         flow_input,
         Some(&remote),
-        None,
-        true,
+        Some(&emitter),
+        false,
     );
+    emitter.shutdown().await;
 
     match result {
-        taurus_core::types::signal::Signal::Success(value) => {
+        Signal::Success(value) => {
             let json = to_json_value(value);
             let pretty = serde_json::to_string_pretty(&json).unwrap();
             println!("{}", pretty);
         }
-        taurus_core::types::signal::Signal::Return(value) => {
+        Signal::Return(value) => {
             let json = to_json_value(value);
             let pretty = serde_json::to_string_pretty(&json).unwrap();
             println!("{}", pretty);
         }
-        taurus_core::types::signal::Signal::Respond(value) => {
+        Signal::Respond(value) => {
             let json = to_json_value(value);
             let pretty = serde_json::to_string_pretty(&json).unwrap();
             println!("{}", pretty);
         }
-        taurus_core::types::signal::Signal::Stop => println!("Received Stop signal"),
-        taurus_core::types::signal::Signal::Failure(runtime_error) => {
+        Signal::Stop => println!("Received Stop signal"),
+        Signal::Failure(runtime_error) => {
             println!("RuntimeError: {:?}", runtime_error);
         }
     }

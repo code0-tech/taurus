@@ -1,11 +1,12 @@
 # Taurus Runtime Error Codes
 
-This document is the canonical catalog for runtime error codes emitted by `taurus-core`.
+This document is the canonical catalog for runtime error codes emitted by Taurus runtime crates (`taurus-core` and `taurus-provider`).
 
 ## Code Format
 
 - `T-STD-XXXXX`: Errors originating inside standard function implementations under `runtime/functions/*`.
 - `T-CORE-XXXXXX`: Errors originating from core runtime infrastructure (`engine`, `handler`, type conversion, app-layer mapping).
+- `T-PROV-XXXXXX`: Errors originating from provider integrations (transport adapters, remote runtime connectors).
 
 ## Code Table
 
@@ -29,3 +30,10 @@ This document is the canonical catalog for runtime error codes emitted by `tauru
 | `T-CORE-000304` | App Error Mapping | Serialization/deserialization failure mapped into runtime error format. | Encoding/decoding/parsing failure surfaced as `Error::Serialization`. | `types/errors/error.rs` |
 | `T-CORE-000399` | App Error Mapping | Internal application failure mapped into runtime error format. | Catch-all non-domain internal failure surfaced as `Error::Internal`. | `types/errors/error.rs` |
 | `T-CORE-999999` | Runtime Error Fallback | Default fallback runtime error code when no explicit mapping is provided. | `RuntimeError::default()` used as defensive fallback. | `types/errors/runtime_error.rs` |
+| `T-PROV-000001` | Provider Remote Runtime | Remote request to NATS did not yield a valid response message. | NATS request failed or timed out while waiting for remote runtime answer. | `taurus-provider/providers/remote/nats_remote_runtime.rs` |
+| `T-PROV-000002` | Provider Remote Runtime | Remote runtime response could not be decoded into expected protobuf structure. | Received payload is malformed, truncated, or schema-incompatible for `ExecutionResult`. | `taurus-provider/providers/remote/nats_remote_runtime.rs` |
+| `T-PROV-000003` | Provider Remote Runtime | Remote runtime response decoded, but contained no concrete result field. | `ExecutionResult` exists but `result` is `None` (protocol contract violation). | `taurus-provider/providers/remote/nats_remote_runtime.rs` |
+
+## Provider Note
+
+`taurus-provider` can also forward remote service errors with service-owned codes (for example codes returned inside Aquila `ExecutionResult::Error`). Those are intentionally preserved instead of remapped, so they are not enumerated as static Taurus provider codes here.

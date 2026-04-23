@@ -51,7 +51,26 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        self.execute_graph(
+        self.execute_flow_with_execution_id(
+            ExecutionId::new_v4(),
+            flow,
+            remote,
+            respond_emitter,
+            with_trace,
+        )
+    }
+
+    /// Execute an `ExecutionFlow` with a caller-provided execution id.
+    pub fn execute_flow_with_execution_id(
+        &self,
+        execution_id: ExecutionId,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> (Signal, ExitReason) {
+        self.execute_graph_with_execution_id(
+            execution_id,
             flow.starting_node_id,
             flow.node_functions,
             flow.input_value,
@@ -71,8 +90,28 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        let execution_id = ExecutionId::new_v4();
+        self.execute_graph_with_execution_id(
+            ExecutionId::new_v4(),
+            start_node_id,
+            node_functions,
+            flow_input,
+            remote,
+            respond_emitter,
+            with_trace,
+        )
+    }
 
+    /// Execute a graph described by node list and start node with a caller-provided execution id.
+    pub fn execute_graph_with_execution_id(
+        &self,
+        execution_id: ExecutionId,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> (Signal, ExitReason) {
         if let Some(emitter) = respond_emitter {
             emitter.emit(execution_id, EmitType::StartingExec, null_value());
         }

@@ -1001,7 +1001,6 @@ name = "manual"
 version = "0.1.0"
 dependencies = [
  "async-nats",
- "async-trait",
  "clap",
  "env_logger",
  "log",
@@ -1009,6 +1008,7 @@ dependencies = [
  "serde",
  "serde_json",
  "taurus-core",
+ "taurus-provider",
  "tokio",
  "tonic",
  "tucana",

@@ -1,0 +1,398 @@
+{
+	"name": "10_multiple_respond",
+	"description": "This flow checks if the emitter is working correctly, only works with taurus-manual",
+	"inputs": [
+		{
+			"input": {
+				"http_method": "GET",
+				"headers": {
+					"Content-Type": "text/plain"
+				},
+				"payload": {
+					"users": [
+						{
+							"age": 22,
+							"email": "joe@text.com",
+							"name": "joe doe"
+						},
+						{
+							"age": 56,
+							"email": "tom@text.com",
+							"name": "timmy doe"
+						},
+						{
+							"age": 88,
+							"email": "willy@text.com",
+							"name": "willy wokner"
+						},
+						{
+							"age": 12,
+							"email": "jeffy@text.com",
+							"name": "jeff jefferson"
+						}
+					]
+				}
+			},
+			"expected_result": {
+				"headers": {
+					"x": "y"
+				},
+				"http_status_code": 200,
+				"payload": [
+					"timmy doe",
+					"willy wokner"
+				]
+			}
+		},
+		{
+			"input": {
+				"http_method": "GET",
+				"headers": {
+					"Content-Type": "text/plain"
+				},
+				"payload": null
+			},
+			"expected_result": {
+				"headers": {
+					"x": "y"
+				},
+				"http_status_code": 200,
+				"payload": []
+			}
+		}
+	],
+	"flow": {
+		"flowId": "1",
+		"projectId": "1",
+		"type": "REST",
+		"settings": [
+			{
+				"databaseId": "1",
+				"flowSettingId": "httpURL",
+				"value": {
+					"stringValue": "/10"
+				}
+			},
+			{
+				"databaseId": "2",
+				"flowSettingId": "httpMethod",
+				"value": {
+					"stringValue": "POST"
+				}
+			}
+		],
+		"startingNodeId": "7",
+		"nodeFunctions": [
+			{
+				"databaseId": "7",
+				"runtimeFunctionId": "std::list::filter",
+				"parameters": [
+					{
+						"databaseId": "14",
+						"runtimeParameterId": "list",
+						"value": {
+							"referenceValue": {
+								"paths": [
+									{
+										"path": "payload"
+									},
+									{
+										"path": "users"
+									}
+								],
+								"flowInput": {}
+							}
+						}
+					},
+					{
+						"databaseId": "15",
+						"runtimeParameterId": "predicate",
+						"value": {
+							"nodeFunctionId": "8"
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"databaseId": "8",
+				"runtimeFunctionId": "std::number::is_greater",
+				"parameters": [
+					{
+						"databaseId": "16",
+						"runtimeParameterId": "first",
+						"value": {
+							"referenceValue": {
+								"paths": [
+									{
+										"path": "age"
+									}
+								],
+								"inputType": {
+									"nodeId": "7",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "20",
+						"runtimeParameterId": "second",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "35"
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "9"
+			},
+			{
+				"databaseId": "9",
+				"runtimeFunctionId": "std::control::if_else",
+				"parameters": [
+					{
+						"databaseId": "17",
+						"runtimeParameterId": "condition",
+						"value": {
+							"referenceValue": {
+								"nodeId": "8"
+							}
+						}
+					},
+					{
+						"databaseId": "21",
+						"runtimeParameterId": "runnable",
+						"value": {
+							"nodeFunctionId": "1"
+						}
+					},
+					{
+						"databaseId": "22",
+						"runtimeParameterId": "else_runnable",
+						"value": {
+							"nodeFunctionId": "3"
+						}
+					}
+				],
+				"nextNodeId": "5"
+			},
+			{
+				"databaseId": "1",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "1",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"boolValue": true
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "3",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "6",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"boolValue": false
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "5",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "10",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"boolValue": true
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::list::size",
+				"parameters": [
+					{
+						"databaseId": "3",
+						"runtimeParameterId": "list",
+						"value": {
+							"referenceValue": {
+								"nodeId": "7"
+							}
+						}
+					}
+				],
+				"nextNodeId": "10"
+			},
+			{
+				"databaseId": "6",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "13",
+						"runtimeParameterId": "value",
+						"value": {
+							"referenceValue": {
+								"paths": [
+									{
+										"path": "name"
+									}
+								],
+								"inputType": {
+									"nodeId": "10",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "10",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "23",
+						"runtimeParameterId": "list",
+						"value": {
+							"referenceValue": {
+								"nodeId": "7"
+							}
+						}
+					},
+					{
+						"databaseId": "24",
+						"runtimeParameterId": "transform",
+						"value": {
+							"nodeFunctionId": "6"
+						}
+					}
+				],
+				"nextNodeId": "11"
+			},
+			{
+				"databaseId": "11",
+				"runtimeFunctionId": "http::response::create",
+				"parameters": [
+					{
+						"databaseId": "27",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "30",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"x": {
+											"stringValue": "y"
+										}
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "31",
+						"runtimeParameterId": "payload",
+						"value": {
+							"referenceValue": {
+								"nodeId": "10"
+							}
+						}
+					}
+				],
+				"nextNodeId": "4"
+			},
+			{
+				"databaseId": "4",
+				"nextNodeId": "20",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "8",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "11"
+							}
+						}
+					}
+				]
+			},
+			{
+				"nextNodeId": "21",
+				"databaseId": "20",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "8",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "11"
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "21",
+				"nextNodeId": "22",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "8",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "11"
+							}
+						}
+					}
+				]
+			},
+			{
+				"databaseId": "22",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "8",
+						"runtimeParameterId": "http_response",
+						"value": {
+							"referenceValue": {
+								"nodeId": "11"
+							}
+						}
+					}
+				]
+			}
+		],
+		"projectSlug": "project",
+		"signature": "(httpURL: HTTP_URL, httpMethod: HTTP_METHOD): { payload: { users: { name: TEXT, email: TEXT, age: NUMBER }[] }, headers: I }"
+	}
+}

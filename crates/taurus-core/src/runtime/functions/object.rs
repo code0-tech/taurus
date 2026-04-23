@@ -29,8 +29,8 @@ fn get(
         Some(v) => Signal::Success(v.clone()),
         None => Signal::Failure(RuntimeError::new(
             "T-STD-00002",
-            "InvalidArgumentRuntimeError",
-            "Expected number",
+            "KeyNotFoundRuntimeError",
+            format!("Object field not found: {}", key),
         )),
     }
 }

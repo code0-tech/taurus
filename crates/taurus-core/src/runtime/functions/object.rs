@@ -8,6 +8,7 @@ use crate::handler::argument::Argument;
 use crate::handler::macros::args;
 use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
+use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::value_from_i64;
 
@@ -16,7 +17,23 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
     FunctionRegistration::eager("std::object::keys", keys, 1),
     FunctionRegistration::eager("std::object::size", size, 1),
     FunctionRegistration::eager("std::object::set", set, 3),
+    FunctionRegistration::eager("std::object::get", get, 3),
 ];
+fn get(
+    args: &[Argument],
+    _ctx: &mut ValueStore,
+    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+) -> Signal {
+    args!(args => object: Struct, key: String);
+    match object.fields.get(&key) {
+        Some(v) => Signal::Success(v.clone()),
+        None => Signal::Failure(RuntimeError::new(
+            "T-STD-00002",
+            "InvalidArgumentRuntimeError",
+            "Expected number",
+        )),
+    }
+}
 
 fn contains_key(
     args: &[Argument],
@@ -411,5 +428,66 @@ mod tests {
         // ensure original (captured clone) unchanged
         assert_eq!(orig_clone.fields.len(), original_len);
         assert!(!orig_clone.fields.contains_key("new_key"));
+    }
+
+    #[test]
+    fn test_get_success_string_field() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+        let args = vec![a_struct(s_test()), a_string("name")];
+
+        let signal = get(&args, &mut ctx, &mut run);
+        let v = match signal {
+            Signal::Success(v) => v,
+            s => panic!("Expected Success, got {:?}", s),
+        };
+
+        match v.kind {
+            Some(Kind::StringValue(s)) => assert_eq!(s, "John"),
+            _ => panic!("Expected StringValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_success_nested_struct_field() {
+        let mut ctx = ValueStore::default();
+        let nested = {
+            let mut nf = HashMap::new();
+            nf.insert("street".to_string(), v_string("123 Main St"));
+            v_struct(nf)
+        };
+        let object = s_from(vec![("address", nested)]);
+        let mut run = dummy_run;
+        let args = vec![a_struct(object), a_string("address")];
+
+        let signal = get(&args, &mut ctx, &mut run);
+        let v = match signal {
+            Signal::Success(v) => v,
+            s => panic!("Expected Success, got {:?}", s),
+        };
+
+        match v.kind {
+            Some(Kind::StructValue(st)) => match st.fields.get("street") {
+                Some(Value {
+                    kind: Some(Kind::StringValue(s)),
+                    ..
+                }) => assert_eq!(s, "123 Main St"),
+                _ => panic!("Expected nested 'street' string"),
+            },
+            _ => panic!("Expected StructValue"),
+        }
+    }
+
+    #[test]
+    fn test_get_missing_field_returns_field_not_present() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+        let args = vec![a_struct(s_test()), a_string("email")];
+
+        let signal = get(&args, &mut ctx, &mut run);
+        let _ = match signal {
+            Signal::Failure(err) => err,
+            s => panic!("Expected Failure, got {:?}", s),
+        };
     }
 }

@@ -1771,6 +1771,7 @@ dependencies = [
  "prost",
  "rand 0.10.1",
  "taurus-core",
+ "taurus-provider",
  "tokio",
  "tonic",
  "tonic-health",
@@ -1788,6 +1789,25 @@ dependencies = [
  "rand 0.10.1",
  "tucana",
  "uuid",
+]
+
+[[package]]
+name = "taurus-provider"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "base64",
+ "code0-flow",
+ "env_logger",
+ "futures-lite",
+ "log",
+ "prost",
+ "rand 0.10.1",
+ "taurus-core",
+ "tokio",
+ "tonic",
+ "tonic-health",
+ "tucana",
 ]
 
 [[package]]

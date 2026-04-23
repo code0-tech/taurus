@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/taurus-core", "crates/taurus-manual", "crates/taurus", "crates/taurus-tests"]
+members = [ "crates/taurus-core", "crates/taurus-manual", "crates/taurus", "crates/taurus-tests", "crates/taurus-provider"]
 resolver = "3"
 
 [workspace.package]
@@ -26,4 +26,7 @@ uuid =  { version = "1.23.0", features = ["v4"] }
 
 [workspace.dependencies.taurus-core]
 path = "./crates/taurus-core"
+
+[workspace.dependencies.taurus-provider]
+path = "./crates/taurus-provider"
 

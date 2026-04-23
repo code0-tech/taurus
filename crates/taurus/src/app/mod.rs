@@ -129,12 +129,13 @@ async fn setup_dynamic_services_if_needed(
 }
 
 async fn push_definitions_until_success(config: &Config) {
-    let definition_service = FlowUpdateService::from_url(
+    let mut definition_service = FlowUpdateService::from_url(
         config.aquila_url.clone(),
         config.definitions.as_str(),
         config.aquila_token.clone(),
     )
-    .await;
+    .await
+    .with_definition_source(String::from("taurus"));
 
     let mut retry_count = 1;
     loop {

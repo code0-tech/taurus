@@ -16,7 +16,7 @@ use crate::runtime::remote::RemoteRuntime;
 use crate::types::exit_reason::ExitReason;
 use crate::types::signal::Signal;
 use compiler::compile_flow;
-pub use emitter::{EmitType, RespondEmitter};
+pub use emitter::{EmitType, ExecutionId, RespondEmitter};
 
 fn null_value() -> Value {
     Value {
@@ -71,8 +71,10 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
+        let execution_id = ExecutionId::new_v4();
+
         if let Some(emitter) = respond_emitter {
-            emitter.emit(EmitType::StartingExec, null_value());
+            emitter.emit(execution_id, EmitType::StartingExec, null_value());
         }
 
         let mut value_store = match flow_input {
@@ -85,7 +87,7 @@ impl ExecutionEngine {
             Err(err) => {
                 let runtime_error = err.as_runtime_error();
                 if let Some(emitter) = respond_emitter {
-                    emitter.emit(EmitType::FailedExec, runtime_error.as_value());
+                    emitter.emit(execution_id, EmitType::FailedExec, runtime_error.as_value());
                 }
                 let signal = Signal::Failure(runtime_error);
                 return (signal, ExitReason::Failure);
@@ -97,6 +99,7 @@ impl ExecutionEngine {
             &self.handlers,
             &mut value_store,
             remote,
+            execution_id,
             respond_emitter,
             with_trace,
         );
@@ -108,11 +111,13 @@ impl ExecutionEngine {
         }
         if let Some(emitter) = respond_emitter {
             match &signal {
-                Signal::Failure(err) => emitter.emit(EmitType::FailedExec, err.as_value()),
-                Signal::Success(value) | Signal::Return(value) | Signal::Respond(value) => {
-                    emitter.emit(EmitType::FinishedExec, value.clone())
+                Signal::Failure(err) => {
+                    emitter.emit(execution_id, EmitType::FailedExec, err.as_value())
                 }
-                Signal::Stop => emitter.emit(EmitType::FinishedExec, null_value()),
+                Signal::Success(value) | Signal::Return(value) | Signal::Respond(value) => {
+                    emitter.emit(execution_id, EmitType::FinishedExec, value.clone())
+                }
+                Signal::Stop => emitter.emit(execution_id, EmitType::FinishedExec, null_value()),
             }
         }
         let exit_reason = signal.exit_reason();
@@ -386,7 +391,7 @@ mod tests {
     fn emitter_emits_start_and_finish_for_successful_execution() {
         let engine = ExecutionEngine::new();
         let events = RefCell::new(Vec::<EmitType>::new());
-        let emitter = |emit_type: EmitType, _value: Value| {
+        let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
             events.borrow_mut().push(emit_type);
         };
 
@@ -413,7 +418,7 @@ mod tests {
     fn emitter_emits_ongoing_for_intermediate_respond() {
         let engine = ExecutionEngine::new();
         let events = RefCell::new(Vec::<EmitType>::new());
-        let emitter = |emit_type: EmitType, _value: Value| {
+        let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
             events.borrow_mut().push(emit_type);
         };
 
@@ -466,7 +471,7 @@ mod tests {
     fn emitter_emits_failed_for_runtime_failure() {
         let engine = ExecutionEngine::new();
         let events = RefCell::new(Vec::<EmitType>::new());
-        let emitter = |emit_type: EmitType, _value: Value| {
+        let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
             events.borrow_mut().push(emit_type);
         };
 

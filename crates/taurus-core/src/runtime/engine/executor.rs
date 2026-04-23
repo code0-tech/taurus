@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::handler::argument::{Argument, ParameterNode};
 use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
-use crate::runtime::engine::emitter::{EmitType, RespondEmitter};
+use crate::runtime::engine::emitter::{EmitType, ExecutionId, RespondEmitter};
 use crate::runtime::engine::model::{CompiledArg, CompiledFlow, CompiledNode, NodeExecutionTarget};
 use crate::runtime::execution::trace::{
     ArgKind, ArgTrace, EdgeKind, Outcome, ReferenceKind, TraceRun,
@@ -28,6 +28,7 @@ pub fn execute_compiled(
     handlers: &FunctionStore,
     value_store: &mut ValueStore,
     remote: Option<&dyn RemoteRuntime>,
+    execution_id: ExecutionId,
     respond_emitter: Option<&dyn RespondEmitter>,
     with_trace: bool,
 ) -> (Signal, Option<TraceRun>) {
@@ -37,6 +38,7 @@ pub fn execute_compiled(
         flow,
         handlers,
         remote,
+        execution_id,
         respond_emitter,
         tracer: tracer.as_ref(),
     };
@@ -63,6 +65,7 @@ struct EngineExecutor<'a> {
     flow: &'a CompiledFlow,
     handlers: &'a FunctionStore,
     remote: Option<&'a dyn RemoteRuntime>,
+    execution_id: ExecutionId,
     respond_emitter: Option<&'a dyn RespondEmitter>,
     tracer: Option<&'a RefCell<Tracer>>,
 }
@@ -107,7 +110,7 @@ impl<'a> EngineExecutor<'a> {
                 Signal::Respond(value) => {
                     // `Respond` is an observable side effect; execution may still continue.
                     if let Some(emitter) = self.respond_emitter {
-                        emitter.emit(EmitType::OngoingExec, value.clone());
+                        emitter.emit(self.execution_id, EmitType::OngoingExec, value.clone());
                     }
 
                     value_store.insert_success(node_id, value.clone());

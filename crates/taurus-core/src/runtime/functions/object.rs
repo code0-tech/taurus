@@ -17,7 +17,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
     FunctionRegistration::eager("std::object::keys", keys, 1),
     FunctionRegistration::eager("std::object::size", size, 1),
     FunctionRegistration::eager("std::object::set", set, 3),
-    FunctionRegistration::eager("std::object::get", get, 3),
+    FunctionRegistration::eager("std::object::get", get, 2),
 ];
 fn get(
     args: &[Argument],

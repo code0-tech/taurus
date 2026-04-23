@@ -1,0 +1,18 @@
+[package]
+name = "manual"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tucana = { workspace = true }
+taurus-core = { workspace = true }
+taurus-provider = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+tokio = { workspace = true }
+async-nats = { workspace = true }
+clap = { version = "4.6.0", features= ["derive"] }

@@ -521,7 +521,36 @@ fn log(
         Ok(v) => v,
         Err(e) => return e,
     };
-    Signal::Success(value_from_f64(value.log(base)))
+    if !value.is_finite() || !base.is_finite() {
+        return Signal::Failure(RuntimeError::new(
+            "T-STD-00001",
+            "InvalidArgumentRuntimeError",
+            "Log input and base must be finite numbers",
+        ));
+    }
+    if value <= 0.0 {
+        return Signal::Failure(RuntimeError::new(
+            "T-STD-00001",
+            "InvalidArgumentRuntimeError",
+            "Log input must be greater than zero",
+        ));
+    }
+    if base <= 0.0 || base == 1.0 {
+        return Signal::Failure(RuntimeError::new(
+            "T-STD-00001",
+            "InvalidArgumentRuntimeError",
+            "Log base must be greater than zero and not equal to one",
+        ));
+    }
+    let result = value.log(base);
+    if !result.is_finite() {
+        return Signal::Failure(RuntimeError::new(
+            "T-STD-00001",
+            "InvalidArgumentRuntimeError",
+            "Log result was not finite",
+        ));
+    }
+    Signal::Success(value_from_f64(result))
 }
 
 fn ln(
@@ -1086,6 +1115,24 @@ mod tests {
         let mut run = dummy_run;
         let ln1 = expect_num(ln(&[a_num(f64::consts::E)], &mut ctx, &mut run));
         assert!((ln1 - 1.0).abs() < f64::EPSILON);
+
+        let mut run = dummy_run;
+        assert!(matches!(
+            log(&[a_num(-100.0), a_num(10.0)], &mut ctx, &mut run),
+            Signal::Failure(_)
+        ));
+
+        let mut run = dummy_run;
+        assert!(matches!(
+            log(&[a_num(100.0), a_num(1.0)], &mut ctx, &mut run),
+            Signal::Failure(_)
+        ));
+
+        let mut run = dummy_run;
+        assert!(matches!(
+            log(&[a_num(100.0), a_num(0.0)], &mut ctx, &mut run),
+            Signal::Failure(_)
+        ));
     }
 
     #[test]

@@ -16,6 +16,7 @@ use tucana::shared::value::Kind;
 pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
     FunctionRegistration::eager("std::control::stop", stop, 0),
     FunctionRegistration::eager("std::control::return", r#return, 1),
+    FunctionRegistration::eager("std::control::value", value, 1),
     FunctionRegistration::modes("std::control::if", r#if, &[Eager, Lazy]),
     FunctionRegistration::modes("std::control::if_else", if_else, &[Eager, Lazy, Lazy]),
 ];
@@ -26,6 +27,15 @@ fn stop(
     _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
 ) -> Signal {
     Signal::Stop
+}
+
+fn value(
+    args: &[Argument],
+    _ctx: &mut ValueStore,
+    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+) -> Signal {
+    args!(args => value: Value);
+    Signal::Success(value)
 }
 
 fn r#return(

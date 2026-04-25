@@ -23,10 +23,10 @@ tonic = "0.14.1"
 serde_json = "1.0.149"
 serde = "1.0.228"
 uuid =  { version = "1.23.0", features = ["v4"] }
+ureq = "2.12.1"
 
 [workspace.dependencies.taurus-core]
 path = "./crates/taurus-core"
 
 [workspace.dependencies.taurus-provider]
 path = "./crates/taurus-provider"
-

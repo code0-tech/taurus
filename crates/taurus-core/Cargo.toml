@@ -11,4 +11,5 @@ log = { workspace = true }
 futures-lite = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
-
+serde_json = { workspace = true }
+ureq = { workspace = true }

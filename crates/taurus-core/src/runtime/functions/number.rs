@@ -30,7 +30,7 @@ fn num_f64(n: &NumberValue) -> Result<f64, Signal> {
 pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
     FunctionRegistration::eager("std::number::add", add, 2),
     FunctionRegistration::eager("std::number::multiply", multiply, 2),
-    FunctionRegistration::eager("std::number::substract", substract, 2),
+    FunctionRegistration::eager("std::number::subtract", subtract, 2),
     FunctionRegistration::eager("std::number::divide", divide, 2),
     FunctionRegistration::eager("std::number::modulo", modulo, 2),
     FunctionRegistration::eager("std::number::abs", abs, 1),
@@ -153,7 +153,7 @@ fn multiply(
     Signal::Success(value_from_f64(lhs * rhs))
 }
 
-fn substract(
+fn subtract(
     args: &[Argument],
     _ctx: &mut ValueStore,
     _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
@@ -922,12 +922,12 @@ mod tests {
     }
 
     #[test]
-    fn test_substract_and_divide() {
+    fn test_subtract_and_divide() {
         let mut ctx = ValueStore::default();
 
         let mut run = dummy_run;
         assert_eq!(
-            expect_num(substract(&[a_num(10.0), a_num(4.0)], &mut ctx, &mut run)),
+            expect_num(subtract(&[a_num(10.0), a_num(4.0)], &mut ctx, &mut run)),
             6.0
         );
 

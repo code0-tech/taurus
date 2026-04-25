@@ -12,7 +12,7 @@ use crate::value::number_to_string;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::io::Read;
-use tucana::shared::helper::value::{from_json_value, to_json_value, ToValue};
+use tucana::shared::helper::value::{ToValue, from_json_value, to_json_value};
 use tucana::shared::value::Kind;
 use tucana::shared::{Struct, Value};
 
@@ -188,7 +188,12 @@ fn send_request(
 
     let mut fields = HashMap::new();
     fields.insert("http_status_code".to_string(), status_code.to_value());
-    fields.insert("headers".to_string(), response_headers.to_value());
+    fields.insert(
+        "headers".to_string(),
+        Value {
+            kind: Some(Kind::StructValue(response_headers)),
+        },
+    );
     fields.insert("payload".to_string(), response_payload);
 
     Signal::Success(Value {

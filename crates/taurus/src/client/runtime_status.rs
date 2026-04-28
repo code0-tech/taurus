@@ -9,37 +9,25 @@ use tucana::{
         RuntimeStatusUpdateRequest, runtime_status_service_client::RuntimeStatusServiceClient,
         runtime_status_update_request::Status,
     },
-    shared::{ExecutionRuntimeStatus, RuntimeFeature},
+    shared::ExecutionRuntimeStatus,
 };
 
 pub struct TaurusRuntimeStatusService {
     channel: Channel,
     identifier: String,
-    features: Vec<RuntimeFeature>,
     aquila_token: String,
 }
 
 impl TaurusRuntimeStatusService {
-    pub async fn from_url(
-        aquila_url: String,
-        aquila_token: String,
-        identifier: String,
-        features: Vec<RuntimeFeature>,
-    ) -> Self {
+    pub async fn from_url(aquila_url: String, aquila_token: String, identifier: String) -> Self {
         let channel = create_channel_with_retry("Aquila", aquila_url).await;
-        Self::new(channel, aquila_token, identifier, features)
+        Self::new(channel, aquila_token, identifier)
     }
 
-    pub fn new(
-        channel: Channel,
-        aquila_token: String,
-        identifier: String,
-        features: Vec<RuntimeFeature>,
-    ) -> Self {
+    pub fn new(channel: Channel, aquila_token: String, identifier: String) -> Self {
         TaurusRuntimeStatusService {
             channel,
             identifier,
-            features,
             aquila_token,
         }
     }
@@ -68,7 +56,6 @@ impl TaurusRuntimeStatusService {
                     status: status.into(),
                     timestamp: timestamp as i64,
                     identifier: self.identifier.clone(),
-                    features: self.features.clone(),
                 })),
             },
         );

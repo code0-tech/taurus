@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use futures_lite::future::block_on;
-use tucana::aquila::ExecutionRequest;
+use tucana::aquila::ActionExecutionRequest;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{Struct, Value};
@@ -485,7 +485,7 @@ impl<'a> EngineExecutor<'a> {
         &self,
         node: &CompiledNode,
         values: Vec<Value>,
-    ) -> Result<ExecutionRequest, RuntimeError> {
+    ) -> Result<ActionExecutionRequest, RuntimeError> {
         if node.parameters.len() != values.len() {
             return Err(RuntimeError::new(
                 "T-CORE-000005",
@@ -499,7 +499,7 @@ impl<'a> EngineExecutor<'a> {
             fields.insert(parameter.runtime_parameter_id.clone(), value);
         }
 
-        Ok(ExecutionRequest {
+        Ok(ActionExecutionRequest {
             execution_identifier: Uuid::new_v4().to_string(),
             function_identifier: node.handler_id.clone(),
             parameters: Some(Struct { fields }),

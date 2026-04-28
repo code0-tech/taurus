@@ -3,7 +3,7 @@ use prost::Message;
 use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use tonic::async_trait;
-use tucana::aquila::ExecutionResult;
+use tucana::aquila::ActionExecutionResponse;
 use tucana::shared::Value;
 
 pub struct NATSRemoteRuntime {
@@ -42,8 +42,8 @@ impl RemoteRuntime for NATSRemoteRuntime {
             }
         };
 
-        let decode_result = ExecutionResult::decode(message.payload);
-        let execution_result = match decode_result {
+        let decode_result = ActionExecutionResponse::decode(message.payload);
+        let _execution_result = match decode_result {
             Ok(r) => r,
             Err(err) => {
                 log::error!(
@@ -58,24 +58,6 @@ impl RemoteRuntime for NATSRemoteRuntime {
             }
         };
 
-        match execution_result.result {
-            Some(result) => match result {
-                tucana::aquila::execution_result::Result::Success(value) => Ok(value),
-                tucana::aquila::execution_result::Result::Error(err) => {
-                    let code = err.code.to_string();
-                    let description = match err.description {
-                        Some(string) => string,
-                        None => "Unknown Error".to_string(),
-                    };
-                    let error = RuntimeError::new(code, "RemoteExecutionError", description);
-                    Err(error)
-                }
-            },
-            None => Err(RuntimeError::new(
-                "T-PROV-000003",
-                "RemoteRuntimeExeption",
-                "Result of Remote Response was empty.",
-            )),
-        }
+        unimplemented!("Taurus needs to handle text executions (issue nr #185)")
     }
 }

@@ -181,6 +181,7 @@ mod tests {
             value: Some(NodeValue {
                 value: Some(node_value::Value::LiteralValue(value)),
             }),
+            cast: None,
         }
     }
 
@@ -189,8 +190,11 @@ mod tests {
             database_id,
             runtime_parameter_id: runtime_parameter_id.to_string(),
             value: Some(NodeValue {
-                value: Some(node_value::Value::NodeFunctionId(node_id)),
+                value: Some(node_value::Value::SubFlow(unimplemented!(
+                    "Taurus needs to handle SubFlows (issue nr #184)"
+                ))),
             }),
+            cast: None,
         }
     }
 
@@ -208,6 +212,7 @@ mod tests {
                     paths: Vec::new(),
                 })),
             }),
+            cast: None,
         }
     }
 
@@ -276,6 +281,7 @@ mod tests {
                     paths: Vec::new(),
                 })),
             }),
+            cast: None,
         }
     }
 

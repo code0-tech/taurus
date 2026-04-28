@@ -125,7 +125,7 @@ pub fn compile_flow(
             let arg = match value {
                 node_value::Value::LiteralValue(v) => CompiledArg::Literal(v.clone()),
                 node_value::Value::ReferenceValue(r) => CompiledArg::Reference(r.clone()),
-                node_value::Value::NodeFunctionId(id) => CompiledArg::DeferredNode(*id),
+                node_value::Value::SubFlow(_sub_flow) => unimplemented!("Taurus needs to handle SubFlows (issue nr #184)"),
             };
 
             parameters.push(CompiledParameter {

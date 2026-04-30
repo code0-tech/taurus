@@ -1,5 +1,6 @@
 mod worker;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use code0_flow::flow_config::load_env_file;
@@ -27,7 +28,7 @@ pub async fn run() {
     let client = connect_nats(&config).await;
 
     let mut health_task = spawn_health_task(&config);
-    let (runtime_status_service, runtime_usage_service) =
+    let (runtime_status_service, runtime_usage_service, mut runtime_status_heartbeat_task) =
         setup_dynamic_services_if_needed(&config).await;
 
     let nats_remote = NATSRemoteRuntime::new(client.clone());
@@ -41,6 +42,14 @@ pub async fn run() {
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task).await;
+    if let Some(handle) = runtime_status_heartbeat_task.take() {
+        handle.abort();
+        if let Err(err) = handle.await {
+            if !err.is_cancelled() {
+                log::warn!("Runtime status heartbeat task ended unexpectedly: {}", err);
+            }
+        }
+    }
     update_stopped_status(runtime_status_service.as_ref()).await;
 
     log::info!("Taurus shutdown complete");
@@ -95,11 +104,12 @@ fn spawn_health_task(config: &Config) -> Option<JoinHandle<()>> {
 async fn setup_dynamic_services_if_needed(
     config: &Config,
 ) -> (
-    Option<TaurusRuntimeStatusService>,
+    Option<Arc<TaurusRuntimeStatusService>>,
     Option<TaurusRuntimeUsageService>,
+    Option<JoinHandle<()>>,
 ) {
     if config.mode != DYNAMIC {
-        return (None, None);
+        return (None, None, None);
     }
 
     push_definitions_until_success(config).await;
@@ -109,7 +119,7 @@ async fn setup_dynamic_services_if_needed(
             .await,
     );
 
-    let runtime_status_service = Some(
+    let runtime_status_service = Some(Arc::new(
         TaurusRuntimeStatusService::from_url(
             config.aquila_url.clone(),
             config.aquila_token.clone(),
@@ -117,7 +127,7 @@ async fn setup_dynamic_services_if_needed(
             runtime_features(),
         )
         .await,
-    );
+    ));
 
     if let Some(status_service) = runtime_status_service.as_ref() {
         status_service
@@ -125,7 +135,43 @@ async fn setup_dynamic_services_if_needed(
             .await;
     }
 
-    (runtime_status_service, runtime_usage_service)
+    let runtime_status_heartbeat_task = if config.adapter_status_update_interval_seconds > 0 {
+        let status_service = runtime_status_service
+            .as_ref()
+            .expect("runtime status service should exist in dynamic mode")
+            .clone();
+        let update_interval_seconds = config.adapter_status_update_interval_seconds;
+
+        let handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(update_interval_seconds));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            // First tick is immediate; consume it so heartbeats start after the interval.
+            interval.tick().await;
+
+            loop {
+                interval.tick().await;
+                status_service
+                    .update_runtime_status(tucana::shared::execution_runtime_status::Status::Running)
+                    .await;
+            }
+        });
+
+        log::info!(
+            "Runtime status heartbeat started (interval={}s)",
+            update_interval_seconds
+        );
+        Some(handle)
+    } else {
+        log::info!("Runtime status heartbeat is disabled");
+        None
+    };
+
+    (
+        runtime_status_service,
+        runtime_usage_service,
+        runtime_status_heartbeat_task,
+    )
 }
 
 async fn push_definitions_until_success(config: &Config) {
@@ -165,7 +211,7 @@ fn runtime_features() -> Vec<RuntimeFeature> {
     }]
 }
 
-async fn update_stopped_status(runtime_status_service: Option<&TaurusRuntimeStatusService>) {
+async fn update_stopped_status(runtime_status_service: Option<&Arc<TaurusRuntimeStatusService>>) {
     if let Some(status_service) = runtime_status_service {
         status_service
             .update_runtime_status(tucana::shared::execution_runtime_status::Status::Stopped)

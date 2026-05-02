@@ -31,12 +31,17 @@ Taurus is the execution runtime in the CodeZero execution block.
 ```mermaid
 graph TD
   NATS[NATS]
-  Taurus[Taurus Runtime\ncrates/taurus]
-  Core[ExecutionEngine\ncrates/taurus-core]
-  Emitter[Runtime Emitter\ncrates/taurus-provider]
-  Remote[Remote Runtime Adapter\ncrates/taurus-provider]
+  Taurus[Taurus Runtime
+  crates/taurus]
+  Core[ExecutionEngine
+  crates/taurus-core]
+  Emitter[Runtime Emitter
+  crates/taurus-provider]
+  Remote[Remote Runtime Adapter
+  crates/taurus-provider]
   Service[Remote Service / Action Runtime]
-  Aquila[Aquila gRPC APIs\n(dynamic mode only)]
+  Aquila[Aquila gRPC APIs
+  dynamic mode only]
 
   NATS -->|execution.*| Taurus
   Taurus --> Core

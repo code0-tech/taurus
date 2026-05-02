@@ -5,7 +5,8 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 ## Code Format
 
 - `T-STD-XXXXX`: Errors originating inside standard function implementations under `runtime/functions/*`.
-- `T-CORE-XXXXXX`: Errors originating from core runtime infrastructure (`engine`, `handler`, type conversion, app-layer mapping).
+- `T-CORE-XXXXXX`: Errors originating from core runtime infrastructure (`engine`, `handler`,
+type conversion, app-layer mapping).
 - `T-PROV-XXXXXX`: Errors originating from provider integrations (transport adapters, remote runtime connectors).
 
 ## Code Table
@@ -37,4 +38,6 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 
 ## Provider Note
 
-`taurus-provider` can also forward remote service errors with service-owned codes (for example codes returned inside Aquila `ExecutionResult::Error`). Those are intentionally preserved instead of remapped, so they are not enumerated as static Taurus provider codes here.
+`taurus-provider` can also forward remote service errors with service-owned codes (for example
+codes returned inside Aquila `ExecutionResult::Error`). Those are intentionally preserved instead of remapped,
+so they are not enumerated as static Taurus provider codes here.

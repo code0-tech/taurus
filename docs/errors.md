@@ -5,8 +5,7 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 ## Code Format
 
 - `T-STD-XXXXX`: Errors originating inside standard function implementations under `runtime/functions/*`.
-- `T-CORE-XXXXXX`: Errors originating from core runtime infrastructure (`engine`, `handler`,
-type conversion, app-layer mapping).
+- `T-CORE-XXXXXX`: Errors originating from core runtime infrastructure.
 - `T-PROV-XXXXXX`: Errors originating from provider integrations (transport adapters, remote runtime connectors).
 
 ## Code Table

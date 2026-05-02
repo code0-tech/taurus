@@ -135,12 +135,12 @@ async fn setup_dynamic_services_if_needed(
             .await;
     }
 
-    let runtime_status_heartbeat_task = if config.adapter_status_update_interval_seconds > 0 {
+    let runtime_status_heartbeat_task = if config.runtime_status_update_interval_seconds > 0 {
         let status_service = runtime_status_service
             .as_ref()
             .expect("runtime status service should exist in dynamic mode")
             .clone();
-        let update_interval_seconds = config.adapter_status_update_interval_seconds;
+        let update_interval_seconds = config.runtime_status_update_interval_seconds;
 
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(update_interval_seconds));

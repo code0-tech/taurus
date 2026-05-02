@@ -9,7 +9,7 @@ pub struct Config {
     ///
     /// Options:
     /// `static` (default)
-    /// `hybrid`
+    /// `dynamic`
     pub mode: Mode,
 
     /// URL to the NATS service

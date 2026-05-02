@@ -2,7 +2,6 @@
 title: Taurus Error Table
 ---
 
-
 # Taurus Runtime Error Codes
 
 This document is the canonical catalog for runtime error codes emitted by Taurus runtime crates (`taurus-core` and `taurus-provider`).

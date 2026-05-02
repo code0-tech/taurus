@@ -1,7 +1,7 @@
 # Taurus
 The heart of the execution block - the runtime itself
 
-- Execute Flows & handles test executions
+- Executes flows and handles test executions
 - Requests single node executions from Actions
 - Serves the standard CodeZero library
 

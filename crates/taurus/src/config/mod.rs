@@ -32,7 +32,7 @@ pub struct Config {
     pub runtime_status_update_interval_seconds: u64,
 }
 
-/// Implementation for all relevant `Aquila` startup configurations
+/// Implementation for all relevant `Taurus` startup configurations
 ///
 /// Behavior:
 /// Searches for the env. file at root level. Filename: `.env`

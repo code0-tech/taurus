@@ -1,0 +1,103 @@
+---
+title: Taurus Installation Guide
+---
+
+import {Step, Steps} from 'fumadocs-ui/components/steps';
+
+Use this guide to install and configure Taurus.
+
+## Setup Options
+
+### Using Docker Compose
+
+Use Docker Compose to run Taurus and related services.
+If you are developing Taurus locally, make sure the Taurus container is stopped to avoid port conflicts.
+If your compose setup supports profiles, you can set `COMPOSE_PROFILES=ide` to run only
+IDE-related services and start Taurus manually.
+
+### Virtual Development Environment (Preferred)
+
+Use the shared environment setup from the main platform docs:
+
+- [Visit Setup Guide](https://docs.code0.tech/general/install/)
+
+### Manual Installation
+
+<Steps>
+
+<Step>
+
+#### **Clone Taurus**
+
+Clone this repository to your local machine.
+
+</Step>
+
+<Step>
+
+#### **Set up environment variables**
+
+Configure `.env` in the project root with the required settings.
+You can use `.env-example` as a starting point.
+
+</Step>
+
+<Step>
+
+#### **Ensure required services are running**
+
+**NATS**:
+
+- Ensure a NATS instance is reachable
+- Enable JetStream
+- See [NATS installation docs](https://docs.nats.io/running-a-nats-service/introduction/installation)
+
+**Aquila**:
+
+- Required for dynamic mode (`MODE=dynamic`)
+- Ensure the configured endpoint is reachable
+
+</Step>
+
+<Step>
+
+#### **Start Taurus**
+
+Run:
+
+```bash
+cargo run -p taurus
+```
+
+</Step>
+
+</Steps>
+---
+
+## Environment Variables
+
+Taurus configuration is split into shared variables and mode-specific variables.
+
+### Common (Static + Dynamic)
+
+| Name                  | Description                                                                                                  | Default                         |
+|-----------------------|--------------------------------------------------------------------------------------------------------------|---------------------------------|
+| `MODE`                | Runtime mode. `static` loads local flows. `dynamic` enables dynamic synchronization with Sagittarius.        | `static`                        |
+| `ENVIRONMENT`         | Runtime environment (`development`, `staging`, `production`).                                                | `development`                   |
+| `NATS_URL`            | URL of the NATS instance Taurus connects to.                                                                 | `nats://localhost:4222`         |
+| `AQUILA_URL`          | URL of the Aquila instance .                                                                                 | `nats://localhost:4222`         |
+| `AQUILA_TOKEN`        | Token to authenticate agains Aquila.                                                                 | `nats://localhost:4222`         |
+| `GRPC_HOST`           | Hostname for the Taurus gRPC server.                                                                         | `127.0.0.1`                     |
+| `GRPC_PORT`           | Port for the Taurus gRPC server.                                                                             | `50051`                          |
+| `WITH_HEALTH_SERVICE` | Enables the gRPC health service when set to `true`.                                                          | `false`                         |
+
+### Dynamic Mode
+
+Set `MODE=dynamic` when the IDE is required/needed.
+
+| Name              | Description                                                                       | Default                  |
+|-------------------|-----------------------------------------------------------------------------------|--------------------------|
+| `AQUILA_URL` | URL of the Aquila instance. | `http://localhost:50051` |
+| `AQUILA_TOKEN`   | Token used by Taurus to authenticate with Aquila.                            | `token`  |
+| `DEFINITIONS` | Path to the runtime definition modules. | `./definitions` |
+| `RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS` | Interval (in seconds) of updating the current runtime status. | `30s` |

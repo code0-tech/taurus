@@ -1,15 +1,18 @@
 use code0_flow::flow_config::env_with_default;
+use code0_flow::flow_config::environment::Environment;
 use code0_flow::flow_config::mode::Mode;
 
 /// Struct for all relevant `Taurus` startup configurations
 pub struct Config {
-    /// Aquila mode
+    pub environment: Environment,
+    /// Taurus mode
     ///
     /// Options:
     /// `static` (default)
-    /// `hybrid`
+    /// `dynamic`
     pub mode: Mode,
 
+    /// URL to the NATS service
     pub nats_url: String,
 
     pub aquila_url: String,
@@ -26,16 +29,17 @@ pub struct Config {
 
     /// Runtime status heartbeat interval in seconds while Taurus is running.
     /// Set to 0 to disable periodic heartbeat updates.
-    pub adapter_status_update_interval_seconds: u64,
+    pub runtime_status_update_interval_seconds: u64,
 }
 
-/// Implementation for all relevant `Aquila` startup configurations
+/// Implementation for all relevant `Taurus` startup configurations
 ///
 /// Behavior:
 /// Searches for the env. file at root level. Filename: `.env`
 impl Config {
     pub fn new() -> Self {
         Config {
+            environment: env_with_default("ENVIRONMENT", Environment::Development),
             mode: env_with_default("MODE", Mode::DYNAMIC),
             nats_url: env_with_default("NATS_URL", String::from("nats://localhost:4222")),
             aquila_url: env_with_default("AQUILA_URL", String::from("http://localhost:50051")),
@@ -44,8 +48,8 @@ impl Config {
             grpc_host: env_with_default("GRPC_HOST", "127.0.0.1".to_string()),
             grpc_port: env_with_default("GRPC_PORT", 50051),
             definitions: env_with_default("DEFINITIONS", String::from("./definitions")),
-            adapter_status_update_interval_seconds: env_with_default(
-                "ADAPTER_STATUS_UPDATE_INTERVAL_SECONDS",
+            runtime_status_update_interval_seconds: env_with_default(
+                "RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS",
                 30_u64,
             ),
         }

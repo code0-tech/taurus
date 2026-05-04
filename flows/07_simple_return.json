@@ -19,7 +19,11 @@
 			"expected_result": {
 				"http_status_code": 200,
 				"headers": {},
-				"payload": [null, null, "username"]
+				"payload": [
+					null,
+					null,
+					"username"
+				]
 			}
 		}
 	],
@@ -86,7 +90,11 @@
 						"databaseId": "31",
 						"runtimeParameterId": "transform",
 						"value": {
-							"nodeFunctionId": "10"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "10"
+							}
 						}
 					}
 				],
@@ -137,7 +145,11 @@
 						"databaseId": "35",
 						"runtimeParameterId": "runnable",
 						"value": {
-							"nodeFunctionId": "7"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "7"
+							}
 						}
 					}
 				],

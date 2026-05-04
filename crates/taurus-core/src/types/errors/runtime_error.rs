@@ -12,7 +12,9 @@ use std::fmt::{Display, Formatter};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tucana::shared::value::Kind::{NumberValue, StringValue, StructValue};
-use tucana::shared::{NumberValue as ProtoNumberValue, Struct, Value, number_value};
+use tucana::shared::{
+    Error as TucanaError, NumberValue as ProtoNumberValue, Struct, Value, number_value,
+};
 
 /// Runtime execution failure representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -138,6 +140,38 @@ impl RuntimeError {
                     ),
                 ]),
             })),
+        }
+    }
+
+    /// Convert to transport-level shared error object.
+    pub fn as_tucana_error(&self) -> TucanaError {
+        TucanaError {
+            code: self.code.clone(),
+            category: self.category.clone(),
+            message: self.message.clone(),
+            timestamp: self.timestamp_unix_ms as i64,
+            version: self.version.clone(),
+            dependencies: self.dependencies.clone(),
+            details: Some(Struct {
+                fields: self.details.clone(),
+            }),
+        }
+    }
+
+    /// Build a runtime error from a transport-level shared error object.
+    pub fn from_tucana_error(error: &TucanaError) -> Self {
+        Self {
+            code: error.code.clone(),
+            category: error.category.clone(),
+            message: error.message.clone(),
+            timestamp_unix_ms: error.timestamp.max(0) as u64,
+            version: error.version.clone(),
+            dependencies: error.dependencies.clone(),
+            details: error
+                .details
+                .as_ref()
+                .map(|it| it.fields.clone())
+                .unwrap_or_default(),
         }
     }
 }

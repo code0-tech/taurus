@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::{NodeFunction, node_value};
+use tucana::shared::{NodeFunction, node_value, sub_flow};
 
 use crate::{
     runtime::engine::model::{
@@ -26,6 +26,15 @@ pub enum CompileError {
     ParameterValueMissing {
         node_id: i64,
         parameter_index: usize,
+    },
+    SubFlowExecutionReferenceMissing {
+        node_id: i64,
+        parameter_index: usize,
+    },
+    SubFlowFunctionIdentifierUnsupported {
+        node_id: i64,
+        parameter_index: usize,
+        function_identifier: String,
     },
 }
 
@@ -62,6 +71,29 @@ impl CompileError {
                 format!(
                     "Node {} parameter {} does not contain a value",
                     node_id, parameter_index
+                ),
+            ),
+            CompileError::SubFlowExecutionReferenceMissing {
+                node_id,
+                parameter_index,
+            } => RuntimeError::new(
+                "T-CORE-000105",
+                "FlowCompileError",
+                format!(
+                    "Node {} parameter {} sub_flow is missing execution reference",
+                    node_id, parameter_index
+                ),
+            ),
+            CompileError::SubFlowFunctionIdentifierUnsupported {
+                node_id,
+                parameter_index,
+                function_identifier,
+            } => RuntimeError::new(
+                "T-CORE-000106",
+                "FlowCompileError",
+                format!(
+                    "Node {} parameter {} uses unsupported sub_flow function identifier {}",
+                    node_id, parameter_index, function_identifier
                 ),
             ),
         }
@@ -125,7 +157,26 @@ pub fn compile_flow(
             let arg = match value {
                 node_value::Value::LiteralValue(v) => CompiledArg::Literal(v.clone()),
                 node_value::Value::ReferenceValue(r) => CompiledArg::Reference(r.clone()),
-                node_value::Value::SubFlow(_sub_flow) => unimplemented!("Taurus needs to handle SubFlows (issue nr #184)"),
+                node_value::Value::SubFlow(sub_flow) => {
+                    match sub_flow.execution_reference.as_ref() {
+                        Some(sub_flow::ExecutionReference::StartingNodeId(node_id)) => {
+                            CompiledArg::DeferredNode(*node_id)
+                        }
+                        Some(sub_flow::ExecutionReference::FunctionIdentifier(identifier)) => {
+                            return Err(CompileError::SubFlowFunctionIdentifierUnsupported {
+                                node_id: node.database_id,
+                                parameter_index,
+                                function_identifier: identifier.clone(),
+                            });
+                        }
+                        None => {
+                            return Err(CompileError::SubFlowExecutionReferenceMissing {
+                                node_id: node.database_id,
+                                parameter_index,
+                            });
+                        }
+                    }
+                }
             };
 
             parameters.push(CompiledParameter {

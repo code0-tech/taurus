@@ -1,12 +1,12 @@
 //! Mutable value store used by runtime execution to resolve references.
 
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use tucana::shared::{InputType, ReferenceValue, Value, value::Kind};
+use tucana::shared::node_execution_result::Result as TucanaNodeResult;
+use tucana::shared::{InputType, NodeExecutionResult, ReferenceValue, Value, value::Kind};
 
-use crate::runtime::execution::trace::{
-    StoreInputSlotEntry, StoreResultEntry, StoreResultStatus, StoreSnapshot,
-};
+use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
 use crate::types::errors::runtime_error::RuntimeError;
 
 #[derive(Clone)]
@@ -18,7 +18,7 @@ pub enum ValueStoreResult {
 
 #[derive(Default)]
 pub struct ValueStore {
-    results: HashMap<i64, ValueStoreResult>,
+    results: HashMap<i64, NodeExecutionResult>,
     input_types: HashMap<InputType, Value>,
     flow_input: Value,
     current_node_id: i64,
@@ -101,7 +101,13 @@ impl ValueStore {
 
     fn get_result(&mut self, id: i64) -> ValueStoreResult {
         match self.results.get(&id) {
-            Some(result) => result.clone(),
+            Some(result) => match &result.result {
+                Some(TucanaNodeResult::Success(value)) => ValueStoreResult::Success(value.clone()),
+                Some(TucanaNodeResult::Error(error)) => {
+                    ValueStoreResult::Error(RuntimeError::from_tucana_error(error))
+                }
+                None => ValueStoreResult::NotFound,
+            },
             None => ValueStoreResult::NotFound,
         }
     }
@@ -130,12 +136,36 @@ impl ValueStore {
     }
 
     pub fn insert_success(&mut self, id: i64, value: Value) {
-        self.results.insert(id, ValueStoreResult::Success(value));
+        let ts = now_unix_ms();
+        self.insert_node_result(
+            id,
+            NodeExecutionResult {
+                node_id: id,
+                started_at: ts,
+                finished_at: ts,
+                parameter_results: Vec::new(),
+                result: Some(TucanaNodeResult::Success(value)),
+            },
+        );
     }
 
     pub fn insert_error(&mut self, id: i64, runtime_error: RuntimeError) {
-        self.results
-            .insert(id, ValueStoreResult::Error(runtime_error));
+        let ts = now_unix_ms();
+        self.insert_node_result(
+            id,
+            NodeExecutionResult {
+                node_id: id,
+                started_at: ts,
+                finished_at: ts,
+                parameter_results: Vec::new(),
+                result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
+            },
+        );
+    }
+
+    pub fn insert_node_result(&mut self, id: i64, mut result: NodeExecutionResult) {
+        result.node_id = id;
+        self.results.insert(id, result);
     }
 
     pub fn push_runtime_trace_label(&mut self, label: String) {
@@ -149,19 +179,18 @@ impl ValueStore {
     pub fn trace_snapshot(&self) -> StoreSnapshot {
         let mut results = Vec::with_capacity(self.results.len());
         for (node_id, result) in &self.results {
-            match result {
-                ValueStoreResult::Success(value) => results.push(StoreResultEntry {
-                    node_id: *node_id,
-                    status: StoreResultStatus::Success,
-                    preview: preview_value(value),
-                }),
-                ValueStoreResult::Error(err) => results.push(StoreResultEntry {
-                    node_id: *node_id,
-                    status: StoreResultStatus::Error,
-                    preview: format!("{}:{} {}", err.code, err.category, err.message),
-                }),
-                ValueStoreResult::NotFound => {}
-            }
+            let preview = match &result.result {
+                Some(TucanaNodeResult::Success(value)) => preview_value(value),
+                Some(TucanaNodeResult::Error(err)) => {
+                    format!("{}:{} {}", err.code, err.category, err.message)
+                }
+                None => "empty-result".to_string(),
+            };
+            results.push(StoreResultEntry {
+                node_id: *node_id,
+                result: result.clone(),
+                preview,
+            });
         }
         results.sort_by_key(|entry| entry.node_id);
 
@@ -183,6 +212,13 @@ impl ValueStore {
             input_slots,
         }
     }
+}
+
+fn now_unix_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|it| it.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn preview_value(value: &Value) -> String {

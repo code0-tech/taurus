@@ -4,7 +4,7 @@ use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use tonic::async_trait;
 use tucana::aquila::ActionExecutionResponse;
-use tucana::shared::{NodeExecutionResult};
+use tucana::shared::NodeExecutionResult;
 
 pub struct NATSRemoteRuntime {
     client: Client,
@@ -18,7 +18,10 @@ impl NATSRemoteRuntime {
 
 #[async_trait]
 impl RemoteRuntime for NATSRemoteRuntime {
-    async fn execute_remote(&self, execution: RemoteExecution) -> Result<NodeExecutionResult, RuntimeError> {
+    async fn execute_remote(
+        &self,
+        execution: RemoteExecution,
+    ) -> Result<NodeExecutionResult, RuntimeError> {
         let topic = format!(
             "action.{}.{}",
             execution.target_service, execution.request.execution_identifier
@@ -47,13 +50,13 @@ impl RemoteRuntime for NATSRemoteRuntime {
             Ok(r) => match r.node_result {
                 Some(res) => Ok(res),
                 None => {
-                log::error!("RemoteRuntimeExeption: recieved execution result without an body");
-                return Err(RuntimeError::new(
-                    "T-PROV-000003",
-                    "RemoteRuntimeExeption",
-                    "Recieved empty action execution response",
-                ));
-            },
+                    log::error!("RemoteRuntimeExeption: recieved execution result without an body");
+                    return Err(RuntimeError::new(
+                        "T-PROV-000003",
+                        "RemoteRuntimeExeption",
+                        "Recieved empty action execution response",
+                    ));
+                }
             },
             Err(err) => {
                 log::error!(

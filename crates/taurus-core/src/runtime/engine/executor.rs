@@ -5,9 +5,10 @@ use std::collections::HashMap;
 
 use futures_lite::future::block_on;
 use tucana::aquila::ActionExecutionRequest;
+use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
-use tucana::shared::{Struct, Value};
+use tucana::shared::{NodeExecutionResult as TucanaNodeExecutionResult, Struct, Value};
 use uuid::Uuid;
 
 use crate::handler::argument::{Argument, ParameterNode};
@@ -56,7 +57,7 @@ struct ExecutionResult {
 }
 
 /// Result of executing exactly one compiled node.
-struct NodeExecutionResult {
+struct NodeResult {
     signal: Signal,
     frame_id: Option<u64>,
 }
@@ -150,25 +151,24 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn execute_single_node(
-        &self,
-        node_idx: usize,
-        value_store: &mut ValueStore,
-    ) -> NodeExecutionResult {
+    fn execute_single_node(&self, node_idx: usize, value_store: &mut ValueStore) -> NodeResult {
         let node = &self.flow.nodes[node_idx];
         // InputType references resolve against the currently running node.
         value_store.set_current_node_id(node.id);
 
         let frame_id = self.trace_enter(node, value_store);
         let signal = match &node.execution_target {
-            NodeExecutionTarget::Local => self.execute_local_node(node, value_store, frame_id),
+            NodeExecutionTarget::Local => {
+                let signal = self.execute_local_node(node, value_store, frame_id);
+                self.commit_result(node.id, signal, value_store)
+            }
             NodeExecutionTarget::Remote { service } => {
                 self.execute_remote_node(node, service, value_store, frame_id)
             }
         };
         self.trace_exit(frame_id, &signal, value_store);
 
-        NodeExecutionResult { signal, frame_id }
+        NodeResult { signal, frame_id }
     }
 
     fn execute_local_node(
@@ -190,14 +190,11 @@ impl<'a> EngineExecutor<'a> {
 
         let mut args = match self.build_args(node, value_store, frame_id) {
             Ok(args) => args,
-            Err(err) => {
-                value_store.insert_error(node.id, err.clone());
-                return Signal::Failure(err);
-            }
+            Err(err) => return Signal::Failure(err),
         };
 
         if let Some(signal) = self.force_eager_args(entry, &mut args, value_store, frame_id) {
-            return self.commit_result(node.id, signal, value_store);
+            return signal;
         }
 
         // Handler-owned runtime calls (for lazy args / callbacks) re-enter the same executor.
@@ -211,8 +208,7 @@ impl<'a> EngineExecutor<'a> {
             child_result.signal
         };
 
-        let signal = (entry.handler)(&args, value_store, &mut run);
-        self.commit_result(node.id, signal, value_store)
+        (entry.handler)(&args, value_store, &mut run)
     }
 
     fn execute_remote_node(
@@ -225,20 +221,21 @@ impl<'a> EngineExecutor<'a> {
         let remote_runtime = match self.remote {
             Some(remote) => remote,
             None => {
-                return Signal::Failure(RuntimeError::new(
-                    "T-CORE-000003",
-                    "RemoteRuntimeNotConfigured",
-                    "Remote runtime not configured",
-                ));
+                return self.commit_result(
+                    node.id,
+                    Signal::Failure(RuntimeError::new(
+                        "T-CORE-000003",
+                        "RemoteRuntimeNotConfigured",
+                        "Remote runtime not configured",
+                    )),
+                    value_store,
+                );
             }
         };
 
         let mut args = match self.build_args(node, value_store, frame_id) {
             Ok(args) => args,
-            Err(err) => {
-                value_store.insert_error(node.id, err.clone());
-                return Signal::Failure(err);
-            }
+            Err(err) => return self.commit_result(node.id, Signal::Failure(err), value_store),
         };
 
         let values = match self.resolve_remote_args(&mut args, value_store, frame_id) {
@@ -248,21 +245,16 @@ impl<'a> EngineExecutor<'a> {
 
         let request = match self.build_remote_request(node, values) {
             Ok(request) => request,
-            Err(err) => {
-                value_store.insert_error(node.id, err.clone());
-                return Signal::Failure(err);
-            }
+            Err(err) => return self.commit_result(node.id, Signal::Failure(err), value_store),
         };
 
-        let signal = match block_on(remote_runtime.execute_remote(RemoteExecution {
+        match block_on(remote_runtime.execute_remote(RemoteExecution {
             target_service: service.to_string(),
             request,
         })) {
-            Ok(value) => Signal::Success(value),
-            Err(err) => Signal::Failure(err),
-        };
-
-        self.commit_result(node.id, signal, value_store)
+            Ok(result) => self.commit_remote_result(node.id, result, value_store),
+            Err(err) => self.commit_result(node.id, Signal::Failure(err), value_store),
+        }
     }
 
     fn build_args(
@@ -519,6 +511,26 @@ impl<'a> EngineExecutor<'a> {
             }
             // Control signals are transient and should not be cached as node outputs.
             other => other,
+        }
+    }
+
+    fn commit_remote_result(
+        &self,
+        node_id: i64,
+        result: TucanaNodeExecutionResult,
+        value_store: &mut ValueStore,
+    ) -> Signal {
+        value_store.insert_node_result(node_id, result.clone());
+        match result.result {
+            Some(TucanaNodeResult::Success(value)) => Signal::Success(value),
+            Some(TucanaNodeResult::Error(error)) => {
+                Signal::Failure(RuntimeError::from_tucana_error(&error))
+            }
+            None => Signal::Failure(RuntimeError::new(
+                "T-CORE-000006",
+                "NodeExecutionResultMissingOutcome",
+                "Remote node execution result is missing success/error outcome",
+            )),
         }
     }
 

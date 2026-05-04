@@ -9,6 +9,8 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+use tucana::shared::NodeExecutionResult;
+
 /// Relationship between two execution frames.
 #[derive(Debug, Clone)]
 pub enum EdgeKind {
@@ -69,18 +71,11 @@ pub enum Outcome {
 }
 
 /// One stored node result entry at snapshot time.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StoreResultEntry {
     pub node_id: i64,
-    pub status: StoreResultStatus,
+    pub result: NodeExecutionResult,
     pub preview: String,
-}
-
-/// Result status in the value store.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StoreResultStatus {
-    Success,
-    Error,
 }
 
 /// One temporary input slot entry at snapshot time.
@@ -93,7 +88,7 @@ pub struct StoreInputSlotEntry {
 }
 
 /// Value store snapshot attached to a frame boundary.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StoreSnapshot {
     pub current_node_id: i64,
     pub flow_input_preview: String,
@@ -102,7 +97,7 @@ pub struct StoreSnapshot {
 }
 
 /// Per-frame store changes between `store_before` and `store_after`.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct StoreDiff {
     pub current_node_changed: Option<(i64, i64)>,
     pub result_sets: Vec<StoreResultEntry>,
@@ -129,7 +124,7 @@ impl StoreDiff {
         for (node_id, after_entry) in &after_results {
             match before_results.get(node_id) {
                 Some(before_entry)
-                    if before_entry.status == after_entry.status
+                    if before_entry.result == after_entry.result
                         && before_entry.preview == after_entry.preview => {}
                 _ => result_sets.push((*after_entry).clone()),
             }

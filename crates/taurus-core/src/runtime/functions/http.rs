@@ -15,6 +15,8 @@ use std::io::Read;
 use tucana::shared::helper::value::{ToValue, from_json_value, to_json_value};
 use tucana::shared::value::Kind;
 use tucana::shared::{Struct, Value};
+use ureq::http;
+use ureq::{Body, RequestExt};
 
 pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
     FunctionRegistration::eager("http::request::create", create_request, 4),
@@ -158,28 +160,69 @@ fn send_request(
         headers.insert("content-type".to_string(), default_content_type.to_string());
     }
 
-    let mut request = ureq::request(&method, &url);
-    for (name, value) in &headers {
-        request = request.set(name, value);
-    }
-
-    let response_result = match request_body {
-        Some(bytes) => request.send_bytes(bytes.as_slice()),
-        None => request.call(),
-    };
-
-    let response = match response_result {
-        Ok(response) => response,
-        Err(ureq::Error::Status(_, response)) => response,
-        Err(ureq::Error::Transport(err)) => {
+    let http_method = match http::Method::from_bytes(method.as_bytes()) {
+        Ok(value) => value,
+        Err(_) => {
             return fail(
-                "HttpRequestRuntimeError",
-                format!("HTTP transport error while sending request: {}", err),
+                "InvalidArgumentRuntimeError",
+                format!("Invalid HTTP method '{}'", method),
             );
         }
     };
 
-    let status_code = response.status() as i64;
+    let mut request_builder = http::Request::builder().method(http_method).uri(&url);
+    for (name, value) in &headers {
+        request_builder = request_builder.header(name, value);
+    }
+
+    let response_result = match request_body {
+        Some(bytes) => {
+            let request = match request_builder.body(bytes) {
+                Ok(request) => request,
+                Err(err) => {
+                    return fail(
+                        "InvalidArgumentRuntimeError",
+                        format!("Invalid HTTP request: {}", err),
+                    );
+                }
+            };
+            request
+                .with_default_agent()
+                .configure()
+                .http_status_as_error(false)
+                .allow_non_standard_methods(true)
+                .run()
+        }
+        None => {
+            let request = match request_builder.body(()) {
+                Ok(request) => request,
+                Err(err) => {
+                    return fail(
+                        "InvalidArgumentRuntimeError",
+                        format!("Invalid HTTP request: {}", err),
+                    );
+                }
+            };
+            request
+                .with_default_agent()
+                .configure()
+                .http_status_as_error(false)
+                .allow_non_standard_methods(true)
+                .run()
+        }
+    };
+
+    let response = match response_result {
+        Ok(response) => response,
+        Err(err) => {
+            return fail(
+                "HttpRequestRuntimeError",
+                format!("HTTP request error while sending request: {}", err),
+            );
+        }
+    };
+
+    let status_code = response.status().as_u16() as i64;
     let response_headers = decode_headers(&response);
     let response_payload = match decode_response_payload(response) {
         Ok(result) => result,
@@ -364,23 +407,26 @@ fn encode_request_payload(
     }
 }
 
-fn decode_headers(response: &ureq::Response) -> Struct {
+fn decode_headers(response: &http::Response<Body>) -> Struct {
     let mut fields = HashMap::new();
-    for name in response.headers_names() {
-        if let Some(value) = response.header(&name) {
-            fields.insert(name, value.to_string().to_value());
+    for (name, value) in response.headers().iter() {
+        if let Ok(value) = value.to_str() {
+            fields.insert(name.as_str().to_string(), value.to_string().to_value());
         }
     }
     Struct { fields }
 }
 
-fn decode_response_payload(response: ureq::Response) -> Result<Value, String> {
+fn decode_response_payload(response: http::Response<Body>) -> Result<Value, String> {
     let content_type = response
-        .header("content-type")
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
         .map(|value| value.to_ascii_lowercase());
 
     let mut bytes = Vec::new();
-    let mut reader = response.into_reader();
+    let (_, body) = response.into_parts();
+    let mut reader = body.into_reader();
     reader
         .read_to_end(&mut bytes)
         .map_err(|err| format!("Unable to read HTTP response payload: {}", err))?;

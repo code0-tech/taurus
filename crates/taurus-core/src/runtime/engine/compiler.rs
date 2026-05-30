@@ -14,6 +14,9 @@ use crate::{
 
 #[derive(Debug)]
 pub enum CompileError {
+    NodeIdMissing {
+        node_index: usize,
+    },
     DuplicateNodeId {
         node_id: i64,
     },
@@ -37,6 +40,11 @@ pub enum CompileError {
 impl CompileError {
     pub fn as_runtime_error(&self) -> RuntimeError {
         match self {
+            CompileError::NodeIdMissing { node_index } => RuntimeError::new(
+                "T-CORE-000100",
+                "FlowCompileError",
+                format!("Node at index {} is missing database id", node_index),
+            ),
             CompileError::DuplicateNodeId { node_id } => RuntimeError::new(
                 "T-CORE-000101",
                 "FlowCompileError",
@@ -90,10 +98,12 @@ pub fn compile_flow(
 ) -> Result<CompiledFlow, CompileError> {
     let mut node_idx_by_id = HashMap::with_capacity(nodes.len());
     for (idx, node) in nodes.iter().enumerate() {
-        if node_idx_by_id.insert(node.database_id, idx).is_some() {
-            return Err(CompileError::DuplicateNodeId {
-                node_id: node.database_id,
-            });
+        let Some(node_id) = node.database_id else {
+            return Err(CompileError::NodeIdMissing { node_index: idx });
+        };
+
+        if node_idx_by_id.insert(node_id, idx).is_some() {
+            return Err(CompileError::DuplicateNodeId { node_id });
         }
     }
 
@@ -108,12 +118,15 @@ pub fn compile_flow(
 
     let mut compiled_nodes = Vec::with_capacity(nodes.len());
     for node in nodes {
+        let node_id = node
+            .database_id
+            .expect("compiler validates node database ids before compilation");
         let next_idx = match node.next_node_id {
             Some(next_id) => match node_idx_by_id.get(&next_id).copied() {
                 Some(idx) => Some(idx),
                 None => {
                     return Err(CompileError::NextNodeMissing {
-                        node_id: node.database_id,
+                        node_id,
                         next_node_id: next_id,
                     });
                 }
@@ -127,13 +140,13 @@ pub fn compile_flow(
         for (parameter_index, parameter) in node.parameters.iter().enumerate() {
             let Some(node_value) = parameter.value.as_ref() else {
                 return Err(CompileError::ParameterValueMissing {
-                    node_id: node.database_id,
+                    node_id,
                     parameter_index,
                 });
             };
             let Some(value) = node_value.value.as_ref() else {
                 return Err(CompileError::ParameterValueMissing {
-                    node_id: node.database_id,
+                    node_id,
                     parameter_index,
                 });
             };
@@ -155,7 +168,7 @@ pub fn compile_flow(
                         }
                         None => {
                             return Err(CompileError::SubFlowExecutionReferenceMissing {
-                                node_id: node.database_id,
+                                node_id,
                                 parameter_index,
                             });
                         }
@@ -170,7 +183,7 @@ pub fn compile_flow(
         }
 
         compiled_nodes.push(CompiledNode {
-            id: node.database_id,
+            id: node_id,
             handler_id: node.runtime_function_id,
             execution_target,
             next_idx,
@@ -186,14 +199,11 @@ pub fn compile_flow(
 }
 
 fn execution_target_for(node: &NodeFunction) -> NodeExecutionTarget {
-    if node.definition_source.is_empty()
-        || node.definition_source == "taurus"
-        || node.definition_source.starts_with("draco")
-    {
-        NodeExecutionTarget::Local
-    } else {
-        NodeExecutionTarget::Remote {
-            service: node.definition_source.clone(),
-        }
+    match node.definition_source.as_deref() {
+        None | Some("") | Some("taurus") => NodeExecutionTarget::Local,
+        Some(source) if source.starts_with("draco") => NodeExecutionTarget::Local,
+        Some(service) => NodeExecutionTarget::Remote {
+            service: service.to_string(),
+        },
     }
 }

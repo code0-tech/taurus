@@ -59,7 +59,7 @@ fn arg_err<S: Into<String>>(msg: S) -> Signal {
 fn as_bytes(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -77,7 +77,7 @@ fn as_bytes(
 fn byte_size(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
     Signal::Success(value_from_i64(value.len() as i64))
@@ -86,7 +86,7 @@ fn byte_size(
 fn capitalize(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -113,7 +113,7 @@ fn capitalize(
 fn uppercase(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
@@ -124,7 +124,7 @@ fn uppercase(
 fn lowercase(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
@@ -135,7 +135,7 @@ fn lowercase(
 fn swapcase(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -160,7 +160,7 @@ fn swapcase(
 fn trim(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
     Signal::Success(Value {
@@ -171,7 +171,7 @@ fn trim(
 fn chars(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -190,7 +190,7 @@ fn chars(
 fn at(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, index: tucana::shared::NumberValue);
     let index = match number_to_i64_lossy(&index) {
@@ -222,7 +222,7 @@ fn at(
 fn append(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, suffix: String);
     Signal::Success(Value {
@@ -233,7 +233,7 @@ fn append(
 fn prepend(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, prefix: String);
     Signal::Success(Value {
@@ -244,7 +244,7 @@ fn prepend(
 fn insert(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, position: tucana::shared::NumberValue, text: String);
     let position = match number_to_i64_lossy(&position) {
@@ -277,7 +277,7 @@ fn insert(
 fn length(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
     Signal::Success(value_from_i64(value.chars().count() as i64))
@@ -286,7 +286,7 @@ fn length(
 fn remove(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, from: tucana::shared::NumberValue, to: tucana::shared::NumberValue);
     let from = match number_to_i64_lossy(&from) {
@@ -334,7 +334,7 @@ fn remove(
 fn replace(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, old: String, new: String);
     let replaced = value.replace(&old, &new);
@@ -346,7 +346,7 @@ fn replace(
 fn replace_first(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, old: String, new: String);
     let replaced = value.replacen(&old, &new, 1);
@@ -358,7 +358,7 @@ fn replace_first(
 fn replace_last(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, old: String, new: String);
 
@@ -384,7 +384,7 @@ fn replace_last(
 fn hex(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -402,7 +402,7 @@ fn hex(
 fn octal(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -420,7 +420,7 @@ fn octal(
 fn index_of(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, sub: String);
 
@@ -433,7 +433,7 @@ fn index_of(
 fn contains(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, sub: String);
     Signal::Success(Value {
@@ -444,7 +444,7 @@ fn contains(
 fn split(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, delimiter: String);
 
@@ -463,7 +463,7 @@ fn split(
 fn reverse(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -476,7 +476,7 @@ fn reverse(
 fn starts_with(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, prefix: String);
     Signal::Success(Value {
@@ -487,7 +487,7 @@ fn starts_with(
 fn ends_with(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, suffix: String);
     Signal::Success(Value {
@@ -498,7 +498,7 @@ fn ends_with(
 fn to_ascii(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String);
 
@@ -515,7 +515,7 @@ fn to_ascii(
 fn from_ascii(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     // Requires a TryFromArg impl for ListValue in your macro system.
     args!(args => list: ListValue);
@@ -546,7 +546,7 @@ fn from_ascii(
 fn encode(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, encoding: String);
 
@@ -565,7 +565,7 @@ fn encode(
 fn decode(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: String, encoding: String);
 
@@ -600,7 +600,7 @@ fn decode(
 fn is_equal(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: String, rhs: String);
     Signal::Success(Value {
@@ -674,8 +674,8 @@ mod tests {
         }
     }
 
-    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal`
-    fn dummy_run(_: i64, _: &mut ValueStore) -> Signal {
+    // dummy runner for handlers that accept `run: &mut crate::handler::registry::ThunkRunner<'_>`
+    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })

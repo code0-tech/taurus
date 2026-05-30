@@ -30,7 +30,7 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 | `T-CORE-000103` | Compiler | Flow compilation failed because a `next` edge points to a missing node. | `next_node_id` references unknown node id. | `runtime/engine/compiler.rs` |
 | `T-CORE-000104` | Compiler | Flow compilation failed because a parameter is structurally incomplete. | Parameter has no value payload in IR. | `runtime/engine/compiler.rs` |
 | `T-CORE-000105` | Compiler | Flow compilation failed because a sub-flow parameter is missing its execution reference. | `sub_flow.execution_reference` is absent. | `runtime/engine/compiler.rs` |
-| `T-CORE-000106` | Compiler | Flow compilation failed because a sub-flow parameter uses an unsupported execution reference. | `sub_flow.execution_reference` is not a starting node id. | `runtime/engine/compiler.rs` |
+| `T-CORE-000107` | Engine | Function sub-flow execution failed because a required setting value is missing. | A non-optional sub-flow setting has no callback input value and no default value. | `runtime/engine/executor.rs` |
 | `T-CORE-000201` | Handler | Handler argument arity contract was violated before function execution began. | `args!`/`no_args!` macro expected different argument count. | `handler/macros.rs` |
 | `T-CORE-000202` | Handler | Handler argument type conversion failed during typed extraction. | `TryFromArgument` expected type does not match provided argument. | `handler/argument.rs` |
 | `T-CORE-000301` | App Error Mapping | Application configuration failure mapped into runtime error format. | Invalid/missing runtime config surfaced as `Error::Configuration`. | `types/errors/error.rs` |

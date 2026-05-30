@@ -31,7 +31,7 @@ pub enum ArgKind {
         hit: bool,
     },
     Thunk {
-        node_id: i64,
+        target: String,
         eager: bool,
         executed: bool,
     },

@@ -170,8 +170,9 @@ mod tests {
     use crate::types::exit_reason::ExitReason;
     use std::cell::RefCell;
     use tucana::shared::{
-        InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow, Value,
-        node_value, reference_value, sub_flow::ExecutionReference, value::Kind,
+        InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow,
+        SubFlowSetting, Value, node_value, reference_value, sub_flow::ExecutionReference,
+        value::Kind,
     };
 
     fn literal_param(database_id: i64, runtime_parameter_id: &str, value: Value) -> NodeParameter {
@@ -197,6 +198,42 @@ mod tests {
                 })),
             }),
             cast: None,
+        }
+    }
+
+    fn function_thunk_param(
+        database_id: i64,
+        runtime_parameter_id: &str,
+        function_identifier: &str,
+        settings: Vec<SubFlowSetting>,
+    ) -> NodeParameter {
+        NodeParameter {
+            database_id,
+            runtime_parameter_id: runtime_parameter_id.to_string(),
+            value: Some(NodeValue {
+                value: Some(node_value::Value::SubFlow(SubFlow {
+                    signature: String::new(),
+                    settings,
+                    execution_reference: Some(ExecutionReference::FunctionIdentifier(
+                        function_identifier.to_string(),
+                    )),
+                })),
+            }),
+            cast: None,
+        }
+    }
+
+    fn subflow_setting(
+        identifier: &str,
+        default_value: Option<Value>,
+        optional: bool,
+        hidden: bool,
+    ) -> SubFlowSetting {
+        SubFlowSetting {
+            identifier: identifier.to_string(),
+            default_value,
+            optional: Some(optional),
+            hidden: Some(hidden),
         }
     }
 
@@ -260,6 +297,13 @@ mod tests {
     fn list_value(values: Vec<Value>) -> Value {
         Value {
             kind: Some(Kind::ListValue(ListValue { values })),
+        }
+    }
+
+    fn expect_success(signal: Signal) -> Value {
+        match signal {
+            Signal::Success(value) => value,
+            other => panic!("expected success, got {:?}", other),
         }
     }
 
@@ -432,6 +476,247 @@ mod tests {
                 other
             ),
         }
+    }
+
+    #[test]
+    fn function_subflow_map_executes_function_identifier_with_iteration_input() {
+        let engine = ExecutionEngine::new();
+
+        let map_node = node(
+            1,
+            "std::list::map",
+            vec![
+                literal_param(100, "list", list_value(vec![int_value(1), int_value(2)])),
+                function_thunk_param(
+                    101,
+                    "transform",
+                    "std::number::add",
+                    vec![
+                        subflow_setting("lhs", None, false, false),
+                        subflow_setting("rhs", Some(int_value(2)), false, true),
+                    ],
+                ),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(
+            expect_success(signal),
+            list_value(vec![int_value(3), int_value(4)])
+        );
+    }
+
+    #[test]
+    fn function_subflow_filter_executes_predicate_identifier() {
+        let engine = ExecutionEngine::new();
+
+        let filter_node = node(
+            1,
+            "std::list::filter",
+            vec![
+                literal_param(
+                    100,
+                    "list",
+                    list_value(vec![int_value(1), int_value(4), int_value(7)]),
+                ),
+                function_thunk_param(
+                    101,
+                    "predicate",
+                    "std::number::is_greater",
+                    vec![
+                        subflow_setting("lhs", None, false, false),
+                        subflow_setting("rhs", Some(int_value(3)), false, true),
+                    ],
+                ),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![filter_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(
+            expect_success(signal),
+            list_value(vec![int_value(4), int_value(7)])
+        );
+    }
+
+    #[test]
+    fn function_subflow_default_replaces_null_callback_input() {
+        let engine = ExecutionEngine::new();
+
+        let map_node = node(
+            1,
+            "std::list::map",
+            vec![
+                literal_param(100, "list", list_value(vec![null_value(), int_value(5)])),
+                function_thunk_param(
+                    101,
+                    "transform",
+                    "std::control::value",
+                    vec![subflow_setting("value", Some(int_value(9)), false, false)],
+                ),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(
+            expect_success(signal),
+            list_value(vec![int_value(9), int_value(5)])
+        );
+    }
+
+    #[test]
+    fn function_subflow_hidden_setting_always_uses_default() {
+        let engine = ExecutionEngine::new();
+
+        let map_node = node(
+            1,
+            "std::list::map",
+            vec![
+                literal_param(100, "list", list_value(vec![int_value(1), int_value(2)])),
+                function_thunk_param(
+                    101,
+                    "transform",
+                    "std::control::value",
+                    vec![subflow_setting("value", Some(int_value(9)), false, true)],
+                ),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(
+            expect_success(signal),
+            list_value(vec![int_value(9), int_value(9)])
+        );
+    }
+
+    #[test]
+    fn function_subflow_optional_missing_setting_uses_null() {
+        let engine = ExecutionEngine::new();
+
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                function_thunk_param(
+                    101,
+                    "runnable",
+                    "std::control::value",
+                    vec![subflow_setting("value", None, true, false)],
+                ),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(expect_success(signal), null_value());
+    }
+
+    #[test]
+    fn function_subflow_required_missing_setting_fails() {
+        let engine = ExecutionEngine::new();
+
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                function_thunk_param(
+                    101,
+                    "runnable",
+                    "std::control::value",
+                    vec![subflow_setting("value", None, false, false)],
+                ),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Failure);
+        match signal {
+            Signal::Failure(err) => assert_eq!(err.code, "T-CORE-000107"),
+            other => panic!("expected missing setting failure, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn function_subflow_unknown_function_identifier_fails_when_executed() {
+        let engine = ExecutionEngine::new();
+
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                function_thunk_param(101, "runnable", "std::missing::function", Vec::new()),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Failure);
+        match signal {
+            Signal::Failure(err) => assert_eq!(err.code, "T-CORE-000002"),
+            other => panic!("expected function-not-found failure, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn function_subflow_can_be_forced_as_eager_argument() {
+        let engine = ExecutionEngine::new();
+
+        let add_node = node(
+            1,
+            "std::number::add",
+            vec![
+                function_thunk_param(
+                    100,
+                    "lhs",
+                    "std::control::value",
+                    vec![subflow_setting("value", Some(int_value(40)), false, true)],
+                ),
+                literal_param(101, "rhs", int_value(2)),
+            ],
+            None,
+        );
+
+        let (signal, reason) = engine.execute_graph(1, vec![add_node], None, None, None, false);
+
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(expect_success(signal), int_value(42));
     }
 
     #[test]

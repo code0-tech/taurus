@@ -160,13 +160,13 @@ fn render_frame(
                 format!("reference {:?} ({})", reference, hit_state)
             }
             ArgKind::Thunk {
-                node_id,
+                target,
                 eager,
                 executed,
             } => {
                 let mode = if *eager { "eager" } else { "lazy" };
                 let executed_state = if *executed { "executed" } else { "deferred" };
-                format!("thunk node={} {} {}", node_id, mode, executed_state)
+                format!("thunk {} {} {}", target, mode, executed_state)
             }
         };
         out.push_str(&format!(

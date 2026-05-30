@@ -519,10 +519,10 @@ impl<'a> EngineExecutor<'a> {
             let mode = entry.param_mode(index);
 
             if matches!(mode, ParameterNode::Eager)
-                && let Argument::Thunk(thunk) = argument.clone()
+                && let Argument::Thunk(thunk) = argument
             {
                 self.trace_mark_thunk(frame_id, index, true, true);
-                let child = self.execute_thunk(&thunk, value_store);
+                let child = self.execute_thunk(thunk, value_store);
                 if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
                     self.trace_link_child(
                         parent,

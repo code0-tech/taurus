@@ -262,11 +262,11 @@ mod tests {
         next_node_id: Option<i64>,
     ) -> NodeFunction {
         NodeFunction {
-            database_id,
+            database_id: Some(database_id),
             runtime_function_id: runtime_function_id.to_string(),
             parameters,
             next_node_id,
-            definition_source: "taurus".to_string(),
+            definition_source: Some("taurus".to_string()),
         }
     }
 

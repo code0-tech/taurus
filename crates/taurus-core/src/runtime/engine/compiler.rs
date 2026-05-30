@@ -2,11 +2,12 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::{NodeFunction, node_value};
+use tucana::shared::{NodeFunction, node_value, sub_flow};
 
 use crate::{
     runtime::engine::model::{
-        CompiledArg, CompiledFlow, CompiledNode, CompiledParameter, NodeExecutionTarget,
+        CompiledArg, CompiledFlow, CompiledNode, CompiledParameter, CompiledThunk,
+        NodeExecutionTarget,
     },
     types::errors::runtime_error::RuntimeError,
 };
@@ -24,6 +25,10 @@ pub enum CompileError {
         next_node_id: i64,
     },
     ParameterValueMissing {
+        node_id: i64,
+        parameter_index: usize,
+    },
+    SubFlowExecutionReferenceMissing {
         node_id: i64,
         parameter_index: usize,
     },
@@ -61,6 +66,17 @@ impl CompileError {
                 "FlowCompileError",
                 format!(
                     "Node {} parameter {} does not contain a value",
+                    node_id, parameter_index
+                ),
+            ),
+            CompileError::SubFlowExecutionReferenceMissing {
+                node_id,
+                parameter_index,
+            } => RuntimeError::new(
+                "T-CORE-000105",
+                "FlowCompileError",
+                format!(
+                    "Node {} parameter {} sub_flow is missing execution reference",
                     node_id, parameter_index
                 ),
             ),
@@ -125,7 +141,26 @@ pub fn compile_flow(
             let arg = match value {
                 node_value::Value::LiteralValue(v) => CompiledArg::Literal(v.clone()),
                 node_value::Value::ReferenceValue(r) => CompiledArg::Reference(r.clone()),
-                node_value::Value::NodeFunctionId(id) => CompiledArg::DeferredNode(*id),
+                node_value::Value::SubFlow(sub_flow) => {
+                    match sub_flow.execution_reference.as_ref() {
+                        Some(sub_flow::ExecutionReference::StartingNodeId(node_id)) => {
+                            CompiledArg::Deferred(CompiledThunk::Node(*node_id))
+                        }
+                        Some(sub_flow::ExecutionReference::FunctionIdentifier(identifier)) => {
+                            CompiledArg::Deferred(CompiledThunk::Function {
+                                identifier: identifier.clone(),
+                                parameter_index: parameter_index as i64,
+                                settings: sub_flow.settings.clone(),
+                            })
+                        }
+                        None => {
+                            return Err(CompileError::SubFlowExecutionReferenceMissing {
+                                node_id: node.database_id,
+                                parameter_index,
+                            });
+                        }
+                    }
+                }
             };
 
             parameters.push(CompiledParameter {

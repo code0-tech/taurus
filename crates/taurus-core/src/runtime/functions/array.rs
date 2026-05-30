@@ -76,9 +76,9 @@ fn fail(category: &str, message: impl Into<String>) -> Signal {
 fn parse_array_and_thunk<'a>(
     op_name: &str,
     args: &'a [Argument],
-) -> Result<(&'a Value, i64), Signal> {
+) -> Result<(&'a Value, &'a crate::handler::argument::Thunk), Signal> {
     match args {
-        [Argument::Eval(array_v), Argument::Thunk(thunk)] => Ok((array_v, *thunk)),
+        [Argument::Eval(array_v), Argument::Thunk(thunk)] => Ok((array_v, thunk)),
         _ => Err(fail(
             "InvalidArgumentRuntimeError",
             format!(
@@ -103,8 +103,8 @@ fn run_with_unary_input(
     input_type: InputType,
     iter_index: usize,
     item: &Value,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
-    thunk_node: i64,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
+    thunk_node: &crate::handler::argument::Thunk,
 ) -> Signal {
     ctx.insert_input_type(input_type, item.clone());
     ctx.push_runtime_trace_label(format!("iter={} value={}", iter_index, preview_value(item)));
@@ -120,8 +120,8 @@ fn run_with_binary_inputs(
     cmp_index: usize,
     left: &Value,
     right: &Value,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
-    thunk_node: i64,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
+    thunk_node: &crate::handler::argument::Thunk,
 ) -> Signal {
     ctx.insert_input_type(left_input, left.clone());
     ctx.insert_input_type(right_input, right.clone());
@@ -178,7 +178,7 @@ fn comparator_ordering(signal: Signal, reverse: bool) -> Result<Ordering, Signal
 fn at(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     // array, index
     args!(args => array: ListValue, index: f64);
@@ -203,7 +203,7 @@ fn at(
 fn concat(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs_v: Value, rhs_v: Value);
 
@@ -237,7 +237,7 @@ fn concat(
 fn filter(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, predicate_node) = match parse_array_and_thunk("filter", args) {
         Ok(data) => data,
@@ -273,7 +273,7 @@ fn filter(
 fn find(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, predicate_node) = match parse_array_and_thunk("find", args) {
         Ok(data) => data,
@@ -308,7 +308,7 @@ fn find(
 fn find_last(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, predicate_node) = match parse_array_and_thunk("find_last", args) {
         Ok(data) => data,
@@ -344,7 +344,7 @@ fn find_last(
 fn find_index(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, predicate_node) = match parse_array_and_thunk("find_index", args) {
         Ok(data) => data,
@@ -380,7 +380,7 @@ fn find_index(
 fn first(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array: ListValue);
 
@@ -397,7 +397,7 @@ fn first(
 fn last(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array: ListValue);
     match array.values.last() {
@@ -413,7 +413,7 @@ fn last(
 fn for_each(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, transform_node) = match parse_array_and_thunk("for_each", args) {
         Ok(data) => data,
@@ -474,7 +474,7 @@ fn format_value_json(value: &Value) -> String {
 fn map(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, transform_node) = match parse_array_and_thunk("map", args) {
         Ok(data) => data,
@@ -505,7 +505,7 @@ fn map(
 fn push(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -524,7 +524,7 @@ fn push(
 fn pop(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -543,7 +543,7 @@ fn pop(
 fn remove(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -570,7 +570,7 @@ fn remove(
 fn is_empty(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -588,7 +588,7 @@ fn is_empty(
 fn size(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -604,7 +604,7 @@ fn size(
 fn index_of(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value, item: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -627,7 +627,7 @@ fn index_of(
 fn to_unique(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -653,7 +653,7 @@ fn to_unique(
 fn sort(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, transform_node) = match parse_array_and_thunk("sort", args) {
         Ok(data) => data,
@@ -718,7 +718,7 @@ fn sort(
 fn sort_reverse(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let (array_v, transform_node) = match parse_array_and_thunk("sort_reverse", args) {
         Ok(data) => data,
@@ -783,7 +783,7 @@ fn sort_reverse(
 fn reverse(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(mut array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -802,7 +802,7 @@ fn reverse(
 fn flat(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array_v: Value);
     let Kind::ListValue(array) = array_v.kind.ok_or(()).unwrap_or(Kind::NullValue(0)) else {
@@ -829,7 +829,7 @@ fn flat(
 fn min(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array: ListValue);
 
@@ -869,7 +869,7 @@ fn min(
 fn max(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array: ListValue);
 
@@ -909,7 +909,7 @@ fn max(
 fn sum(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array: ListValue);
 
@@ -949,7 +949,7 @@ fn sum(
 fn join(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => array: ListValue, separator: String);
 
@@ -976,7 +976,7 @@ mod tests {
         Argument::Eval(v)
     }
     fn a_thunk(id: i64) -> Argument {
-        Argument::Thunk(id)
+        Argument::Thunk(crate::handler::argument::Thunk::Node(id))
     }
     fn v_num(n: f64) -> Value {
         value_from_f64(n)
@@ -1033,13 +1033,15 @@ mod tests {
         }
     }
 
-    fn dummy_run(_: i64, _: &mut ValueStore) -> Signal {
+    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })
     }
 
-    fn run_from_bools(seq: Vec<bool>) -> impl FnMut(i64, &mut ValueStore) -> Signal {
+    fn run_from_bools(
+        seq: Vec<bool>,
+    ) -> impl FnMut(&crate::handler::argument::Thunk, &mut ValueStore) -> Signal {
         let mut i = 0usize;
         move |_, _| {
             let b = *seq.get(i).unwrap_or(&false);
@@ -1050,7 +1052,9 @@ mod tests {
         }
     }
 
-    fn run_from_values(seq: Vec<Value>) -> impl FnMut(i64, &mut ValueStore) -> Signal {
+    fn run_from_values(
+        seq: Vec<Value>,
+    ) -> impl FnMut(&crate::handler::argument::Thunk, &mut ValueStore) -> Signal {
         let mut i = 0usize;
         move |_, _| {
             let v = seq.get(i).cloned().unwrap_or(Value {
@@ -1251,7 +1255,7 @@ mod tests {
     fn test_for_each_and_map() {
         let mut ctx = ValueStore::default();
         let mut called = 0usize;
-        let mut run = |_, _ctx: &mut ValueStore| {
+        let mut run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
             called += 1;
             Signal::Success(Value {
                 kind: Some(Kind::NullValue(0)),
@@ -1291,7 +1295,7 @@ mod tests {
         let return_value = v_str("early_return");
 
         let mut for_each_calls = 0usize;
-        let mut for_each_run = |_, _ctx: &mut ValueStore| {
+        let mut for_each_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
             for_each_calls += 1;
             Signal::Return(return_value.clone())
         };
@@ -1309,7 +1313,7 @@ mod tests {
         assert_eq!(for_each_calls, 2);
 
         let mut map_calls = 0usize;
-        let mut map_run = |_, _ctx: &mut ValueStore| {
+        let mut map_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
             map_calls += 1;
             Signal::Return(return_value.clone())
         };
@@ -1338,7 +1342,7 @@ mod tests {
 
         let mut filter_index = 0usize;
         let filter_returns = [true, false, true];
-        let mut filter_run = |_, _ctx: &mut ValueStore| {
+        let mut filter_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
             let out = filter_returns.get(filter_index).copied().unwrap_or(false);
             filter_index += 1;
             Signal::Return(v_bool(out))
@@ -1355,7 +1359,7 @@ mod tests {
 
         let mut find_index = 0usize;
         let find_returns = [false, true];
-        let mut find_run = |_, _ctx: &mut ValueStore| {
+        let mut find_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
             let out = find_returns.get(find_index).copied().unwrap_or(false);
             find_index += 1;
             Signal::Return(v_bool(out))

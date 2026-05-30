@@ -2,8 +2,10 @@
 
 use std::collections::HashMap;
 
+use tucana::shared::node_execution_result::Result as TucanaNodeResult;
+
 use crate::runtime::execution::trace::{
-    ArgKind, EdgeKind, Outcome, StoreDiff, StoreResultStatus, TraceFrame, TraceRun,
+    ArgKind, EdgeKind, Outcome, StoreDiff, TraceFrame, TraceRun,
 };
 
 struct TraceTheme;
@@ -158,13 +160,13 @@ fn render_frame(
                 format!("reference {:?} ({})", reference, hit_state)
             }
             ArgKind::Thunk {
-                node_id,
+                target,
                 eager,
                 executed,
             } => {
                 let mode = if *eager { "eager" } else { "lazy" };
                 let executed_state = if *executed { "executed" } else { "deferred" };
-                format!("thunk node={} {} {}", node_id, mode, executed_state)
+                format!("thunk {} {} {}", target, mode, executed_state)
             }
         };
         out.push_str(&format!(
@@ -266,14 +268,17 @@ fn render_store_diff(
     }
 
     for set in &diff.result_sets {
-        let status = match set.status {
-            StoreResultStatus::Success => "success",
-            StoreResultStatus::Error => "error",
+        let status = match &set.result.result {
+            Some(TucanaNodeResult::Success(_)) => "success",
+            Some(TucanaNodeResult::Error(_)) => "error",
+            None => "empty",
         };
         out.push_str(&format!(
-            "{step:04} {prefix}{continuation}{store:<5} result.set node={} [{}] {}\n",
+            "{step:04} {prefix}{continuation}{store:<5} result.set node={} [{}] started_at={} finished_at={} {}\n",
             set.node_id,
             status,
+            set.result.started_at,
+            set.result.finished_at,
             set.preview,
             step = *step,
             prefix = prefix,

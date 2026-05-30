@@ -6,6 +6,11 @@ on:
 jobs:
   taurus:
     runs-on: ubuntu-latest
+    services:
+      nats:
+        image: nats:2
+        ports:
+          - 4222:4222
 
     steps:
       - uses: actions/checkout@v6
@@ -15,8 +20,11 @@ jobs:
         run: PATH=${{ runner.temp }}/proto/bin:$PATH cargo build
         env:
           RUST_BACKTRACE: 'full'
-      - name: Run Tests
-        run: cargo test
-      - name: Run Test Suite
+      - name: Run workspace tests
+        run: cargo test --workspace --all-targets
+      - name: Run NATS test execution request tests
+        run: cargo test -p taurus test_execution_request -- --ignored --nocapture
+        env:
+          NATS_URL: nats://127.0.0.1:4222
+      - name: Run tests package flow suite
         run: cargo run --package tests
-

@@ -1,11 +1,10 @@
 mod worker;
 
-use std::sync::Arc;
-use std::time::Duration;
-
 use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
 use code0_flow::flow_service::FlowUpdateService;
+use std::sync::Arc;
+use std::time::Duration;
 use taurus_core::runtime::engine::ExecutionEngine;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
@@ -13,7 +12,6 @@ use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
-use tucana::shared::{RuntimeFeature, Translation};
 
 use crate::client::runtime_status::TaurusRuntimeStatusService;
 use crate::client::runtime_usage::TaurusRuntimeUsageService;
@@ -124,7 +122,6 @@ async fn setup_dynamic_services_if_needed(
             config.aquila_url.clone(),
             config.aquila_token.clone(),
             "taurus".into(),
-            runtime_features(),
         )
         .await,
     ));
@@ -152,7 +149,9 @@ async fn setup_dynamic_services_if_needed(
             loop {
                 interval.tick().await;
                 status_service
-                    .update_runtime_status(tucana::shared::execution_runtime_status::Status::Running)
+                    .update_runtime_status(
+                        tucana::shared::execution_runtime_status::Status::Running,
+                    )
                     .await;
             }
         });
@@ -196,19 +195,6 @@ async fn push_definitions_until_success(config: &Config) {
         retry_count += 1;
         sleep(Duration::from_secs(3)).await;
     }
-}
-
-fn runtime_features() -> Vec<RuntimeFeature> {
-    vec![RuntimeFeature {
-        name: vec![Translation {
-            code: "en-US".to_string(),
-            content: "Runtime".to_string(),
-        }],
-        description: vec![Translation {
-            code: "en-US".to_string(),
-            content: "Will execute incoming flows.".to_string(),
-        }],
-    }]
 }
 
 async fn update_stopped_status(runtime_status_service: Option<&Arc<TaurusRuntimeStatusService>>) {

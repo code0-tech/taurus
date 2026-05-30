@@ -32,7 +32,7 @@ fn fail(category: &str, message: impl Into<String>) -> Signal {
 fn respond(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => struct_val: Struct);
 
@@ -93,7 +93,7 @@ fn respond(
 fn create_request(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
     let mut fields = std::collections::HashMap::new();
@@ -116,7 +116,7 @@ fn create_request(
 fn send_request(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => http_request: Struct);
 
@@ -247,7 +247,7 @@ fn send_request(
 fn create_response(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => http_status_code: i64, headers: Struct, payload: Value);
     let mut fields = std::collections::HashMap::new();
@@ -731,7 +731,7 @@ mod tests {
             kind: Some(Kind::StructValue(request)),
         })];
         let mut ctx = ValueStore::default();
-        let mut run = |_: i64, _: &mut ValueStore| Signal::Stop;
+        let mut run = |_: &crate::handler::argument::Thunk, _: &mut ValueStore| Signal::Stop;
 
         let signal = send_request(&args, &mut ctx, &mut run);
 

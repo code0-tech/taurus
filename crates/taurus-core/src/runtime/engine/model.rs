@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::{ReferenceValue, Value};
+use tucana::shared::{ReferenceValue, SubFlowSetting, Value};
 
 #[derive(Debug, Clone)]
 pub enum NodeExecutionTarget {
@@ -18,7 +18,17 @@ pub enum NodeExecutionTarget {
 pub enum CompiledArg {
     Literal(Value),
     Reference(ReferenceValue),
-    DeferredNode(i64),
+    Deferred(CompiledThunk),
+}
+
+#[derive(Debug, Clone)]
+pub enum CompiledThunk {
+    Node(i64),
+    Function {
+        identifier: String,
+        parameter_index: i64,
+        settings: Vec<SubFlowSetting>,
+    },
 }
 
 /// Compiled parameter binding.

@@ -1,0 +1,74 @@
+{
+	"name": "11_function_subflow",
+	"description": "This flow validates sub_flow execution by function identifier with settings and defaults",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": [
+				3,
+				4
+			]
+		}
+	],
+	"flow": {
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definition_source": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"listValue": {
+									"values": [
+										{
+											"numberValue": {
+												"integer": "1"
+											}
+										},
+										{
+											"numberValue": {
+												"integer": "2"
+											}
+										}
+									]
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "transform",
+						"value": {
+							"sub_flow": {
+								"signature": "",
+								"settings": [
+									{
+										"identifier": "lhs",
+										"optional": false,
+										"hidden": false
+									},
+									{
+										"identifier": "rhs",
+										"defaultValue": {
+											"numberValue": {
+												"integer": "2"
+											}
+										},
+										"optional": false,
+										"hidden": true
+									}
+								],
+								"functionIdentifier": "std::number::add"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

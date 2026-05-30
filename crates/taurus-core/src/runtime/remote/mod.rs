@@ -4,7 +4,7 @@
 //! trait without coupling the core engine to a specific transport.
 
 use async_trait::async_trait;
-use tucana::{aquila::ExecutionRequest, shared::Value};
+use tucana::{aquila::ActionExecutionRequest, shared::NodeExecutionResult};
 
 use crate::types::errors::runtime_error::RuntimeError;
 
@@ -12,11 +12,14 @@ pub struct RemoteExecution {
     /// Remote service identifier to route the call.
     pub target_service: String,
     /// Execution request payload expected by the remote runtime.
-    pub request: ExecutionRequest,
+    pub request: ActionExecutionRequest,
 }
 
 #[async_trait]
 pub trait RemoteRuntime {
     /// Execute a remote node invocation and return its resulting value.
-    async fn execute_remote(&self, execution: RemoteExecution) -> Result<Value, RuntimeError>;
+    async fn execute_remote(
+        &self,
+        execution: RemoteExecution,
+    ) -> Result<NodeExecutionResult, RuntimeError>;
 }

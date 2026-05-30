@@ -148,14 +148,22 @@
 						"databaseId": "63",
 						"runtimeParameterId": "runnable",
 						"value": {
-							"nodeFunctionId": "19"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "19"
+							}
 						}
 					},
 					{
 						"databaseId": "68",
 						"runtimeParameterId": "else_runnable",
 						"value": {
-							"nodeFunctionId": "17"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "17"
+							}
 						}
 					}
 				]

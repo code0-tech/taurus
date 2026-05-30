@@ -73,7 +73,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
 fn has_digits(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
 
@@ -93,7 +93,7 @@ fn has_digits(
 fn remove_digits(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     match number_to_i64_lossy(&value) {
@@ -109,7 +109,7 @@ fn remove_digits(
 fn add(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     // Preserve integer precision and overflow checks when both operands are integers.
@@ -133,7 +133,7 @@ fn add(
 fn multiply(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) =
@@ -156,7 +156,7 @@ fn multiply(
 fn subtract(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) =
@@ -179,7 +179,7 @@ fn subtract(
 fn divide(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
 
@@ -214,7 +214,7 @@ fn divide(
 fn modulo(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
 
@@ -248,7 +248,7 @@ fn modulo(
 fn abs(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     if let Some(number_value::Number::Integer(i)) = value.number
@@ -266,7 +266,7 @@ fn abs(
 fn is_positive(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -281,7 +281,7 @@ fn is_positive(
 fn is_greater(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     let lhs = match num_f64(&lhs) {
@@ -300,7 +300,7 @@ fn is_greater(
 fn is_less(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     let lhs = match num_f64(&lhs) {
@@ -319,7 +319,7 @@ fn is_less(
 fn is_zero(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -334,7 +334,7 @@ fn is_zero(
 fn square(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     if let Some(number_value::Number::Integer(i)) = value.number
@@ -352,7 +352,7 @@ fn square(
 fn exponential(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => base: NumberValue, exponent: NumberValue);
     match (base.number, exponent.number) {
@@ -381,7 +381,7 @@ fn exponential(
 fn pi(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     no_args!(args);
     Signal::Success(value_from_f64(f64::consts::PI))
@@ -390,7 +390,7 @@ fn pi(
 fn euler(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     no_args!(args);
     Signal::Success(value_from_f64(f64::consts::E))
@@ -399,7 +399,7 @@ fn euler(
 fn infinity(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     no_args!(args);
     Signal::Success(value_from_f64(f64::INFINITY))
@@ -408,7 +408,7 @@ fn infinity(
 fn round_up(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue, decimal_places: NumberValue);
     let decimal_places = match num_f64(&decimal_places) {
@@ -432,7 +432,7 @@ fn round_up(
 fn round_down(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue, decimal_places: NumberValue);
     let decimal_places = match num_f64(&decimal_places) {
@@ -456,7 +456,7 @@ fn round_down(
 fn round(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue, decimal_places: NumberValue);
     let decimal_places = match num_f64(&decimal_places) {
@@ -480,7 +480,7 @@ fn round(
 fn square_root(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -493,7 +493,7 @@ fn square_root(
 fn root(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue, root: NumberValue);
     let value = match num_f64(&value) {
@@ -510,7 +510,7 @@ fn root(
 fn log(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue, base: NumberValue);
     let value = match num_f64(&value) {
@@ -556,7 +556,7 @@ fn log(
 fn ln(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -569,7 +569,7 @@ fn ln(
 fn from_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => string_value: String);
 
@@ -589,7 +589,7 @@ fn from_text(
 fn as_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -604,7 +604,7 @@ fn as_text(
 fn min(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) =
@@ -626,7 +626,7 @@ fn min(
 fn max(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     if let (Some(number_value::Number::Integer(a)), Some(number_value::Number::Integer(b))) =
@@ -648,7 +648,7 @@ fn max(
 fn negate(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     if let Some(number_value::Number::Integer(i)) = value.number
@@ -666,7 +666,7 @@ fn negate(
 fn random(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => min: NumberValue, max: NumberValue);
 
@@ -695,7 +695,7 @@ fn random(
 fn sin(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -708,7 +708,7 @@ fn sin(
 fn cos(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -721,7 +721,7 @@ fn cos(
 fn tan(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -734,7 +734,7 @@ fn tan(
 fn arcsin(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -747,7 +747,7 @@ fn arcsin(
 fn arccos(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -760,7 +760,7 @@ fn arccos(
 fn arctan(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -773,7 +773,7 @@ fn arctan(
 fn sinh(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -786,7 +786,7 @@ fn sinh(
 fn cosh(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue);
     let value = match num_f64(&value) {
@@ -799,7 +799,7 @@ fn cosh(
 fn clamp(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: NumberValue, min: NumberValue, max: NumberValue);
     if let (
@@ -828,7 +828,7 @@ fn clamp(
 fn is_equal(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: NumberValue, rhs: NumberValue);
     let lhs = match num_f64(&lhs) {
@@ -904,8 +904,8 @@ mod tests {
         }
     }
 
-    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal`
-    fn dummy_run(_: i64, _: &mut ValueStore) -> Signal {
+    // dummy runner for handlers that accept `run: &mut crate::handler::registry::ThunkRunner<'_>`
+    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })

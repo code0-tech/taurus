@@ -10,6 +10,7 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 
 - `T-STD-XXXXX`: Errors originating inside standard function implementations under `runtime/functions/*`.
 - `T-CORE-XXXXXX`: Errors originating from core runtime infrastructure.
+- `T-TAURUS-XXXXXX`: Errors originating from the Taurus runtime app layer.
 - `T-PROV-XXXXXX`: Errors originating from provider integrations (transport adapters, remote runtime connectors).
 
 ## Code Table
@@ -23,10 +24,13 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 | `T-CORE-000003` | Engine | Flow requires remote execution but no remote runtime adapter was configured. | Node execution target is remote while `RemoteRuntime` is `None`. | `runtime/engine/executor.rs` |
 | `T-CORE-000004` | Engine | Reference lookup failed in the execution value store. | Missing prior node result, missing flow input path, or unresolved input reference. | `runtime/engine/executor.rs` |
 | `T-CORE-000005` | Engine | Remote request cannot be assembled because parameter metadata and resolved values diverge. | Parameter count mismatch during remote request materialization. | `runtime/engine/executor.rs` |
+| `T-CORE-000006` | Engine | Node execution result exists without a success/error outcome. | Provider or value store returned a `NodeExecutionResult` with no `result` field. | `runtime/engine/executor.rs`, `runtime/execution/value_store.rs` |
 | `T-CORE-000101` | Compiler | Flow compilation failed because a node id appears more than once. | Duplicate `database_id` in input nodes. | `runtime/engine/compiler.rs` |
 | `T-CORE-000102` | Compiler | Flow compilation failed because the declared start node is absent. | `start_node_id` not found in node list. | `runtime/engine/compiler.rs` |
 | `T-CORE-000103` | Compiler | Flow compilation failed because a `next` edge points to a missing node. | `next_node_id` references unknown node id. | `runtime/engine/compiler.rs` |
 | `T-CORE-000104` | Compiler | Flow compilation failed because a parameter is structurally incomplete. | Parameter has no value payload in IR. | `runtime/engine/compiler.rs` |
+| `T-CORE-000105` | Compiler | Flow compilation failed because a sub-flow parameter is missing its execution reference. | `sub_flow.execution_reference` is absent. | `runtime/engine/compiler.rs` |
+| `T-CORE-000107` | Engine | Function sub-flow execution failed because a required setting value is missing. | A non-optional sub-flow setting has no callback input value and no default value. | `runtime/engine/executor.rs` |
 | `T-CORE-000201` | Handler | Handler argument arity contract was violated before function execution began. | `args!`/`no_args!` macro expected different argument count. | `handler/macros.rs` |
 | `T-CORE-000202` | Handler | Handler argument type conversion failed during typed extraction. | `TryFromArgument` expected type does not match provided argument. | `handler/argument.rs` |
 | `T-CORE-000301` | App Error Mapping | Application configuration failure mapped into runtime error format. | Invalid/missing runtime config surfaced as `Error::Configuration`. | `types/errors/error.rs` |
@@ -35,6 +39,7 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 | `T-CORE-000304` | App Error Mapping | Serialization/deserialization failure mapped into runtime error format. | Encoding/decoding/parsing failure surfaced as `Error::Serialization`. | `types/errors/error.rs` |
 | `T-CORE-000399` | App Error Mapping | Internal application failure mapped into runtime error format. | Catch-all non-domain internal failure surfaced as `Error::Internal`. | `types/errors/error.rs` |
 | `T-CORE-999999` | Runtime Error Fallback | Default fallback runtime error code when no explicit mapping is provided. | `RuntimeError::default()` used as defensive fallback. | `types/errors/runtime_error.rs` |
+| `T-TAURUS-000001` | Taurus App | Test execution request payload could not be decoded as an execution flow. | Malformed or schema-incompatible payload published to the test execution NATS subject. | `taurus/src/app/worker.rs` |
 | `T-PROV-000001` | Provider Remote Runtime | Remote request to NATS did not yield a valid response message. | NATS request failed or timed out while waiting for remote runtime answer. | `taurus-provider/providers/remote/nats_remote_runtime.rs` |
 | `T-PROV-000002` | Provider Remote Runtime | Remote runtime response could not be decoded into expected protobuf structure. | Received payload is malformed, truncated, or schema-incompatible for `ExecutionResult`. | `taurus-provider/providers/remote/nats_remote_runtime.rs` |
 | `T-PROV-000003` | Provider Remote Runtime | Remote runtime response decoded, but contained no concrete result field. | `ExecutionResult` exists but `result` is `None` (protocol contract violation). | `taurus-provider/providers/remote/nats_remote_runtime.rs` |

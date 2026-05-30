@@ -1,6 +1,6 @@
 //! Runtime handler registry and callable function signatures.
 
-use crate::handler::argument::{Argument, ParameterNode};
+use crate::handler::argument::{Argument, ParameterNode, Thunk};
 use crate::runtime::execution::value_store::ValueStore;
 use crate::runtime::functions::ALL_FUNCTION_SETS;
 use crate::types::signal::Signal;
@@ -8,12 +8,14 @@ use std::collections::HashMap;
 
 /// Handler function type.
 /// - For eager params, the executor will already convert them to Argument::Eval(Value).
-/// - For lazy params, the executor will pass Argument::Thunk(node_id).
-/// - If a handler wants to execute a lazy arg, it calls run(node_id).
-pub type HandlerFn = fn(
+/// - For lazy params, the executor will pass Argument::Thunk(thunk).
+/// - If a handler wants to execute a lazy arg, it calls run(thunk).
+pub type ThunkRunner<'runner> = dyn FnMut(&Thunk, &mut ValueStore) -> Signal + 'runner;
+
+pub type HandlerFn = for<'runner> fn(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut ThunkRunner<'runner>,
 ) -> Signal;
 
 #[derive(Clone, Copy)]

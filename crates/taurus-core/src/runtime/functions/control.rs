@@ -24,7 +24,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
 fn stop(
     _args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     Signal::Stop
 }
@@ -32,7 +32,7 @@ fn stop(
 fn value(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: Value);
     Signal::Success(value)
@@ -41,7 +41,7 @@ fn value(
 fn r#return(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: Value);
     // The executor decides how far this return unwinds (one frame).
@@ -51,7 +51,7 @@ fn r#return(
 fn r#if(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let [
         Argument::Eval(Value {
@@ -70,7 +70,7 @@ fn r#if(
     if *bool {
         // Branch execution is delegated to the executor through `run`.
         ctx.push_runtime_trace_label("branch=if".to_string());
-        run(*if_pointer, ctx)
+        run(if_pointer, ctx)
     } else {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
@@ -81,7 +81,7 @@ fn r#if(
 fn if_else(
     args: &[Argument],
     ctx: &mut ValueStore,
-    run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     let [
         Argument::Eval(Value {
@@ -100,9 +100,9 @@ fn if_else(
 
     if *bool {
         ctx.push_runtime_trace_label("branch=if".to_string());
-        run(*if_pointer, ctx)
+        run(if_pointer, ctx)
     } else {
         ctx.push_runtime_trace_label("branch=else".to_string());
-        run(*else_pointer, ctx)
+        run(else_pointer, ctx)
     }
 }

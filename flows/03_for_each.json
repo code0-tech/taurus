@@ -61,7 +61,11 @@
 						"databaseId": "12",
 						"runtimeParameterId": "consumer",
 						"value": {
-							"nodeFunctionId": "6"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "6"
+							}
 						}
 					}
 				]

@@ -170,8 +170,8 @@ mod tests {
     use crate::types::exit_reason::ExitReason;
     use std::cell::RefCell;
     use tucana::shared::{
-        InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, Value, node_value,
-        reference_value, value::Kind,
+        InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow, Value,
+        node_value, reference_value, sub_flow::ExecutionReference, value::Kind,
     };
 
     fn literal_param(database_id: i64, runtime_parameter_id: &str, value: Value) -> NodeParameter {
@@ -190,9 +190,11 @@ mod tests {
             database_id,
             runtime_parameter_id: runtime_parameter_id.to_string(),
             value: Some(NodeValue {
-                value: Some(node_value::Value::SubFlow(unimplemented!(
-                    "Taurus needs to handle SubFlows (issue nr #184)"
-                ))),
+                value: Some(node_value::Value::SubFlow(SubFlow {
+                    signature: String::new(),
+                    settings: Vec::new(),
+                    execution_reference: Some(ExecutionReference::StartingNodeId(node_id)),
+                })),
             }),
             cast: None,
         }

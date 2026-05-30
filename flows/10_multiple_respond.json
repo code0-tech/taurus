@@ -50,7 +50,7 @@
 				"headers": {
 					"Content-Type": "text/plain"
 				},
-				"payload": null
+				"payload": []
 			},
 			"expected_result": {
 				"headers": {
@@ -108,7 +108,11 @@
 						"databaseId": "15",
 						"runtimeParameterId": "predicate",
 						"value": {
-							"nodeFunctionId": "8"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "8"
+							}
 						}
 					}
 				],
@@ -166,14 +170,22 @@
 						"databaseId": "21",
 						"runtimeParameterId": "runnable",
 						"value": {
-							"nodeFunctionId": "1"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "1"
+							}
 						}
 					},
 					{
 						"databaseId": "22",
 						"runtimeParameterId": "else_runnable",
 						"value": {
-							"nodeFunctionId": "3"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "3"
+							}
 						}
 					}
 				],
@@ -280,7 +292,11 @@
 						"databaseId": "24",
 						"runtimeParameterId": "transform",
 						"value": {
-							"nodeFunctionId": "6"
+							"sub_flow": {
+								"signature": "",
+								"settings": [],
+								"startingNodeId": "6"
+							}
 						}
 					}
 				],

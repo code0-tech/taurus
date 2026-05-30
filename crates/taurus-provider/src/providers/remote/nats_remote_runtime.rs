@@ -4,7 +4,7 @@ use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use tonic::async_trait;
 use tucana::aquila::ActionExecutionResponse;
-use tucana::shared::Value;
+use tucana::shared::NodeExecutionResult;
 
 pub struct NATSRemoteRuntime {
     client: Client,
@@ -18,7 +18,10 @@ impl NATSRemoteRuntime {
 
 #[async_trait]
 impl RemoteRuntime for NATSRemoteRuntime {
-    async fn execute_remote(&self, execution: RemoteExecution) -> Result<Value, RuntimeError> {
+    async fn execute_remote(
+        &self,
+        execution: RemoteExecution,
+    ) -> Result<NodeExecutionResult, RuntimeError> {
         let topic = format!(
             "action.{}.{}",
             execution.target_service, execution.request.execution_identifier
@@ -31,33 +34,41 @@ impl RemoteRuntime for NATSRemoteRuntime {
             Ok(r) => r,
             Err(err) => {
                 log::error!(
-                    "RemoteRuntimeExeption: failed to handle NATS message: {}",
+                    "RemoteRuntimeException: failed to handle NATS message: {}",
                     err
                 );
                 return Err(RuntimeError::new(
                     "T-PROV-000001",
-                    "RemoteRuntimeExeption",
+                    "RemoteRuntimeException",
                     "Failed to receive any response messages from a remote runtime.",
                 ));
             }
         };
 
         let decode_result = ActionExecutionResponse::decode(message.payload);
-        let _execution_result = match decode_result {
-            Ok(r) => r,
+        match decode_result {
+            Ok(r) => match r.node_result {
+                Some(res) => Ok(res),
+                None => {
+                    log::error!("RemoteRuntimeException: received execution result without a body");
+                    Err(RuntimeError::new(
+                        "T-PROV-000003",
+                        "RemoteRuntimeException",
+                        "Received empty action execution response",
+                    ))
+                }
+            },
             Err(err) => {
                 log::error!(
-                    "RemoteRuntimeExeption: failed to decode NATS message: {}",
+                    "RemoteRuntimeException: failed to decode NATS message: {}",
                     err
                 );
                 return Err(RuntimeError::new(
                     "T-PROV-000002",
-                    "RemoteRuntimeExeption",
+                    "RemoteRuntimeException",
                     "Failed to read Remote Response",
                 ));
             }
-        };
-
-        unimplemented!("Taurus needs to handle text executions (issue nr #185)")
+        }
     }
 }

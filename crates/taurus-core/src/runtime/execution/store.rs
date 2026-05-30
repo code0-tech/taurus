@@ -2,17 +2,9 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::Value;
+use tucana::shared::{NodeExecutionResult, Value};
 
-use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::execution::ids::{FrameId, NodeId};
-
-/// Runtime outcome persisted per node.
-#[derive(Debug, Clone)]
-pub enum NodeOutcome {
-    Success(Value),
-    Failure(RuntimeError),
-}
 
 /// Input slot key for runtime-provided temporary inputs (for iterators/predicates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,7 +17,7 @@ pub struct InputSlotKey {
 /// Store that captures mutable runtime execution state.
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionStore {
-    pub node_outcomes: HashMap<NodeId, NodeOutcome>,
+    pub node_results: HashMap<NodeId, NodeExecutionResult>,
     pub input_slots: HashMap<InputSlotKey, Value>,
     pub flow_input: Option<Value>,
     pub current_node: Option<NodeId>,

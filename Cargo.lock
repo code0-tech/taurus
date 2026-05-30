@@ -346,7 +346,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana",
+ "tucana 0.0.70",
  "walkdir",
 ]
 
@@ -1072,7 +1072,7 @@ dependencies = [
  "taurus-provider",
  "tokio",
  "tonic",
- "tucana",
+ "tucana 0.0.72",
 ]
 
 [[package]]
@@ -1855,7 +1855,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana",
+ "tucana 0.0.72",
 ]
 
 [[package]]
@@ -1868,7 +1868,7 @@ dependencies = [
  "log",
  "rand 0.10.1",
  "serde_json",
- "tucana",
+ "tucana 0.0.72",
  "ureq",
  "uuid",
 ]
@@ -1889,7 +1889,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana",
+ "tucana 0.0.72",
 ]
 
 [[package]]
@@ -1914,7 +1914,7 @@ dependencies = [
  "serde",
  "serde_json",
  "taurus-core",
- "tucana",
+ "tucana 0.0.72",
 ]
 
 [[package]]
@@ -2245,6 +2245,26 @@ name = "tucana"
 version = "0.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ececdc8eeccd39a9ba82a4ee78e9663d9871a9ca9da65013477536360322392"
+dependencies = [
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "tucana"
+version = "0.0.72"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5513f2fc08c899ee75f2f4717a7c4af53269a80e76b2f1a331b3455544b1ef"
 dependencies = [
  "pbjson",
  "pbjson-build",

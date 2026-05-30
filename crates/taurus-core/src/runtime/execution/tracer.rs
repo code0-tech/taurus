@@ -14,7 +14,7 @@ pub trait ExecutionTracer {
     fn record_arg(&mut self, frame_id: u64, arg: ArgTrace);
     fn link_child(&mut self, parent_frame: u64, child_frame: u64, edge: EdgeKind);
     fn mark_thunk(&mut self, frame_id: u64, arg_index: usize, eager: bool, executed: bool);
-    fn mark_thunk_executed_by_node(&mut self, frame_id: u64, node_id: i64);
+    fn mark_thunk_executed(&mut self, frame_id: u64, target: &str);
     fn exit_node(&mut self, frame_id: u64, outcome: Outcome, store_after: StoreSnapshot);
 }
 
@@ -141,16 +141,16 @@ impl ExecutionTracer for Tracer {
         }
     }
 
-    fn mark_thunk_executed_by_node(&mut self, frame_id: u64, node_id: i64) {
+    fn mark_thunk_executed(&mut self, frame_id: u64, target: &str) {
         let frame = self.get_frame_mut(frame_id);
         if let Some(arg) = frame.args.iter_mut().find(|a| {
             matches!(
-                a.kind,
+                &a.kind,
                 ArgKind::Thunk {
-                    node_id: current_node,
+                    target: current_target,
                     executed: false,
                     ..
-                } if current_node == node_id
+                } if current_target == target
             )
         }) && let ArgTrace {
             kind:

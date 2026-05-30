@@ -22,7 +22,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
 fn get(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => object: Struct, key: String);
     match object.fields.get(&key) {
@@ -38,7 +38,7 @@ fn get(
 fn contains_key(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => object: Struct, key: String);
     let contains = object.fields.contains_key(&key);
@@ -51,7 +51,7 @@ fn contains_key(
 fn size(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => object: Struct);
     Signal::Success(value_from_i64(object.fields.len() as i64))
@@ -60,7 +60,7 @@ fn size(
 fn keys(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => object: Struct);
 
@@ -83,7 +83,7 @@ fn keys(
 fn set(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => object: Struct, key: String, value: Value);
     let mut new_object = object.clone();
@@ -159,8 +159,8 @@ mod tests {
         })
     }
 
-    // dummy runner for handlers that accept `run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal`
-    fn dummy_run(_: i64, _: &mut ValueStore) -> Signal {
+    // dummy runner for handlers that accept `run: &mut crate::handler::registry::ThunkRunner<'_>`
+    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
         })

@@ -24,7 +24,7 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
 fn as_number(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: bool);
     Signal::Success(value_from_i64(if value { 1 } else { 0 }))
@@ -33,7 +33,7 @@ fn as_number(
 fn as_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
@@ -44,7 +44,7 @@ fn as_text(
 fn from_number(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => number: f64);
     let is_zero = number == 0.0;
@@ -56,7 +56,7 @@ fn from_number(
 fn from_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => text: String);
 
@@ -76,7 +76,7 @@ fn from_text(
 fn is_equal(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => lhs: bool, rhs: bool);
     Signal::Success(Value {
@@ -87,7 +87,7 @@ fn is_equal(
 fn negate(
     args: &[Argument],
     _ctx: &mut ValueStore,
-    _run: &mut dyn FnMut(i64, &mut ValueStore) -> Signal,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => value: bool);
     Signal::Success(Value {
@@ -143,7 +143,7 @@ mod tests {
     }
 
     // dummy `run` closure (unused by these handlers)
-    fn dummy_run(_: i64, _: &mut ValueStore) -> Signal {
+    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
         Signal::Success(Value {
             kind: Some(Kind::BoolValue(true)),
         })

@@ -132,7 +132,7 @@ impl Testable for Case {
                 flow_input,
                 None,
                 None,
-                true,
+                false,
             );
 
             match res {

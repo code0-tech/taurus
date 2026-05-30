@@ -7,12 +7,56 @@ use tucana::shared::value::Kind;
 use tucana::shared::{ListValue, NumberValue, Struct, Value};
 
 use crate::value::{number_to_f64, number_to_i64_lossy};
+use std::fmt;
+use tucana::shared::SubFlowSetting;
+
+#[derive(Clone)]
+pub struct FunctionThunk {
+    pub identifier: String,
+    pub parameter_index: i64,
+    pub settings: Vec<SubFlowSetting>,
+}
+
+impl fmt::Debug for FunctionThunk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FunctionThunk")
+            .field("identifier", &self.identifier)
+            .field("parameter_index", &self.parameter_index)
+            .field("settings_len", &self.settings.len())
+            .finish()
+    }
+}
+
+#[derive(Clone)]
+pub enum Thunk {
+    Node(i64),
+    Function(FunctionThunk),
+}
+
+impl fmt::Debug for Thunk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Thunk::Node(node_id) => write!(f, "{}", node_id),
+            Thunk::Function(function) => function.fmt(f),
+        }
+    }
+}
+
+impl Thunk {
+    pub fn trace_target(&self) -> String {
+        match self {
+            Thunk::Node(node_id) => format!("node={}", node_id),
+            Thunk::Function(function) => format!("function={}", function.identifier),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Argument {
     /// Eager value that can be consumed immediately by a handler.
     Eval(Value),
-    /// Deferred node execution handle, evaluated by calling `run(node_id)`.
-    Thunk(i64),
+    /// Deferred execution handle, evaluated by calling `run(thunk)`.
+    Thunk(Thunk),
 }
 
 #[derive(Clone, Copy, Debug)]

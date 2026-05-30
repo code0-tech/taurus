@@ -8,13 +8,18 @@ use tucana::aquila::ActionExecutionRequest;
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
-use tucana::shared::{NodeExecutionResult as TucanaNodeExecutionResult, Struct, Value};
+use tucana::shared::{
+    InputType, NodeExecutionResult as TucanaNodeExecutionResult, ReferenceValue, Struct,
+    SubFlowSetting, Value,
+};
 use uuid::Uuid;
 
-use crate::handler::argument::{Argument, ParameterNode};
+use crate::handler::argument::{Argument, FunctionThunk, ParameterNode, Thunk};
 use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
 use crate::runtime::engine::emitter::{EmitType, ExecutionId, RespondEmitter};
-use crate::runtime::engine::model::{CompiledArg, CompiledFlow, CompiledNode, NodeExecutionTarget};
+use crate::runtime::engine::model::{
+    CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget,
+};
 use crate::runtime::execution::trace::{
     ArgKind, ArgTrace, EdgeKind, Outcome, ReferenceKind, TraceRun,
 };
@@ -151,6 +156,75 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
+    fn execute_thunk(&self, thunk: &Thunk, value_store: &mut ValueStore) -> ExecutionResult {
+        match thunk {
+            Thunk::Node(node_id) => self.execute_from_node_id(*node_id, value_store),
+            Thunk::Function(function) => self.execute_function_thunk(function, value_store),
+        }
+    }
+
+    fn execute_function_thunk(
+        &self,
+        function: &FunctionThunk,
+        value_store: &mut ValueStore,
+    ) -> ExecutionResult {
+        let entry = match self.handlers.get(function.identifier.as_str()).copied() {
+            Some(entry) => entry,
+            None => {
+                return ExecutionResult {
+                    signal: Signal::Failure(RuntimeError::new(
+                        "T-CORE-000002",
+                        "FunctionNotFound",
+                        format!("Function {} not found", function.identifier),
+                    )),
+                    root_frame: None,
+                };
+            }
+        };
+
+        let frame_id = self.trace_enter_function(
+            value_store.get_current_node_id(),
+            function.identifier.as_str(),
+            value_store,
+        );
+
+        let mut args = match self.build_function_thunk_args(function, value_store, frame_id) {
+            Ok(args) => args,
+            Err(err) => {
+                let signal = Signal::Failure(err);
+                self.trace_exit(frame_id, &signal, value_store);
+                return ExecutionResult {
+                    signal,
+                    root_frame: frame_id,
+                };
+            }
+        };
+
+        let signal =
+            if let Some(signal) = self.force_eager_args(&entry, &mut args, value_store, frame_id) {
+                signal
+            } else {
+                let mut run = |thunk: &Thunk, store: &mut ValueStore| {
+                    self.trace_mark_thunk_executed(frame_id, thunk);
+                    let label = store.pop_runtime_trace_label();
+                    let child_result = self.execute_thunk(thunk, store);
+                    if let (Some(parent), Some(child)) = (frame_id, child_result.root_frame) {
+                        self.trace_link_child(parent, child, EdgeKind::RuntimeCall { label });
+                    }
+                    child_result.signal
+                };
+
+                (entry.handler)(&args, value_store, &mut run)
+            };
+
+        self.trace_exit(frame_id, &signal, value_store);
+
+        ExecutionResult {
+            signal,
+            root_frame: frame_id,
+        }
+    }
+
     fn execute_single_node(&self, node_idx: usize, value_store: &mut ValueStore) -> NodeResult {
         let node = &self.flow.nodes[node_idx];
         // InputType references resolve against the currently running node.
@@ -198,10 +272,10 @@ impl<'a> EngineExecutor<'a> {
         }
 
         // Handler-owned runtime calls (for lazy args / callbacks) re-enter the same executor.
-        let mut run = |node_id: i64, store: &mut ValueStore| {
-            self.trace_mark_thunk_executed_by_node(frame_id, node_id);
+        let mut run = |thunk: &Thunk, store: &mut ValueStore| {
+            self.trace_mark_thunk_executed(frame_id, thunk);
             let label = store.pop_runtime_trace_label();
-            let child_result = self.execute_from_node_id(node_id, store);
+            let child_result = self.execute_thunk(thunk, store);
             if let (Some(parent), Some(child)) = (frame_id, child_result.root_frame) {
                 self.trace_link_child(parent, child, EdgeKind::RuntimeCall { label });
             }
@@ -377,22 +451,58 @@ impl<'a> EngineExecutor<'a> {
                         ));
                     }
                 },
-                CompiledArg::DeferredNode(node_id) => {
+                CompiledArg::Deferred(thunk) => {
+                    let thunk = compiled_thunk_to_argument(thunk);
+                    let target = thunk.trace_target();
                     self.trace_record_arg(
                         frame_id,
                         ArgTrace {
                             index,
                             kind: ArgKind::Thunk {
-                                node_id: *node_id,
+                                target: target.clone(),
                                 eager: false,
                                 executed: false,
                             },
-                            preview: format!("thunk({})", node_id),
+                            preview: format!("thunk({})", target),
                         },
                     );
-                    args.push(Argument::Thunk(*node_id));
+                    args.push(Argument::Thunk(thunk));
                 }
             }
+        }
+
+        Ok(args)
+    }
+
+    fn build_function_thunk_args(
+        &self,
+        function: &FunctionThunk,
+        value_store: &mut ValueStore,
+        frame_id: Option<u64>,
+    ) -> Result<Vec<Argument>, RuntimeError> {
+        let mut args = Vec::with_capacity(function.settings.len());
+        let current_node_id = value_store.get_current_node_id();
+
+        for (index, setting) in function.settings.iter().enumerate() {
+            let input_type = InputType {
+                node_id: current_node_id,
+                parameter_index: function.parameter_index,
+                input_index: index as i64,
+            };
+            let value = resolve_function_setting(function, setting, input_type, value_store)?;
+            self.trace_record_arg(
+                frame_id,
+                ArgTrace {
+                    index,
+                    kind: ArgKind::Literal,
+                    preview: format!(
+                        "setting({}) -> {}",
+                        setting.identifier,
+                        preview_value(&value)
+                    ),
+                },
+            );
+            args.push(Argument::Eval(value));
         }
 
         Ok(args)
@@ -409,10 +519,10 @@ impl<'a> EngineExecutor<'a> {
             let mode = entry.param_mode(index);
 
             if matches!(mode, ParameterNode::Eager)
-                && let Argument::Thunk(node_id) = *argument
+                && let Argument::Thunk(thunk) = argument
             {
                 self.trace_mark_thunk(frame_id, index, true, true);
-                let child = self.execute_from_node_id(node_id, value_store);
+                let child = self.execute_thunk(thunk, value_store);
                 if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
                     self.trace_link_child(
                         parent,
@@ -446,10 +556,10 @@ impl<'a> EngineExecutor<'a> {
         for (index, argument) in args.iter_mut().enumerate() {
             match argument {
                 Argument::Eval(value) => values.push(value.clone()),
-                Argument::Thunk(node_id) => {
+                Argument::Thunk(thunk) => {
                     // Remote execution always receives materialized values, never thunks.
                     self.trace_mark_thunk(frame_id, index, true, true);
-                    let child = self.execute_from_node_id(*node_id, value_store);
+                    let child = self.execute_thunk(thunk, value_store);
                     if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
                         self.trace_link_child(
                             parent,
@@ -535,12 +645,19 @@ impl<'a> EngineExecutor<'a> {
     }
 
     fn trace_enter(&self, node: &CompiledNode, value_store: &ValueStore) -> Option<u64> {
+        self.trace_enter_function(node.id, node.handler_id.as_str(), value_store)
+    }
+
+    fn trace_enter_function(
+        &self,
+        node_id: i64,
+        function_name: &str,
+        value_store: &ValueStore,
+    ) -> Option<u64> {
         self.tracer.map(|tracer| {
-            tracer.borrow_mut().enter_node(
-                node.id,
-                node.handler_id.as_str(),
-                value_store.trace_snapshot(),
-            )
+            tracer
+                .borrow_mut()
+                .enter_node(node_id, function_name, value_store.trace_snapshot())
         })
     }
 
@@ -598,12 +715,86 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn trace_mark_thunk_executed_by_node(&self, frame_id: Option<u64>, node_id: i64) {
+    fn trace_mark_thunk_executed(&self, frame_id: Option<u64>, thunk: &Thunk) {
         if let (Some(frame_id), Some(tracer)) = (frame_id, self.tracer) {
             tracer
                 .borrow_mut()
-                .mark_thunk_executed_by_node(frame_id, node_id);
+                .mark_thunk_executed(frame_id, thunk.trace_target().as_str());
         }
+    }
+}
+
+fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
+    match thunk {
+        CompiledThunk::Node(node_id) => Thunk::Node(*node_id),
+        CompiledThunk::Function {
+            identifier,
+            parameter_index,
+            settings,
+        } => Thunk::Function(FunctionThunk {
+            identifier: identifier.clone(),
+            parameter_index: *parameter_index,
+            settings: settings.clone(),
+        }),
+    }
+}
+
+fn resolve_function_setting(
+    function: &FunctionThunk,
+    setting: &SubFlowSetting,
+    input_type: InputType,
+    value_store: &mut ValueStore,
+) -> Result<Value, RuntimeError> {
+    if setting.hidden.unwrap_or(false) {
+        return Ok(setting_default_or_null(setting));
+    }
+
+    let reference = ReferenceValue {
+        target: Some(Target::InputType(input_type)),
+        paths: Vec::new(),
+    };
+
+    match value_store.get(reference) {
+        ValueStoreResult::Success(value) => {
+            if is_null_value(&value)
+                && let Some(default_value) = setting.default_value.clone()
+            {
+                Ok(default_value)
+            } else {
+                Ok(value)
+            }
+        }
+        ValueStoreResult::Error(err) => Err(err),
+        ValueStoreResult::NotFound => {
+            if let Some(default_value) = setting.default_value.clone() {
+                Ok(default_value)
+            } else if setting.optional.unwrap_or(false) {
+                Ok(null_value())
+            } else {
+                Err(RuntimeError::new(
+                    "T-CORE-000107",
+                    "SubFlowSettingValueMissing",
+                    format!(
+                        "Required sub_flow setting {} for function {} is missing",
+                        setting.identifier, function.identifier
+                    ),
+                ))
+            }
+        }
+    }
+}
+
+fn setting_default_or_null(setting: &SubFlowSetting) -> Value {
+    setting.default_value.clone().unwrap_or_else(null_value)
+}
+
+fn is_null_value(value: &Value) -> bool {
+    matches!(value.kind.as_ref(), None | Some(Kind::NullValue(_)))
+}
+
+fn null_value() -> Value {
+    Value {
+        kind: Some(Kind::NullValue(0)),
     }
 }
 

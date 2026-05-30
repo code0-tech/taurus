@@ -9,12 +9,13 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tucana::shared::value::Kind::{NumberValue, StringValue, StructValue};
 use tucana::shared::{
     Error as TucanaError, NumberValue as ProtoNumberValue, Struct, Value, number_value,
 };
+
+use crate::time::now_unix_ms;
 
 /// Runtime execution failure representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +47,7 @@ impl RuntimeError {
             code: code.into(),
             category: category.into(),
             message: message.into(),
-            timestamp_unix_ms: now_unix_ms(),
+            timestamp_unix_ms: now_unix_ms() as u64,
             version: env!("CARGO_PKG_VERSION").to_string(),
             dependencies: HashMap::new(),
             details: HashMap::new(),
@@ -188,11 +189,4 @@ impl Display for RuntimeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}] {}: {}", self.code, self.category, self.message)
     }
-}
-
-fn now_unix_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|it| it.as_millis() as u64)
-        .unwrap_or(0)
 }

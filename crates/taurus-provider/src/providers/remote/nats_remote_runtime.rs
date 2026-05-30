@@ -34,12 +34,12 @@ impl RemoteRuntime for NATSRemoteRuntime {
             Ok(r) => r,
             Err(err) => {
                 log::error!(
-                    "RemoteRuntimeExeption: failed to handle NATS message: {}",
+                    "RemoteRuntimeException: failed to handle NATS message: {}",
                     err
                 );
                 return Err(RuntimeError::new(
                     "T-PROV-000001",
-                    "RemoteRuntimeExeption",
+                    "RemoteRuntimeException",
                     "Failed to receive any response messages from a remote runtime.",
                 ));
             }
@@ -50,22 +50,22 @@ impl RemoteRuntime for NATSRemoteRuntime {
             Ok(r) => match r.node_result {
                 Some(res) => Ok(res),
                 None => {
-                    log::error!("RemoteRuntimeExeption: recieved execution result without an body");
-                    return Err(RuntimeError::new(
+                    log::error!("RemoteRuntimeException: received execution result without a body");
+                    Err(RuntimeError::new(
                         "T-PROV-000003",
-                        "RemoteRuntimeExeption",
-                        "Recieved empty action execution response",
-                    ));
+                        "RemoteRuntimeException",
+                        "Received empty action execution response",
+                    ))
                 }
             },
             Err(err) => {
                 log::error!(
-                    "RemoteRuntimeExeption: failed to decode NATS message: {}",
+                    "RemoteRuntimeException: failed to decode NATS message: {}",
                     err
                 );
                 return Err(RuntimeError::new(
                     "T-PROV-000002",
-                    "RemoteRuntimeExeption",
+                    "RemoteRuntimeException",
                     "Failed to read Remote Response",
                 ));
             }

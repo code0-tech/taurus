@@ -1,12 +1,12 @@
 //! Mutable value store used by runtime execution to resolve references.
 
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::{InputType, NodeExecutionResult, ReferenceValue, Value, value::Kind};
 
 use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
+use crate::time::now_unix_ms;
 use crate::types::errors::runtime_error::RuntimeError;
 
 #[derive(Clone)]
@@ -106,7 +106,14 @@ impl ValueStore {
                 Some(TucanaNodeResult::Error(error)) => {
                     ValueStoreResult::Error(RuntimeError::from_tucana_error(error))
                 }
-                None => ValueStoreResult::NotFound,
+                None => ValueStoreResult::Error(RuntimeError::new(
+                    "T-CORE-000006",
+                    "NodeExecutionResultMissingOutcome",
+                    format!(
+                        "Node {} execution result is missing success/error outcome",
+                        id
+                    ),
+                )),
             },
             None => ValueStoreResult::NotFound,
         }
@@ -212,13 +219,6 @@ impl ValueStore {
             input_slots,
         }
     }
-}
-
-fn now_unix_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|it| it.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 fn preview_value(value: &Value) -> String {

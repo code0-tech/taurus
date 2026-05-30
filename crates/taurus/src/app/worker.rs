@@ -1,9 +1,9 @@
 use std::time::Instant;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures_lite::StreamExt;
 use prost::Message;
 use taurus_core::runtime::engine::{EmitType, ExecutionEngine, ExecutionId, RespondEmitter};
+use taurus_core::time::now_unix_ms;
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
@@ -37,15 +37,15 @@ pub fn spawn_worker(
         };
 
         let mut test_execution_subscription = match client
-            .queue_subscribe(String::from("test_executions.*"), "taurus".into())
+            .queue_subscribe(String::from("test_execution.*"), "taurus".into())
             .await
         {
             Ok(subscription) => {
-                log::info!("Subscribed to 'test_executions.*'");
+                log::info!("Subscribed to 'test_execution.*'");
                 subscription
             }
             Err(err) => {
-                log::error!("Failed to subscribe to 'test_executions.*': {:?}", err);
+                log::error!("Failed to subscribe to 'test_execution.*': {:?}", err);
                 return;
             }
         };
@@ -85,7 +85,7 @@ pub fn spawn_worker(
                         }
                         None => {
                             test_execution_closed = true;
-                            log::warn!("Subscription 'test_executions.*' ended");
+                            log::warn!("Subscription 'test_execution.*' ended");
                         }
                     }
                 }
@@ -158,8 +158,16 @@ async fn process_test_execution_message(
     nats_remote: &NATSRemoteRuntime,
     runtime_usage_service: Option<&TaurusRuntimeUsageService>,
 ) {
+    if message.reply.is_none() {
+        log::warn!(
+            "Received test execution request without reply subject on '{}'; ignoring request",
+            message.subject
+        );
+        return;
+    }
+
     let requested_execution_id =
-        match parse_execution_id_from_subject(&message.subject, "test_executions") {
+        match parse_execution_id_from_subject(&message.subject, "test_execution") {
             Some(res) => res,
             None => {
                 log::error!("Failed to extract execution uuid from {}", &message.subject);
@@ -335,13 +343,6 @@ async fn respond_to_test_execution_request(
     }
 }
 
-fn now_unix_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|it| it.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,7 +382,6 @@ mod tests {
         runtime().block_on(async {
             let client = connect_test_nats().await;
             let worker = spawn_test_worker(client.clone());
-            wait_for_worker_subscription().await;
 
             let execution_id = ExecutionId::new_v4();
             let fixture = load_fixture("flows/01_return_object.json");
@@ -418,7 +418,6 @@ mod tests {
         runtime().block_on(async {
             let client = connect_test_nats().await;
             let worker = spawn_test_worker(client.clone());
-            wait_for_worker_subscription().await;
 
             let execution_id = ExecutionId::new_v4();
             let response =
@@ -471,16 +470,12 @@ mod tests {
         spawn_worker(client, engine, nats_remote, runtime_emitter, None)
     }
 
-    async fn wait_for_worker_subscription() {
-        tokio::time::sleep(Duration::from_millis(250)).await;
-    }
-
     async fn request_execution_result(
         client: &async_nats::Client,
         execution_id: ExecutionId,
         payload: Vec<u8>,
     ) -> Result<ExecutionResult, String> {
-        let subject = format!("test_executions.{execution_id}");
+        let subject = format!("test_execution.{execution_id}");
 
         for attempt in 1..=10 {
             match tokio::time::timeout(

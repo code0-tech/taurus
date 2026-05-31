@@ -19,10 +19,8 @@ use ureq::http;
 use ureq::{Body, RequestExt};
 
 pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("http::request::create", create_request, 4),
-    FunctionRegistration::eager("http::request::send", send_request, 1),
-    FunctionRegistration::eager("http::response::create", create_response, 3),
-    FunctionRegistration::eager("rest::control::respond", respond, 1),
+    FunctionRegistration::eager("http::request::send", send_request, 4),
+    FunctionRegistration::eager("rest::control::respond", respond, 3),
 ];
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {
@@ -34,81 +32,20 @@ fn respond(
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => struct_val: Struct);
+    args!(args => http_status_code: i64, headers: Struct, payload: Value);
 
-    let fields = &struct_val.fields;
-
-    let Some(headers_val) = fields.get("headers") else {
-        return Signal::Failure(RuntimeError::new(
-            "T-STD-00001",
-            "InvalidArgumentRuntimeError",
-            "Missing 'headers' field".to_string(),
-        ));
-    };
-
-    let Some(status_code_val) = fields.get("http_status_code") else {
-        return fail(
-            "InvalidArgumentRuntimeError",
-            "Missing 'http_status_code' field",
-        );
-    };
-
-    let Some(payload_val) = fields.get("payload") else {
-        return Signal::Failure(RuntimeError::new(
-            "T-STD-00001",
-            "InvalidArgumentRuntimeError",
-            "Missing 'payload' field".to_string(),
-        ));
-    };
-
-    let Some(Kind::StructValue(_headers_struct)) = &headers_val.kind else {
-        return fail(
-            "InvalidArgumentRuntimeError",
-            "Expected 'headers' to be StructValue",
-        );
-    };
-
-    let Some(Kind::NumberValue(_status_code_str)) = &status_code_val.kind else {
-        return Signal::Failure(RuntimeError::new(
-            "T-STD-00001",
-            "InvalidArgumentRuntimeError",
-            "Expected 'status_code' to be NumberValue".to_string(),
-        ));
-    };
-
-    let Some(_payload_kind) = &payload_val.kind else {
-        return Signal::Failure(RuntimeError::new(
-            "T-STD-00001",
-            "InvalidArgumentRuntimeError",
-            "Expected 'payload' to have a value".to_string(),
-        ));
-    };
+    let mut fields = HashMap::new();
+    fields.insert("http_status_code".to_string(), http_status_code.to_value());
+    fields.insert(
+        "headers".to_string(),
+        Value {
+            kind: Some(Kind::StructValue(headers)),
+        },
+    );
+    fields.insert("payload".to_string(), payload);
 
     // `Respond` is a control signal; the executor can still continue with `next` if present.
     Signal::Respond(Value {
-        kind: Some(Kind::StructValue(struct_val.clone())),
-    })
-}
-
-fn create_request(
-    args: &[Argument],
-    _ctx: &mut ValueStore,
-    _run: &mut crate::handler::registry::ThunkRunner<'_>,
-) -> Signal {
-    args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
-    let mut fields = std::collections::HashMap::new();
-
-    fields.insert(String::from("http_method"), http_method.to_value());
-    fields.insert(String::from("url"), http_url.to_value());
-    fields.insert(String::from("payload"), payload.clone());
-    fields.insert(
-        String::from("headers"),
-        Value {
-            kind: Some(Kind::StructValue(headers.clone())),
-        },
-    );
-
-    Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),
     })
 }
@@ -118,31 +55,9 @@ fn send_request(
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => http_request: Struct);
+    args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
 
-    let method = match expect_struct_string_field(&http_request, "http_method") {
-        Ok(value) => value,
-        Err(signal) => return signal,
-    };
-    let url = match expect_struct_string_field(&http_request, "url") {
-        Ok(value) => value,
-        Err(signal) => return signal,
-    };
-    let headers_struct = match expect_struct_struct_field(&http_request, "headers") {
-        Ok(value) => value,
-        Err(signal) => return signal,
-    };
-    let payload = match http_request.fields.get("payload") {
-        Some(value) => value.clone(),
-        None => {
-            return fail(
-                "InvalidArgumentRuntimeError",
-                "Missing 'payload' field in http_request",
-            );
-        }
-    };
-
-    let mut headers = match encode_headers(&headers_struct) {
+    let mut headers = match encode_headers(&headers) {
         Ok(headers) => headers,
         Err(message) => return fail("InvalidArgumentRuntimeError", message),
     };
@@ -160,17 +75,17 @@ fn send_request(
         headers.insert("content-type".to_string(), default_content_type.to_string());
     }
 
-    let http_method = match http::Method::from_bytes(method.as_bytes()) {
+    let http_method = match http::Method::from_bytes(http_method.as_bytes()) {
         Ok(value) => value,
         Err(_) => {
             return fail(
                 "InvalidArgumentRuntimeError",
-                format!("Invalid HTTP method '{}'", method),
+                format!("Invalid HTTP method '{}'", http_method),
             );
         }
     };
 
-    let mut request_builder = http::Request::builder().method(http_method).uri(&url);
+    let mut request_builder = http::Request::builder().method(http_method).uri(&http_url);
     for (name, value) in &headers {
         request_builder = request_builder.header(name, value);
     }
@@ -242,66 +157,6 @@ fn send_request(
     Signal::Success(Value {
         kind: Some(Kind::StructValue(Struct { fields })),
     })
-}
-
-fn create_response(
-    args: &[Argument],
-    _ctx: &mut ValueStore,
-    _run: &mut crate::handler::registry::ThunkRunner<'_>,
-) -> Signal {
-    args!(args => http_status_code: i64, headers: Struct, payload: Value);
-    let mut fields = std::collections::HashMap::new();
-
-    fields.insert(
-        String::from("http_status_code"),
-        http_status_code.to_value(),
-    );
-    fields.insert(String::from("payload"), payload.clone());
-
-    fields.insert(
-        String::from("headers"),
-        Value {
-            kind: Some(Kind::StructValue(headers.clone())),
-        },
-    );
-
-    Signal::Success(Value {
-        kind: Some(Kind::StructValue(Struct { fields })),
-    })
-}
-
-fn expect_struct_string_field(struct_val: &Struct, field: &str) -> Result<String, Signal> {
-    let Some(value) = struct_val.fields.get(field) else {
-        return Err(fail(
-            "InvalidArgumentRuntimeError",
-            format!("Missing '{}' field in http_request", field),
-        ));
-    };
-
-    match &value.kind {
-        Some(Kind::StringValue(str_val)) => Ok(str_val.clone()),
-        _ => Err(fail(
-            "InvalidArgumentRuntimeError",
-            format!("Expected '{}' to be StringValue", field),
-        )),
-    }
-}
-
-fn expect_struct_struct_field(struct_val: &Struct, field: &str) -> Result<Struct, Signal> {
-    let Some(value) = struct_val.fields.get(field) else {
-        return Err(fail(
-            "InvalidArgumentRuntimeError",
-            format!("Missing '{}' field in http_request", field),
-        ));
-    };
-
-    match &value.kind {
-        Some(Kind::StructValue(struct_val)) => Ok(struct_val.clone()),
-        _ => Err(fail(
-            "InvalidArgumentRuntimeError",
-            format!("Expected '{}' to be StructValue", field),
-        )),
-    }
 }
 
 fn encode_headers(headers: &Struct) -> Result<HashMap<String, String>, String> {
@@ -710,26 +565,14 @@ mod tests {
         let request_headers = Struct {
             fields: HashMap::from([("x-bool".to_string(), true.to_value())]),
         };
-        let request = Struct {
-            fields: HashMap::from([
-                ("http_method".to_string(), string_value("POST")),
-                (
-                    "url".to_string(),
-                    string_value(&format!("http://{}/echo?x=1", addr)),
-                ),
-                (
-                    "headers".to_string(),
-                    Value {
-                        kind: Some(Kind::StructValue(request_headers)),
-                    },
-                ),
-                ("payload".to_string(), request_payload),
-            ]),
-        };
-
-        let args = vec![Argument::Eval(Value {
-            kind: Some(Kind::StructValue(request)),
-        })];
+        let args = vec![
+            Argument::Eval(string_value("POST")),
+            Argument::Eval(Value {
+                kind: Some(Kind::StructValue(request_headers)),
+            }),
+            Argument::Eval(string_value(&format!("http://{}/echo?x=1", addr))),
+            Argument::Eval(request_payload),
+        ];
         let mut ctx = ValueStore::default();
         let mut run = |_: &crate::handler::argument::Thunk, _: &mut ValueStore| Signal::Stop;
 

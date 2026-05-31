@@ -754,9 +754,9 @@ mod tests {
             events.borrow_mut().push(emit_type);
         };
 
-        let create_response_node = node(
+        let respond_node = node(
             1,
-            "http::response::create",
+            "rest::control::respond",
             vec![
                 literal_param(100, "http_status_code", int_value(200)),
                 literal_param(101, "headers", empty_struct_value()),
@@ -764,14 +764,8 @@ mod tests {
             ],
             Some(2),
         );
-        let respond_node = node(
-            2,
-            "rest::control::respond",
-            vec![node_result_ref_param(200, "response", 1)],
-            Some(3),
-        );
         let finish_node = node(
-            3,
+            2,
             "std::number::add",
             vec![
                 literal_param(300, "lhs", int_value(1)),
@@ -782,7 +776,7 @@ mod tests {
 
         let (_signal, reason) = engine.execute_graph(
             1,
-            vec![create_response_node, respond_node, finish_node],
+            vec![respond_node, finish_node],
             None,
             None,
             Some(&emitter),

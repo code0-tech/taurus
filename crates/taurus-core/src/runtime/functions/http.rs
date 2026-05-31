@@ -19,8 +19,8 @@ use ureq::http;
 use ureq::{Body, RequestExt};
 
 pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("http::request::send", send_request, 1),
-    FunctionRegistration::eager("rest::control::respond", respond, 1),
+    FunctionRegistration::eager("http::request::send", send_request, 4),
+    FunctionRegistration::eager("rest::control::respond", respond, 3),
 ];
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {

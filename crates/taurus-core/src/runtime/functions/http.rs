@@ -565,26 +565,14 @@ mod tests {
         let request_headers = Struct {
             fields: HashMap::from([("x-bool".to_string(), true.to_value())]),
         };
-        let request = Struct {
-            fields: HashMap::from([
-                ("http_method".to_string(), string_value("POST")),
-                (
-                    "url".to_string(),
-                    string_value(&format!("http://{}/echo?x=1", addr)),
-                ),
-                (
-                    "headers".to_string(),
-                    Value {
-                        kind: Some(Kind::StructValue(request_headers)),
-                    },
-                ),
-                ("payload".to_string(), request_payload),
-            ]),
-        };
-
-        let args = vec![Argument::Eval(Value {
-            kind: Some(Kind::StructValue(request)),
-        })];
+        let args = vec![
+            Argument::Eval(string_value("POST")),
+            Argument::Eval(Value {
+                kind: Some(Kind::StructValue(request_headers)),
+            }),
+            Argument::Eval(string_value(&format!("http://{}/echo?x=1", addr))),
+            Argument::Eval(request_payload),
+        ];
         let mut ctx = ValueStore::default();
         let mut run = |_: &crate::handler::argument::Thunk, _: &mut ValueStore| Signal::Stop;
 

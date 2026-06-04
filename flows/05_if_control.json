@@ -73,23 +73,8 @@
 		"startingNodeId": "11",
 		"nodeFunctions": [
 			{
-				"databaseId": "13",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "57",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "14"
-							}
-						}
-					}
-				]
-			},
-			{
 				"databaseId": "14",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "54",
@@ -120,8 +105,7 @@
 							}
 						}
 					}
-				],
-				"nextNodeId": "13"
+				]
 			},
 			{
 				"databaseId": "11",
@@ -159,23 +143,8 @@
 				"nextNodeId": "14"
 			},
 			{
-				"databaseId": "15",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "58",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "12"
-							}
-						}
-					}
-				]
-			},
-			{
 				"databaseId": "12",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "51",
@@ -214,8 +183,7 @@
 							}
 						}
 					}
-				],
-				"nextNodeId": "15"
+				]
 			}
 		],
 		"projectSlug": "codezero-project",

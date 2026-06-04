@@ -47,7 +47,7 @@
 			{
 				"definition_source": "taurus",
 				"databaseId": "3",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "5",

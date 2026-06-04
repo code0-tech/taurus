@@ -74,7 +74,7 @@
 		"nodeFunctions": [
 			{
 				"databaseId": "19",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "51",
@@ -102,22 +102,6 @@
 						"value": {
 							"literalValue": {
 								"stringValue": "Blub"
-							}
-						}
-					}
-				],
-				"nextNodeId": "20"
-			},
-			{
-				"databaseId": "20",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "76",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "19"
 							}
 						}
 					}
@@ -170,7 +154,7 @@
 			},
 			{
 				"databaseId": "17",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "72",
@@ -198,22 +182,6 @@
 						"value": {
 							"literalValue": {
 								"stringValue": "Blob"
-							}
-						}
-					}
-				],
-				"nextNodeId": "18"
-			},
-			{
-				"databaseId": "18",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "64",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "17"
 							}
 						}
 					}

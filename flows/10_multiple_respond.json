@@ -304,7 +304,7 @@
 			},
 			{
 				"databaseId": "11",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "27",
@@ -342,23 +342,7 @@
 						}
 					}
 				],
-				"nextNodeId": "4"
-			},
-			{
-				"databaseId": "4",
-				"nextNodeId": "20",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "8",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "11"
-							}
-						}
-					}
-				]
+				"nextNodeId": "20"
 			},
 			{
 				"nextNodeId": "21",
@@ -366,11 +350,37 @@
 				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
-						"databaseId": "8",
-						"runtimeParameterId": "http_response",
+						"databaseId": "27",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "30",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"x": {
+											"stringValue": "y"
+										}
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "31",
+						"runtimeParameterId": "payload",
 						"value": {
 							"referenceValue": {
-								"nodeId": "11"
+								"nodeId": "10"
 							}
 						}
 					}
@@ -382,11 +392,37 @@
 				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
-						"databaseId": "8",
-						"runtimeParameterId": "http_response",
+						"databaseId": "27",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "30",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"x": {
+											"stringValue": "y"
+										}
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "31",
+						"runtimeParameterId": "payload",
 						"value": {
 							"referenceValue": {
-								"nodeId": "11"
+								"nodeId": "10"
 							}
 						}
 					}

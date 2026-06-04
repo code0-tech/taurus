@@ -189,23 +189,8 @@
 				]
 			},
 			{
-				"databaseId": "13",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "25",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "8"
-							}
-						}
-					}
-				]
-			},
-			{
 				"databaseId": "8",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "16",
@@ -236,8 +221,7 @@
 							}
 						}
 					}
-				],
-				"nextNodeId": "13"
+				]
 			}
 		],
 		"projectSlug": "codezero-project",

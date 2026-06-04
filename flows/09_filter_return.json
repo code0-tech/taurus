@@ -317,7 +317,7 @@
 			},
 			{
 				"databaseId": "11",
-				"runtimeFunctionId": "http::response::create",
+				"runtimeFunctionId": "rest::control::respond",
 				"parameters": [
 					{
 						"databaseId": "27",
@@ -351,22 +351,6 @@
 						"value": {
 							"referenceValue": {
 								"nodeId": "10"
-							}
-						}
-					}
-				],
-				"nextNodeId": "4"
-			},
-			{
-				"databaseId": "4",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "8",
-						"runtimeParameterId": "http_response",
-						"value": {
-							"referenceValue": {
-								"nodeId": "11"
 							}
 						}
 					}

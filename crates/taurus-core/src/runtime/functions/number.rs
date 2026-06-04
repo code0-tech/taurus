@@ -42,7 +42,6 @@ pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
     FunctionRegistration::eager("std::number::exponential", exponential, 2),
     FunctionRegistration::eager("std::number::pi", pi, 0),
     FunctionRegistration::eager("std::number::euler", euler, 0),
-    FunctionRegistration::eager("std::number::infinity", infinity, 0),
     FunctionRegistration::eager("std::number::round_up", round_up, 2),
     FunctionRegistration::eager("std::number::round_down", round_down, 2),
     FunctionRegistration::eager("std::number::round", round, 2),
@@ -394,15 +393,6 @@ fn euler(
 ) -> Signal {
     no_args!(args);
     Signal::Success(value_from_f64(f64::consts::E))
-}
-
-fn infinity(
-    args: &[Argument],
-    _ctx: &mut ValueStore,
-    _run: &mut crate::handler::registry::ThunkRunner<'_>,
-) -> Signal {
-    no_args!(args);
-    Signal::Success(value_from_f64(f64::INFINITY))
 }
 
 fn round_up(
@@ -1056,10 +1046,6 @@ mod tests {
         assert!(
             (expect_num(euler(&[], &mut ctx, &mut run)) - std::f64::consts::E).abs() < f64::EPSILON
         );
-
-        let mut run = dummy_run;
-        let inf = expect_num(infinity(&[], &mut ctx, &mut run));
-        assert!(inf.is_infinite() && inf.is_sign_positive());
     }
 
     #[test]

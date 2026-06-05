@@ -9,8 +9,8 @@ use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{
-    InputType, NodeExecutionResult as TucanaNodeExecutionResult, ReferenceValue, Struct,
-    SubFlowSetting, Value,
+    InputType, NodeExecutionResult as TucanaNodeExecutionResult, NodeParameterNodeExecutionResult,
+    ReferenceValue, Struct, SubFlowSetting, Value,
 };
 use uuid::Uuid;
 
@@ -65,6 +65,12 @@ struct ExecutionResult {
 struct NodeResult {
     signal: Signal,
     frame_id: Option<u64>,
+    parameter_results: Vec<NodeParameterNodeExecutionResult>,
+}
+
+struct ExecutedNode {
+    signal: Signal,
+    parameter_results: Vec<NodeParameterNodeExecutionResult>,
 }
 
 struct EngineExecutor<'a> {
@@ -104,11 +110,11 @@ impl<'a> EngineExecutor<'a> {
 
             match result.signal {
                 // Only `Success` keeps walking through the current linear chain.
-                Signal::Success(_) => match next_idx {
+                Signal::Success(value) => match next_idx {
                     Some(next) => current_idx = next,
                     None => {
                         return ExecutionResult {
-                            signal: result.signal,
+                            signal: Signal::Success(value),
                             root_frame: call_root_frame,
                         };
                     }
@@ -119,7 +125,11 @@ impl<'a> EngineExecutor<'a> {
                         emitter.emit(self.execution_id, EmitType::OngoingExec, value.clone());
                     }
 
-                    value_store.insert_success(node_id, value.clone());
+                    value_store.insert_success_with_parameters(
+                        node_id,
+                        value.clone(),
+                        result.parameter_results,
+                    );
                     match next_idx {
                         Some(next) => current_idx = next,
                         None => {
@@ -231,18 +241,31 @@ impl<'a> EngineExecutor<'a> {
         value_store.set_current_node_id(node.id);
 
         let frame_id = self.trace_enter(node, value_store);
-        let signal = match &node.execution_target {
+        let result = match &node.execution_target {
             NodeExecutionTarget::Local => {
-                let signal = self.execute_local_node(node, value_store, frame_id);
-                self.commit_result(node.id, signal, value_store)
+                let executed = self.execute_local_node(node, value_store, frame_id);
+                let parameter_results = executed.parameter_results;
+                let signal = self.commit_result(
+                    node.id,
+                    executed.signal,
+                    parameter_results.clone(),
+                    value_store,
+                );
+                NodeResult {
+                    signal,
+                    frame_id,
+                    parameter_results,
+                }
             }
-            NodeExecutionTarget::Remote { service } => {
-                self.execute_remote_node(node, service, value_store, frame_id)
-            }
+            NodeExecutionTarget::Remote { service } => NodeResult {
+                signal: self.execute_remote_node(node, service, value_store, frame_id),
+                frame_id,
+                parameter_results: Vec::new(),
+            },
         };
-        self.trace_exit(frame_id, &signal, value_store);
+        self.trace_exit(frame_id, &result.signal, value_store);
 
-        NodeResult { signal, frame_id }
+        result
     }
 
     fn execute_local_node(
@@ -250,26 +273,39 @@ impl<'a> EngineExecutor<'a> {
         node: &CompiledNode,
         value_store: &mut ValueStore,
         frame_id: Option<u64>,
-    ) -> Signal {
+    ) -> ExecutedNode {
         let entry = match self.handlers.get(node.handler_id.as_str()) {
             Some(entry) => entry,
             None => {
-                return Signal::Failure(RuntimeError::new(
-                    "T-CORE-000002",
-                    "FunctionNotFound",
-                    format!("Function {} not found", node.handler_id),
-                ));
+                return ExecutedNode {
+                    signal: Signal::Failure(RuntimeError::new(
+                        "T-CORE-000002",
+                        "FunctionNotFound",
+                        format!("Function {} not found", node.handler_id),
+                    )),
+                    parameter_results: Vec::new(),
+                };
             }
         };
 
         let mut args = match self.build_args(node, value_store, frame_id) {
             Ok(args) => args,
-            Err(err) => return Signal::Failure(err),
+            Err(err) => {
+                return ExecutedNode {
+                    signal: Signal::Failure(err),
+                    parameter_results: Vec::new(),
+                };
+            }
         };
 
         if let Some(signal) = self.force_eager_args(entry, &mut args, value_store, frame_id) {
-            return signal;
+            return ExecutedNode {
+                signal,
+                parameter_results: parameter_results_from_args(&args),
+            };
         }
+
+        let parameter_results = parameter_results_from_args(&args);
 
         // Handler-owned runtime calls (for lazy args / callbacks) re-enter the same executor.
         let mut run = |thunk: &Thunk, store: &mut ValueStore| {
@@ -282,7 +318,10 @@ impl<'a> EngineExecutor<'a> {
             child_result.signal
         };
 
-        (entry.handler)(&args, value_store, &mut run)
+        ExecutedNode {
+            signal: (entry.handler)(&args, value_store, &mut run),
+            parameter_results,
+        }
     }
 
     fn execute_remote_node(
@@ -302,6 +341,7 @@ impl<'a> EngineExecutor<'a> {
                         "RemoteRuntimeNotConfigured",
                         "Remote runtime not configured",
                     )),
+                    Vec::new(),
                     value_store,
                 );
             }
@@ -309,25 +349,49 @@ impl<'a> EngineExecutor<'a> {
 
         let mut args = match self.build_args(node, value_store, frame_id) {
             Ok(args) => args,
-            Err(err) => return self.commit_result(node.id, Signal::Failure(err), value_store),
+            Err(err) => {
+                return self.commit_result(node.id, Signal::Failure(err), Vec::new(), value_store);
+            }
         };
 
         let values = match self.resolve_remote_args(&mut args, value_store, frame_id) {
             Ok(values) => values,
-            Err(signal) => return self.commit_result(node.id, signal, value_store),
+            Err(signal) => {
+                return self.commit_result(
+                    node.id,
+                    signal,
+                    parameter_results_from_args(&args),
+                    value_store,
+                );
+            }
         };
+        let parameter_results = parameter_results_from_values(&values);
 
         let request = match self.build_remote_request(node, values) {
             Ok(request) => request,
-            Err(err) => return self.commit_result(node.id, Signal::Failure(err), value_store),
+            Err(err) => {
+                return self.commit_result(
+                    node.id,
+                    Signal::Failure(err),
+                    parameter_results,
+                    value_store,
+                );
+            }
         };
 
         match block_on(remote_runtime.execute_remote(RemoteExecution {
             target_service: service.to_string(),
             request,
         })) {
-            Ok(result) => self.commit_remote_result(node.id, result, value_store),
-            Err(err) => self.commit_result(node.id, Signal::Failure(err), value_store),
+            Ok(result) => {
+                self.commit_remote_result(node.id, result, parameter_results, value_store)
+            }
+            Err(err) => self.commit_result(
+                node.id,
+                Signal::Failure(err),
+                parameter_results,
+                value_store,
+            ),
         }
     }
 
@@ -609,14 +673,24 @@ impl<'a> EngineExecutor<'a> {
         })
     }
 
-    fn commit_result(&self, node_id: i64, signal: Signal, value_store: &mut ValueStore) -> Signal {
+    fn commit_result(
+        &self,
+        node_id: i64,
+        signal: Signal,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        value_store: &mut ValueStore,
+    ) -> Signal {
         match signal {
             Signal::Success(value) => {
-                value_store.insert_success(node_id, value.clone());
+                value_store.insert_success_with_parameters(
+                    node_id,
+                    value.clone(),
+                    parameter_results,
+                );
                 Signal::Success(value)
             }
             Signal::Failure(err) => {
-                value_store.insert_error(node_id, err.clone());
+                value_store.insert_error_with_parameters(node_id, err.clone(), parameter_results);
                 Signal::Failure(err)
             }
             // Control signals are transient and should not be cached as node outputs.
@@ -627,9 +701,13 @@ impl<'a> EngineExecutor<'a> {
     fn commit_remote_result(
         &self,
         node_id: i64,
-        result: TucanaNodeExecutionResult,
+        mut result: TucanaNodeExecutionResult,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
         value_store: &mut ValueStore,
     ) -> Signal {
+        if result.parameter_results.is_empty() {
+            result.parameter_results = parameter_results;
+        }
         value_store.insert_node_result(node_id, result.clone());
         match result.result {
             Some(TucanaNodeResult::Success(value)) => Signal::Success(value),
@@ -722,6 +800,26 @@ impl<'a> EngineExecutor<'a> {
                 .mark_thunk_executed(frame_id, thunk.trace_target().as_str());
         }
     }
+}
+
+fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeParameterNodeExecutionResult> {
+    args.iter()
+        .map(|arg| NodeParameterNodeExecutionResult {
+            value: match arg {
+                Argument::Eval(value) => Some(value.clone()),
+                Argument::Thunk(_) => None,
+            },
+        })
+        .collect()
+}
+
+fn parameter_results_from_values(values: &[Value]) -> Vec<NodeParameterNodeExecutionResult> {
+    values
+        .iter()
+        .map(|value| NodeParameterNodeExecutionResult {
+            value: Some(value.clone()),
+        })
+        .collect()
 }
 
 fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {

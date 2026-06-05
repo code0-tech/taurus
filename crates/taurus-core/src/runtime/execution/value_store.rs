@@ -3,7 +3,10 @@
 use std::collections::HashMap;
 
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
-use tucana::shared::{InputType, NodeExecutionResult, ReferenceValue, Value, value::Kind};
+use tucana::shared::{
+    InputType, NodeExecutionResult, NodeParameterNodeExecutionResult, ReferenceValue, Value,
+    value::Kind,
+};
 
 use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
 use crate::time::now_unix_ms;
@@ -143,6 +146,15 @@ impl ValueStore {
     }
 
     pub fn insert_success(&mut self, id: i64, value: Value) {
+        self.insert_success_with_parameters(id, value, Vec::new());
+    }
+
+    pub fn insert_success_with_parameters(
+        &mut self,
+        id: i64,
+        value: Value,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+    ) {
         let ts = now_unix_ms();
         self.insert_node_result(
             id,
@@ -150,13 +162,22 @@ impl ValueStore {
                 node_id: id,
                 started_at: ts,
                 finished_at: ts,
-                parameter_results: Vec::new(),
+                parameter_results,
                 result: Some(TucanaNodeResult::Success(value)),
             },
         );
     }
 
     pub fn insert_error(&mut self, id: i64, runtime_error: RuntimeError) {
+        self.insert_error_with_parameters(id, runtime_error, Vec::new());
+    }
+
+    pub fn insert_error_with_parameters(
+        &mut self,
+        id: i64,
+        runtime_error: RuntimeError,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+    ) {
         let ts = now_unix_ms();
         self.insert_node_result(
             id,
@@ -164,7 +185,7 @@ impl ValueStore {
                 node_id: id,
                 started_at: ts,
                 finished_at: ts,
-                parameter_results: Vec::new(),
+                parameter_results,
                 result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
             },
         );
@@ -173,6 +194,12 @@ impl ValueStore {
     pub fn insert_node_result(&mut self, id: i64, mut result: NodeExecutionResult) {
         result.node_id = id;
         self.results.insert(id, result);
+    }
+
+    pub fn node_execution_results(&self) -> Vec<NodeExecutionResult> {
+        let mut results: Vec<_> = self.results.values().cloned().collect();
+        results.sort_by_key(|result| result.node_id);
+        results
     }
 
     pub fn push_runtime_trace_label(&mut self, label: String) {

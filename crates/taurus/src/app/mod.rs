@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
 
+use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_status::TaurusRuntimeStatusService;
 use crate::client::runtime_usage::TaurusRuntimeUsageService;
 use crate::config::Config;
@@ -26,8 +27,12 @@ pub async fn run() {
     let client = connect_nats(&config).await;
 
     let mut health_task = spawn_health_task(&config);
-    let (runtime_status_service, runtime_usage_service, mut runtime_status_heartbeat_task) =
-        setup_dynamic_services_if_needed(&config).await;
+    let (
+        runtime_status_service,
+        runtime_execution_service,
+        runtime_usage_service,
+        mut runtime_status_heartbeat_task,
+    ) = setup_dynamic_services_if_needed(&config).await;
 
     let nats_remote = NATSRemoteRuntime::new(client.clone());
     let runtime_emitter = NATSRespondEmitter::new(client.clone());
@@ -36,6 +41,7 @@ pub async fn run() {
         engine,
         nats_remote,
         runtime_emitter,
+        runtime_execution_service,
         runtime_usage_service,
     );
 
@@ -103,14 +109,23 @@ async fn setup_dynamic_services_if_needed(
     config: &Config,
 ) -> (
     Option<Arc<TaurusRuntimeStatusService>>,
+    Option<TaurusRuntimeExecutionService>,
     Option<TaurusRuntimeUsageService>,
     Option<JoinHandle<()>>,
 ) {
     if config.mode != DYNAMIC {
-        return (None, None, None);
+        return (None, None, None, None);
     }
 
     push_definitions_until_success(config).await;
+
+    let runtime_execution_service = Some(
+        TaurusRuntimeExecutionService::from_url(
+            config.aquila_url.clone(),
+            config.aquila_token.clone(),
+        )
+        .await,
+    );
 
     let runtime_usage_service = Some(
         TaurusRuntimeUsageService::from_url(config.aquila_url.clone(), config.aquila_token.clone())
@@ -168,6 +183,7 @@ async fn setup_dynamic_services_if_needed(
 
     (
         runtime_status_service,
+        runtime_execution_service,
         runtime_usage_service,
         runtime_status_heartbeat_task,
     )

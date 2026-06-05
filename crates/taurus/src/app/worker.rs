@@ -10,8 +10,9 @@ use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::task::JoinHandle;
 use tucana::shared::execution_result;
-use tucana::shared::{ExecutionFlow, ExecutionResult, RuntimeUsage, Value};
+use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, RuntimeUsage, Value};
 
+use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_usage::TaurusRuntimeUsageService;
 
 pub fn spawn_worker(
@@ -19,6 +20,7 @@ pub fn spawn_worker(
     engine: ExecutionEngine,
     nats_remote: NATSRemoteRuntime,
     runtime_emitter: NATSRespondEmitter,
+    mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     runtime_usage_service: Option<TaurusRuntimeUsageService>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -36,24 +38,9 @@ pub fn spawn_worker(
             }
         };
 
-        let mut test_execution_subscription = match client
-            .queue_subscribe(String::from("test_execution.*"), "taurus".into())
-            .await
-        {
-            Ok(subscription) => {
-                log::info!("Subscribed to 'test_execution.*'");
-                subscription
-            }
-            Err(err) => {
-                log::error!("Failed to subscribe to 'test_execution.*': {:?}", err);
-                return;
-            }
-        };
-
         let mut execution_closed = false;
-        let mut test_execution_closed = false;
 
-        while !(execution_closed && test_execution_closed) {
+        while !execution_closed {
             tokio::select! {
                 message = execution_subscription.next(), if !execution_closed => {
                     match message {
@@ -63,29 +50,13 @@ pub fn spawn_worker(
                                 &engine,
                                 &nats_remote,
                                 &runtime_emitter,
+                                runtime_execution_service.as_mut(),
                                 runtime_usage_service.as_ref(),
                             ).await;
                         }
                         None => {
                             execution_closed = true;
                             log::warn!("Subscription 'execution.*' ended");
-                        }
-                    }
-                }
-                message = test_execution_subscription.next(), if !test_execution_closed => {
-                    match message {
-                        Some(message) => {
-                            process_test_execution_message(
-                                &client,
-                                message,
-                                &engine,
-                                &nats_remote,
-                                runtime_usage_service.as_ref(),
-                            ).await;
-                        }
-                        None => {
-                            test_execution_closed = true;
-                            log::warn!("Subscription 'test_execution.*' ended");
                         }
                     }
                 }
@@ -101,6 +72,7 @@ async fn process_execution_message(
     engine: &ExecutionEngine,
     nats_remote: &NATSRemoteRuntime,
     runtime_emitter: &NATSRespondEmitter,
+    mut runtime_execution_service: Option<&mut TaurusRuntimeExecutionService>,
     runtime_usage_service: Option<&TaurusRuntimeUsageService>,
 ) {
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")
@@ -122,6 +94,11 @@ async fn process_execution_message(
                 err,
                 &message.payload
             );
+            if let Some(execution_service) = runtime_execution_service.as_mut() {
+                execution_service
+                    .update_runtime_execution(build_decode_error_result(requested_execution_id))
+                    .await;
+            }
             return;
         }
     };
@@ -144,68 +121,27 @@ async fn process_execution_message(
         flow_id
     );
 
-    if let Some(usage_service) = runtime_usage_service {
-        usage_service
-            .update_runtime_usage(run_result.runtime_usage)
-            .await;
-    }
-}
-
-async fn process_test_execution_message(
-    client: &async_nats::Client,
-    message: async_nats::Message,
-    engine: &ExecutionEngine,
-    nats_remote: &NATSRemoteRuntime,
-    runtime_usage_service: Option<&TaurusRuntimeUsageService>,
-) {
-    if message.reply.is_none() {
-        log::warn!(
-            "Received test execution request without reply subject on '{}'; ignoring request",
-            message.subject
-        );
-        return;
-    }
-
-    let requested_execution_id =
-        match parse_execution_id_from_subject(&message.subject, "test_execution") {
-            Some(res) => res,
-            None => {
-                log::error!("Failed to extract execution uuid from {}", &message.subject);
-                return;
-            }
-        };
-
-    let flow: ExecutionFlow = match ExecutionFlow::decode(&*message.payload) {
-        Ok(flow) => flow,
-        Err(err) => {
-            log::error!(
-                "Failed to deserialize test execution flow: {:?}, payload: {:?}",
-                err,
-                &message.payload
-            );
-            let result = build_decode_error_result(requested_execution_id);
-            respond_to_test_execution_request(client, &message, result).await;
-            return;
-        }
-    };
-
-    let run_result = execute_flow(requested_execution_id, flow, engine, nats_remote, None);
-
-    if let Some(usage_service) = runtime_usage_service {
-        usage_service
-            .update_runtime_usage(run_result.runtime_usage.clone())
-            .await;
-    }
-
     let execution_result = build_execution_result(
         run_result.execution_id,
         run_result.flow_id,
         run_result.started_at,
         run_result.finished_at,
-        run_result.input,
-        run_result.signal,
+        run_result.input.clone(),
+        run_result.node_execution_results,
+        run_result.signal.clone(),
     );
-    respond_to_test_execution_request(client, &message, execution_result).await;
+
+    if let Some(execution_service) = runtime_execution_service.as_mut() {
+        execution_service
+            .update_runtime_execution(execution_result)
+            .await;
+    }
+
+    if let Some(usage_service) = runtime_usage_service {
+        usage_service
+            .update_runtime_usage(run_result.runtime_usage)
+            .await;
+    }
 }
 
 #[derive(Clone)]
@@ -216,6 +152,7 @@ struct FlowRunResult {
     finished_at: i64,
     input: Option<Value>,
     signal: Signal,
+    node_execution_results: Vec<NodeExecutionResult>,
     runtime_usage: RuntimeUsage,
 }
 
@@ -230,7 +167,7 @@ fn execute_flow(
     let start = Instant::now();
     let flow_id = flow.flow_id;
     let input = flow.input_value.clone();
-    let (signal, _reason) = engine.execute_flow_with_execution_id(
+    let report = engine.execute_flow_with_execution_id_report(
         execution_id,
         flow,
         Some(nats_remote),
@@ -246,7 +183,8 @@ fn execute_flow(
         started_at,
         finished_at,
         input,
-        signal,
+        signal: report.signal,
+        node_execution_results: report.node_execution_results,
         runtime_usage: RuntimeUsage {
             flow_id,
             duration: duration_millis,
@@ -274,6 +212,7 @@ fn build_execution_result(
     started_at: i64,
     finished_at: i64,
     input: Option<Value>,
+    node_execution_results: Vec<NodeExecutionResult>,
     signal: Signal,
 ) -> ExecutionResult {
     let result = match signal {
@@ -292,7 +231,7 @@ fn build_execution_result(
         started_at,
         finished_at,
         input,
-        node_execution_results: Vec::new(),
+        node_execution_results,
         result,
     }
 }
@@ -302,7 +241,7 @@ fn build_decode_error_result(execution_id: ExecutionId) -> ExecutionResult {
     let runtime_error = RuntimeError::new(
         "T-TAURUS-000001",
         "ExecutionFlowDecodeError",
-        "Failed to decode test execution flow payload",
+        "Failed to decode execution flow payload",
     );
 
     ExecutionResult {
@@ -318,42 +257,11 @@ fn build_decode_error_result(execution_id: ExecutionId) -> ExecutionResult {
     }
 }
 
-async fn respond_to_test_execution_request(
-    client: &async_nats::Client,
-    message: &async_nats::Message,
-    result: ExecutionResult,
-) {
-    let Some(reply_subject) = message.reply.as_ref() else {
-        log::warn!(
-            "Received test execution request without reply subject on '{}'; cannot return ExecutionResult",
-            message.subject
-        );
-        return;
-    };
-
-    if let Err(err) = client
-        .publish(reply_subject.clone(), result.encode_to_vec().into())
-        .await
-    {
-        log::error!(
-            "Failed to publish test execution response on '{}': {:?}",
-            reply_subject,
-            err
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-    use std::time::Duration;
 
-    use prost::Message;
     use serde::Deserialize;
-    use taurus_core::runtime::engine::ExecutionEngine;
-    use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
-    use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
     use tucana::shared::{
         ValidationFlow, execution_result,
         helper::value::{from_json_value, to_json_value},
@@ -371,140 +279,86 @@ mod tests {
         flow: ValidationFlow,
     }
 
-    static NATS_TEST_LOCK: Mutex<()> = Mutex::new(());
-
     #[test]
-    #[ignore = "requires a running NATS server at NATS_URL or nats://127.0.0.1:4222"]
-    fn test_execution_request_returns_execution_result_over_nats() {
-        let _lock = NATS_TEST_LOCK
-            .lock()
-            .expect("NATS test lock should not be poisoned");
-        runtime().block_on(async {
-            let client = connect_test_nats().await;
-            let worker = spawn_test_worker(client.clone());
+    fn build_execution_result_preserves_success_payload() {
+        let execution_id = ExecutionId::new_v4();
+        let fixture = load_fixture("flows/01_return_object.json");
+        let expected_result = fixture.inputs[0].expected_result.clone();
+        let flow = execution_flow_from_fixture(fixture);
+        let success = from_json_value(expected_result.clone());
 
-            let execution_id = ExecutionId::new_v4();
-            let fixture = load_fixture("flows/01_return_object.json");
-            let expected_result = fixture.inputs[0].expected_result.clone();
-            let flow = execution_flow_from_fixture(fixture);
-            let response = request_execution_result(&client, execution_id, flow.encode_to_vec())
-                .await
-                .expect("test execution request should receive an ExecutionResult response");
+        let response = build_execution_result(
+            execution_id,
+            flow.flow_id,
+            1,
+            2,
+            flow.input_value,
+            Vec::new(),
+            Signal::Success(success),
+        );
 
-            worker.abort();
+        assert_eq!(response.execution_identifier, execution_id.to_string());
+        assert_eq!(response.flow_id, flow.flow_id);
+        assert_eq!(response.started_at, 1);
+        assert_eq!(response.finished_at, 2);
+        assert!(response.node_execution_results.is_empty());
 
-            assert_eq!(response.execution_identifier, execution_id.to_string());
-            assert_eq!(response.flow_id, flow.flow_id);
-            assert!(response.started_at > 0);
-            assert!(response.finished_at >= response.started_at);
-            assert_eq!(response.input, None);
-            assert!(response.node_execution_results.is_empty());
-
-            match response.result {
-                Some(execution_result::Result::Success(value)) => {
-                    assert_eq!(to_json_value(value), expected_result);
-                }
-                other => panic!("expected successful test execution result, got {:?}", other),
+        match response.result {
+            Some(execution_result::Result::Success(value)) => {
+                assert_eq!(to_json_value(value), expected_result);
             }
-        });
-    }
-
-    #[test]
-    #[ignore = "requires a running NATS server at NATS_URL or nats://127.0.0.1:4222"]
-    fn test_execution_request_returns_decode_error_over_nats() {
-        let _lock = NATS_TEST_LOCK
-            .lock()
-            .expect("NATS test lock should not be poisoned");
-        runtime().block_on(async {
-            let client = connect_test_nats().await;
-            let worker = spawn_test_worker(client.clone());
-
-            let execution_id = ExecutionId::new_v4();
-            let response =
-                request_execution_result(&client, execution_id, b"not protobuf".to_vec())
-                    .await
-                    .expect("malformed test execution request should receive an error response");
-
-            worker.abort();
-
-            assert_eq!(response.execution_identifier, execution_id.to_string());
-            assert_eq!(response.flow_id, 0);
-            assert!(response.started_at > 0);
-            assert!(response.finished_at >= response.started_at);
-            assert_eq!(response.input, None);
-            assert!(response.node_execution_results.is_empty());
-
-            match response.result {
-                Some(execution_result::Result::Error(error)) => {
-                    assert_eq!(error.code, "T-TAURUS-000001");
-                    assert_eq!(error.category, "ExecutionFlowDecodeError");
-                    assert_eq!(
-                        error.message,
-                        "Failed to decode test execution flow payload"
-                    );
-                }
-                other => panic!("expected decode error result, got {:?}", other),
-            }
-        });
-    }
-
-    fn runtime() -> tokio::runtime::Runtime {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("test runtime should build")
-    }
-
-    async fn connect_test_nats() -> async_nats::Client {
-        let nats_url =
-            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
-        async_nats::connect(&nats_url)
-            .await
-            .unwrap_or_else(|err| panic!("failed to connect to NATS at {nats_url}: {err}"))
-    }
-
-    fn spawn_test_worker(client: async_nats::Client) -> tokio::task::JoinHandle<()> {
-        let engine = ExecutionEngine::new();
-        let nats_remote = NATSRemoteRuntime::new(client.clone());
-        let runtime_emitter = NATSRespondEmitter::new(client.clone());
-        spawn_worker(client, engine, nats_remote, runtime_emitter, None)
-    }
-
-    async fn request_execution_result(
-        client: &async_nats::Client,
-        execution_id: ExecutionId,
-        payload: Vec<u8>,
-    ) -> Result<ExecutionResult, String> {
-        let subject = format!("test_execution.{execution_id}");
-
-        for attempt in 1..=10 {
-            match tokio::time::timeout(
-                Duration::from_secs(2),
-                client.request(subject.clone(), payload.clone().into()),
-            )
-            .await
-            {
-                Ok(Ok(message)) => {
-                    return ExecutionResult::decode(&*message.payload)
-                        .map_err(|err| format!("failed to decode ExecutionResult: {err}"));
-                }
-                Ok(Err(err)) if attempt < 10 => {
-                    log::debug!(
-                        "test execution request attempt {} failed before subscription was ready: {:?}",
-                        attempt,
-                        err
-                    );
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Ok(Err(err)) => return Err(format!("NATS request failed: {err}")),
-                Err(_) if attempt < 10 => {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Err(_) => return Err("timed out waiting for test execution response".to_string()),
-            }
+            other => panic!("expected successful execution result, got {:?}", other),
         }
+    }
 
-        Err("test execution request did not complete".to_string())
+    #[test]
+    fn build_decode_error_result_uses_execution_payload_message() {
+        let execution_id = ExecutionId::new_v4();
+        let response = build_decode_error_result(execution_id);
+
+        assert_eq!(response.execution_identifier, execution_id.to_string());
+        assert_eq!(response.flow_id, 0);
+        assert!(response.started_at > 0);
+        assert!(response.finished_at >= response.started_at);
+        assert_eq!(response.input, None);
+        assert!(response.node_execution_results.is_empty());
+
+        match response.result {
+            Some(execution_result::Result::Error(error)) => {
+                assert_eq!(error.code, "T-TAURUS-000001");
+                assert_eq!(error.category, "ExecutionFlowDecodeError");
+                assert_eq!(error.message, "Failed to decode execution flow payload");
+            }
+            other => panic!("expected decode error result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn build_execution_result_preserves_node_execution_results() {
+        let execution_id = ExecutionId::new_v4();
+        let node_result = NodeExecutionResult {
+            node_id: 42,
+            started_at: 1,
+            finished_at: 2,
+            parameter_results: vec![tucana::shared::NodeParameterNodeExecutionResult {
+                value: Some(from_json_value(serde_json::json!("parameter-value"))),
+            }],
+            result: Some(tucana::shared::node_execution_result::Result::Success(
+                from_json_value(serde_json::json!("node-output")),
+            )),
+        };
+
+        let response = build_execution_result(
+            execution_id,
+            10,
+            1,
+            2,
+            None,
+            vec![node_result.clone()],
+            Signal::Success(from_json_value(serde_json::json!("flow-output"))),
+        );
+
+        assert_eq!(response.node_execution_results, vec![node_result]);
     }
 
     fn load_fixture(path: &str) -> FlowFixture {

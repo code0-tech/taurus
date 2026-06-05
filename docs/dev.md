@@ -13,7 +13,7 @@ Taurus is the execution runtime in the CodeZero execution block.
 - Executes flow graphs via `taurus-core::runtime::engine::ExecutionEngine`
 - Emits lifecycle events to NATS (`runtime.emitter.<execution_id>`)
 - Delegates remote nodes to external services over NATS (`action.<service>.<execution_id>`)
-- Reports runtime status and usage to Aquila in dynamic mode
+- Reports runtime status, runtime usage, and execution results to Aquila in dynamic mode
 
 ## Workspace Layout
 
@@ -50,7 +50,7 @@ graph TD
   Core --> Remote
   Remote -->|action.<service>.<execution_id>| NATS
   NATS --> Service
-  Taurus -->|runtime status + usage| Aquila
+  Taurus -->|runtime status + usage + execution result| Aquila
 ```
 
 ### Execution details
@@ -61,6 +61,7 @@ graph TD
 4. Local nodes run handlers from the built-in function registry.
 5. Non-local `definition_source` values are executed remotely via `RemoteRuntime`.
 6. Lifecycle events are emitted as `starting`, `ongoing`, `finished`, or `failed`.
+7. The completed `ExecutionResult` is transmitted through the Aquila execution gRPC API in dynamic mode.
 
 ## Runtime Modes
 
@@ -73,6 +74,7 @@ Taurus mode is controlled by `MODE`.
 - Sends definitions to Aquila (retry loop until success)
 - Starts runtime status reporting (including heartbeat)
 - Sends runtime usage updates after each flow run
+- Sends execution result updates after each flow run
 
 ### `static`
 
@@ -82,6 +84,7 @@ Taurus mode is controlled by `MODE`.
 - No definition push
 - No runtime status updates
 - No runtime usage updates
+- No execution result updates
 
 ## Environment Variables
 

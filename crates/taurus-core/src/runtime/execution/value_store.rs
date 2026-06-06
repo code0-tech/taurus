@@ -9,7 +9,6 @@ use tucana::shared::{
 };
 
 use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
-use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 
 #[derive(Clone)]
@@ -147,20 +146,6 @@ impl ValueStore {
         self.flow_input = value;
     }
 
-    pub fn insert_success(&mut self, id: i64, value: Value) {
-        self.insert_success_with_parameters(id, value, Vec::new());
-    }
-
-    pub fn insert_success_with_parameters(
-        &mut self,
-        id: i64,
-        value: Value,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
-    ) {
-        let ts = now_unix_micros();
-        self.insert_success_with_timing(id, value, parameter_results, ts, ts);
-    }
-
     pub fn insert_success_with_timing(
         &mut self,
         id: i64,
@@ -179,20 +164,6 @@ impl ValueStore {
                 result: Some(TucanaNodeResult::Success(value)),
             },
         );
-    }
-
-    pub fn insert_error(&mut self, id: i64, runtime_error: RuntimeError) {
-        self.insert_error_with_parameters(id, runtime_error, Vec::new());
-    }
-
-    pub fn insert_error_with_parameters(
-        &mut self,
-        id: i64,
-        runtime_error: RuntimeError,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
-    ) {
-        let ts = now_unix_micros();
-        self.insert_error_with_timing(id, runtime_error, parameter_results, ts, ts);
     }
 
     pub fn insert_error_with_timing(

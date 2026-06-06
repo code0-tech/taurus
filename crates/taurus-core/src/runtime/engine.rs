@@ -414,7 +414,7 @@ mod tests {
         _ctx: &mut ValueStore,
         _run: &mut ThunkRunner<'_>,
     ) -> Signal {
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_micros(2_000));
         Signal::Success(null_value())
     }
 

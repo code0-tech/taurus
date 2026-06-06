@@ -24,10 +24,11 @@ impl TaurusRuntimeExecutionService {
     }
 
     pub async fn update_runtime_execution(&mut self, runtime_execution: ExecutionResult) {
-        log::info!("Updating the current Runtime Execution!");
-        log::debug!(
-            "ExecutionResult payload sent to execution service: {:?}",
-            runtime_execution
+        log::info!(
+            "Transmitting execution result to Aquila (execution_id={}, flow_id={}, node_results={})",
+            runtime_execution.execution_identifier.as_str(),
+            runtime_execution.flow_id,
+            runtime_execution.node_execution_results.len()
         );
 
         let request = Request::from_parts(

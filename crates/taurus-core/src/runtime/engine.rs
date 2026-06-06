@@ -8,7 +8,7 @@ mod emitter;
 mod executor;
 mod model;
 
-use tucana::shared::{ExecutionFlow, NodeFunction, Value};
+use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
 
 use crate::handler::registry::FunctionStore;
 use crate::runtime::execution::value_store::ValueStore;
@@ -27,6 +27,14 @@ fn null_value() -> Value {
 /// Runtime engine entrypoint used by runtime binaries and CLI tools.
 pub struct ExecutionEngine {
     handlers: FunctionStore,
+}
+
+/// Full result of one engine execution, including per-node results for reporting.
+#[derive(Debug, Clone)]
+pub struct EngineExecutionReport {
+    pub signal: Signal,
+    pub exit_reason: ExitReason,
+    pub node_execution_results: Vec<NodeExecutionResult>,
 }
 
 impl Default for ExecutionEngine {
@@ -51,13 +59,14 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        self.execute_flow_with_execution_id(
+        let report = self.execute_flow_with_execution_id_report(
             ExecutionId::new_v4(),
             flow,
             remote,
             respond_emitter,
             with_trace,
-        )
+        );
+        (report.signal, report.exit_reason)
     }
 
     /// Execute an `ExecutionFlow` with a caller-provided execution id.
@@ -69,7 +78,43 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        self.execute_graph_with_execution_id(
+        let report = self.execute_flow_with_execution_id_report(
+            execution_id,
+            flow,
+            remote,
+            respond_emitter,
+            with_trace,
+        );
+        (report.signal, report.exit_reason)
+    }
+
+    /// Execute an `ExecutionFlow` and return the final signal plus per-node execution results.
+    pub fn execute_flow_report(
+        &self,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        self.execute_flow_with_execution_id_report(
+            ExecutionId::new_v4(),
+            flow,
+            remote,
+            respond_emitter,
+            with_trace,
+        )
+    }
+
+    /// Execute an `ExecutionFlow` with a caller-provided execution id and return per-node results.
+    pub fn execute_flow_with_execution_id_report(
+        &self,
+        execution_id: ExecutionId,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        self.execute_graph_with_execution_id_report(
             execution_id,
             flow.starting_node_id,
             flow.node_functions,
@@ -90,7 +135,7 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        self.execute_graph_with_execution_id(
+        let report = self.execute_graph_with_execution_id_report(
             ExecutionId::new_v4(),
             start_node_id,
             node_functions,
@@ -98,7 +143,8 @@ impl ExecutionEngine {
             remote,
             respond_emitter,
             with_trace,
-        )
+        );
+        (report.signal, report.exit_reason)
     }
 
     /// Execute a graph described by node list and start node with a caller-provided execution id.
@@ -112,6 +158,50 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
+        let report = self.execute_graph_with_execution_id_report(
+            execution_id,
+            start_node_id,
+            node_functions,
+            flow_input,
+            remote,
+            respond_emitter,
+            with_trace,
+        );
+        (report.signal, report.exit_reason)
+    }
+
+    /// Execute a graph and return the final signal plus per-node execution results.
+    pub fn execute_graph_report(
+        &self,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        self.execute_graph_with_execution_id_report(
+            ExecutionId::new_v4(),
+            start_node_id,
+            node_functions,
+            flow_input,
+            remote,
+            respond_emitter,
+            with_trace,
+        )
+    }
+
+    /// Execute a graph with a caller-provided execution id and return per-node results.
+    pub fn execute_graph_with_execution_id_report(
+        &self,
+        execution_id: ExecutionId,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
         if let Some(emitter) = respond_emitter {
             emitter.emit(execution_id, EmitType::StartingExec, null_value());
         }
@@ -129,7 +219,11 @@ impl ExecutionEngine {
                     emitter.emit(execution_id, EmitType::FailedExec, runtime_error.as_value());
                 }
                 let signal = Signal::Failure(runtime_error);
-                return (signal, ExitReason::Failure);
+                return EngineExecutionReport {
+                    signal,
+                    exit_reason: ExitReason::Failure,
+                    node_execution_results: Vec::new(),
+                };
             }
         };
 
@@ -160,7 +254,11 @@ impl ExecutionEngine {
             }
         }
         let exit_reason = signal.exit_reason();
-        (signal, exit_reason)
+        EngineExecutionReport {
+            signal,
+            exit_reason,
+            node_execution_results: value_store.node_execution_results(),
+        }
     }
 }
 
@@ -171,8 +269,8 @@ mod tests {
     use std::cell::RefCell;
     use tucana::shared::{
         InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow,
-        SubFlowSetting, Value, node_value, reference_value, sub_flow::ExecutionReference,
-        value::Kind,
+        SubFlowSetting, Value, node_execution_result, node_value, reference_value,
+        sub_flow::ExecutionReference, value::Kind,
     };
 
     fn literal_param(database_id: i64, runtime_parameter_id: &str, value: Value) -> NodeParameter {
@@ -717,6 +815,114 @@ mod tests {
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(expect_success(signal), int_value(42));
+    }
+
+    #[test]
+    fn execution_report_includes_literal_node_parameter_results() {
+        let engine = ExecutionEngine::new();
+        let add_node = node(
+            1,
+            "std::number::add",
+            vec![
+                literal_param(100, "lhs", int_value(1)),
+                literal_param(101, "rhs", int_value(2)),
+            ],
+            None,
+        );
+
+        let report = engine.execute_graph_report(1, vec![add_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(report.node_execution_results.len(), 1);
+
+        let node_result = &report.node_execution_results[0];
+        assert_eq!(node_result.node_id, 1);
+        assert_eq!(node_result.parameter_results.len(), 2);
+        assert_eq!(node_result.parameter_results[0].value, Some(int_value(1)));
+        assert_eq!(node_result.parameter_results[1].value, Some(int_value(2)));
+
+        match node_result.result.as_ref() {
+            Some(node_execution_result::Result::Success(value)) => {
+                assert_eq!(value, &int_value(3));
+            }
+            other => panic!("expected node success result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn execution_report_includes_reference_node_parameter_results() {
+        let engine = ExecutionEngine::new();
+        let value_node = node(
+            1,
+            "std::control::value",
+            vec![literal_param(100, "value", int_value(7))],
+            Some(2),
+        );
+        let add_node = node(
+            2,
+            "std::number::add",
+            vec![
+                node_result_ref_param(200, "lhs", 1),
+                literal_param(201, "rhs", int_value(5)),
+            ],
+            None,
+        );
+
+        let report =
+            engine.execute_graph_report(1, vec![value_node, add_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(report.node_execution_results.len(), 2);
+
+        let node_result = &report.node_execution_results[1];
+        assert_eq!(node_result.node_id, 2);
+        assert_eq!(node_result.parameter_results.len(), 2);
+        assert_eq!(node_result.parameter_results[0].value, Some(int_value(7)));
+        assert_eq!(node_result.parameter_results[1].value, Some(int_value(5)));
+
+        match node_result.result.as_ref() {
+            Some(node_execution_result::Result::Success(value)) => {
+                assert_eq!(value, &int_value(12));
+            }
+            other => panic!("expected node success result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn execution_report_includes_respond_node_parameter_results() {
+        let engine = ExecutionEngine::new();
+        let respond_node = node(
+            1,
+            "rest::control::respond",
+            vec![
+                literal_param(100, "http_status_code", int_value(200)),
+                literal_param(101, "headers", empty_struct_value()),
+                literal_param(102, "payload", string_value("hello")),
+            ],
+            None,
+        );
+
+        let report = engine.execute_graph_report(1, vec![respond_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(report.node_execution_results.len(), 1);
+
+        let node_result = &report.node_execution_results[0];
+        assert_eq!(node_result.node_id, 1);
+        assert_eq!(node_result.parameter_results.len(), 3);
+        assert_eq!(node_result.parameter_results[0].value, Some(int_value(200)));
+        assert_eq!(
+            node_result.parameter_results[1].value,
+            Some(empty_struct_value())
+        );
+        assert_eq!(
+            node_result.parameter_results[2].value,
+            Some(string_value("hello"))
+        );
+        assert!(matches!(
+            node_result.result,
+            Some(node_execution_result::Result::Success(_))
+        ));
     }
 
     #[test]

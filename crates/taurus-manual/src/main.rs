@@ -1,13 +1,15 @@
 use std::path::Path;
 
-use clap::{Parser, arg, command};
+use clap::Parser;
 use log::error;
 use log::info;
+use prost::Message;
 use serde::Deserialize;
-use taurus_core::runtime::engine::ExecutionEngine;
+use taurus_core::runtime::engine::{ExecutionEngine, ExecutionId};
 use taurus_core::types::signal::Signal;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
+use tucana::shared::ExecutionFlow;
 use tucana::shared::ValidationFlow;
 use tucana::shared::helper::value::from_json_value;
 use tucana::shared::helper::value::to_json_value;
@@ -128,6 +130,10 @@ struct Args {
     /// Path value
     #[arg(short, long)]
     path: String,
+
+    /// Queue the selected flow on a running Taurus instance instead of executing locally
+    #[arg(long, default_value_t = false)]
+    queue_execution: bool,
 }
 
 #[tokio::main]
@@ -159,6 +165,12 @@ async fn main() {
             panic!("Failed to connect to NATS server: {}", err);
         }
     };
+
+    if args.queue_execution {
+        queue_execution(&client, &case, flow_input).await;
+        return;
+    }
+
     let remote = NATSRemoteRuntime::new(client.clone());
     let emitter = NATSRespondEmitter::new(client);
     let engine = ExecutionEngine::new();
@@ -193,4 +205,47 @@ async fn main() {
             println!("RuntimeError: {:?}", runtime_error);
         }
     }
+}
+
+async fn queue_execution(
+    client: &async_nats::Client,
+    case: &Case,
+    input_value: Option<tucana::shared::Value>,
+) {
+    let execution_id = ExecutionId::new_v4();
+    let execution_flow = ExecutionFlow {
+        flow_id: case.flow.flow_id,
+        project_id: case.flow.project_id,
+        starting_node_id: case.flow.starting_node_id,
+        node_functions: case.flow.node_functions.clone(),
+        input_value,
+    };
+    let execution_topic = format!("execution.{}", execution_id);
+
+    info!(
+        "Queueing execution of flow {} with execution id {}",
+        execution_flow.flow_id, execution_id
+    );
+
+    if let Err(err) = client
+        .publish(
+            execution_topic.clone(),
+            execution_flow.encode_to_vec().into(),
+        )
+        .await
+    {
+        panic!(
+            "Failed to publish flow {} to execution topic '{}': {}",
+            case.flow.flow_id, execution_topic, err
+        );
+    }
+
+    if let Err(err) = client.flush().await {
+        panic!(
+            "Failed to flush execution request on '{}': {}",
+            execution_topic, err
+        );
+    }
+
+    println!("{}", execution_id);
 }

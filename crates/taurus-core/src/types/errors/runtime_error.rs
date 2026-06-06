@@ -15,7 +15,7 @@ use tucana::shared::{
     Error as TucanaError, NumberValue as ProtoNumberValue, Struct, Value, number_value,
 };
 
-use crate::time::now_unix_ms;
+use crate::time::now_unix_micros;
 
 /// Runtime execution failure representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,8 +26,8 @@ pub struct RuntimeError {
     pub category: String,
     /// Human-readable diagnostic message.
     pub message: String,
-    /// Unix timestamp in milliseconds when this error object was created.
-    pub timestamp_unix_ms: u64,
+    /// Unix timestamp in microseconds when this error object was created.
+    pub timestamp_unix_micros: u64,
     /// Runtime version identifier.
     pub version: String,
     /// Dependency versions relevant to this runtime.
@@ -47,7 +47,7 @@ impl RuntimeError {
             code: code.into(),
             category: category.into(),
             message: message.into(),
-            timestamp_unix_ms: now_unix_ms() as u64,
+            timestamp_unix_micros: now_unix_micros() as u64,
             version: env!("CARGO_PKG_VERSION").to_string(),
             dependencies: HashMap::new(),
             details: HashMap::new(),
@@ -112,7 +112,7 @@ impl RuntimeError {
                         Value {
                             kind: Some(NumberValue(ProtoNumberValue {
                                 number: Some(number_value::Number::Integer(
-                                    self.timestamp_unix_ms as i64,
+                                    self.timestamp_unix_micros as i64,
                                 )),
                             })),
                         },
@@ -150,7 +150,7 @@ impl RuntimeError {
             code: self.code.clone(),
             category: self.category.clone(),
             message: self.message.clone(),
-            timestamp: self.timestamp_unix_ms as i64,
+            timestamp: self.timestamp_unix_micros as i64,
             version: self.version.clone(),
             dependencies: self.dependencies.clone(),
             details: Some(Struct {
@@ -165,7 +165,7 @@ impl RuntimeError {
             code: error.code.clone(),
             category: error.category.clone(),
             message: error.message.clone(),
-            timestamp_unix_ms: error.timestamp.max(0) as u64,
+            timestamp_unix_micros: error.timestamp.max(0) as u64,
             version: error.version.clone(),
             dependencies: error.dependencies.clone(),
             details: error

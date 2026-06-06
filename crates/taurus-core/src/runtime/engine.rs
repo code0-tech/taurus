@@ -265,8 +265,12 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handler::argument::Argument;
+    use crate::handler::registry::{FunctionRegistration, FunctionStore, ThunkRunner};
+    use crate::runtime::execution::value_store::ValueStore;
     use crate::types::exit_reason::ExitReason;
     use std::cell::RefCell;
+    use std::time::Duration;
     use tucana::shared::{
         InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow,
         SubFlowSetting, Value, node_execution_result, node_value, reference_value,
@@ -403,6 +407,15 @@ mod tests {
             Signal::Success(value) => value,
             other => panic!("expected success, got {:?}", other),
         }
+    }
+
+    fn sleep_handler(
+        _args: &[Argument],
+        _ctx: &mut ValueStore,
+        _run: &mut ThunkRunner<'_>,
+    ) -> Signal {
+        std::thread::sleep(Duration::from_micros(2_000));
+        Signal::Success(null_value())
     }
 
     fn input_type_ref_param(
@@ -923,6 +936,103 @@ mod tests {
             node_result.result,
             Some(node_execution_result::Result::Success(_))
         ));
+    }
+
+    #[test]
+    fn node_execution_result_tracks_actual_node_duration() {
+        let mut handlers = FunctionStore::new();
+        handlers.populate(&[FunctionRegistration::eager("test::sleep", sleep_handler, 0)]);
+        let engine = ExecutionEngine { handlers };
+        let sleep_node = node(1, "test::sleep", vec![], None);
+
+        let report = engine.execute_graph_report(1, vec![sleep_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(report.node_execution_results.len(), 1);
+
+        let node_result = &report.node_execution_results[0];
+        assert_eq!(node_result.node_id, 1);
+        assert!(node_result.started_at >= 1_000_000_000_000_000);
+        assert!(node_result.finished_at > node_result.started_at);
+        assert!(node_result.finished_at - node_result.started_at >= 1_000);
+    }
+
+    #[test]
+    fn execution_report_keeps_every_for_each_callback_execution() {
+        let engine = ExecutionEngine::new();
+        let for_each_node = node(
+            1,
+            "std::list::for_each",
+            vec![
+                literal_param(
+                    100,
+                    "list",
+                    list_value(vec![int_value(1), int_value(2), int_value(3)]),
+                ),
+                thunk_param(101, "consumer", 2),
+            ],
+            None,
+        );
+        let callback_node = node(
+            2,
+            "std::number::add",
+            vec![
+                input_type_ref_param(200, "first", 1, 1, 0),
+                literal_param(201, "second", int_value(2)),
+            ],
+            None,
+        );
+
+        let report = engine.execute_graph_report(
+            1,
+            vec![for_each_node, callback_node],
+            None,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(report.node_execution_results.len(), 4);
+
+        let callback_results: Vec<_> = report
+            .node_execution_results
+            .iter()
+            .filter(|result| result.node_id == 2)
+            .collect();
+        assert_eq!(callback_results.len(), 3);
+
+        let callback_values: Vec<_> = callback_results
+            .iter()
+            .map(|result| match result.result.as_ref() {
+                Some(node_execution_result::Result::Success(value)) => value.clone(),
+                other => panic!("expected callback success result, got {:?}", other),
+            })
+            .collect();
+
+        assert_eq!(
+            callback_values,
+            vec![int_value(3), int_value(4), int_value(5)]
+        );
+        let callback_parameters: Vec<_> = callback_results
+            .iter()
+            .map(|result| {
+                result
+                    .parameter_results
+                    .iter()
+                    .map(|parameter| parameter.value.clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(
+            callback_parameters,
+            vec![
+                vec![Some(int_value(1)), Some(int_value(2))],
+                vec![Some(int_value(2)), Some(int_value(2))],
+                vec![Some(int_value(3)), Some(int_value(2))],
+            ]
+        );
+        assert_eq!(report.node_execution_results[3].node_id, 1);
     }
 
     #[test]

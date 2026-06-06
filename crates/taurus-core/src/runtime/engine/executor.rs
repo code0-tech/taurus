@@ -26,6 +26,7 @@ use crate::runtime::execution::trace::{
 use crate::runtime::execution::tracer::{ExecutionTracer, Tracer};
 use crate::runtime::execution::value_store::{ValueStore, ValueStoreResult};
 use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
+use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 
@@ -66,6 +67,8 @@ struct NodeResult {
     signal: Signal,
     frame_id: Option<u64>,
     parameter_results: Vec<NodeParameterNodeExecutionResult>,
+    started_at: i64,
+    finished_at: i64,
 }
 
 struct ExecutedNode {
@@ -125,10 +128,12 @@ impl<'a> EngineExecutor<'a> {
                         emitter.emit(self.execution_id, EmitType::OngoingExec, value.clone());
                     }
 
-                    value_store.insert_success_with_parameters(
+                    value_store.insert_success_with_timing(
                         node_id,
                         value.clone(),
                         result.parameter_results,
+                        result.started_at,
+                        result.finished_at,
                     );
                     match next_idx {
                         Some(next) => current_idx = next,
@@ -243,25 +248,38 @@ impl<'a> EngineExecutor<'a> {
         let frame_id = self.trace_enter(node, value_store);
         let result = match &node.execution_target {
             NodeExecutionTarget::Local => {
+                let started_at = now_unix_micros();
                 let executed = self.execute_local_node(node, value_store, frame_id);
+                let finished_at = now_unix_micros();
                 let parameter_results = executed.parameter_results;
                 let signal = self.commit_result(
                     node.id,
                     executed.signal,
                     parameter_results.clone(),
+                    started_at,
+                    finished_at,
                     value_store,
                 );
                 NodeResult {
                     signal,
                     frame_id,
                     parameter_results,
+                    started_at,
+                    finished_at,
                 }
             }
-            NodeExecutionTarget::Remote { service } => NodeResult {
-                signal: self.execute_remote_node(node, service, value_store, frame_id),
-                frame_id,
-                parameter_results: Vec::new(),
-            },
+            NodeExecutionTarget::Remote { service } => {
+                let started_at = now_unix_micros();
+                let signal = self.execute_remote_node(node, service, value_store, frame_id);
+                let finished_at = now_unix_micros();
+                NodeResult {
+                    signal,
+                    frame_id,
+                    parameter_results: Vec::new(),
+                    started_at,
+                    finished_at,
+                }
+            }
         };
         self.trace_exit(frame_id, &result.signal, value_store);
 
@@ -331,6 +349,7 @@ impl<'a> EngineExecutor<'a> {
         value_store: &mut ValueStore,
         frame_id: Option<u64>,
     ) -> Signal {
+        let started_at = now_unix_micros();
         let remote_runtime = match self.remote {
             Some(remote) => remote,
             None => {
@@ -342,6 +361,8 @@ impl<'a> EngineExecutor<'a> {
                         "Remote runtime not configured",
                     )),
                     Vec::new(),
+                    started_at,
+                    now_unix_micros(),
                     value_store,
                 );
             }
@@ -350,7 +371,14 @@ impl<'a> EngineExecutor<'a> {
         let mut args = match self.build_args(node, value_store, frame_id) {
             Ok(args) => args,
             Err(err) => {
-                return self.commit_result(node.id, Signal::Failure(err), Vec::new(), value_store);
+                return self.commit_result(
+                    node.id,
+                    Signal::Failure(err),
+                    Vec::new(),
+                    started_at,
+                    now_unix_micros(),
+                    value_store,
+                );
             }
         };
 
@@ -361,6 +389,8 @@ impl<'a> EngineExecutor<'a> {
                     node.id,
                     signal,
                     parameter_results_from_args(&args),
+                    started_at,
+                    now_unix_micros(),
                     value_store,
                 );
             }
@@ -374,6 +404,8 @@ impl<'a> EngineExecutor<'a> {
                     node.id,
                     Signal::Failure(err),
                     parameter_results,
+                    started_at,
+                    now_unix_micros(),
                     value_store,
                 );
             }
@@ -390,6 +422,8 @@ impl<'a> EngineExecutor<'a> {
                 node.id,
                 Signal::Failure(err),
                 parameter_results,
+                started_at,
+                now_unix_micros(),
                 value_store,
             ),
         }
@@ -678,19 +712,29 @@ impl<'a> EngineExecutor<'a> {
         node_id: i64,
         signal: Signal,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
         value_store: &mut ValueStore,
     ) -> Signal {
         match signal {
             Signal::Success(value) => {
-                value_store.insert_success_with_parameters(
+                value_store.insert_success_with_timing(
                     node_id,
                     value.clone(),
                     parameter_results,
+                    started_at,
+                    finished_at,
                 );
                 Signal::Success(value)
             }
             Signal::Failure(err) => {
-                value_store.insert_error_with_parameters(node_id, err.clone(), parameter_results);
+                value_store.insert_error_with_timing(
+                    node_id,
+                    err.clone(),
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
                 Signal::Failure(err)
             }
             // Control signals are transient and should not be cached as node outputs.

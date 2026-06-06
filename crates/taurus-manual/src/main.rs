@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Instant;
 
 use clap::Parser;
 use log::error;
@@ -6,10 +7,12 @@ use log::info;
 use prost::Message;
 use serde::Deserialize;
 use taurus_core::runtime::engine::{ExecutionEngine, ExecutionId};
+use taurus_core::time::now_unix_micros;
 use taurus_core::types::signal::Signal;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tucana::shared::ExecutionFlow;
+use tucana::shared::NodeExecutionResult;
 use tucana::shared::ValidationFlow;
 use tucana::shared::helper::value::from_json_value;
 use tucana::shared::helper::value::to_json_value;
@@ -134,6 +137,10 @@ struct Args {
     /// Queue the selected flow on a running Taurus instance instead of executing locally
     #[arg(long, default_value_t = false)]
     queue_execution: bool,
+
+    /// Execute locally without connecting to NATS remote runtime or emitter
+    #[arg(long, default_value_t = false)]
+    offline: bool,
 }
 
 #[tokio::main]
@@ -148,6 +155,10 @@ async fn main() {
     let path = args.path;
     let case = Case::from_path(&path);
 
+    if args.offline && args.queue_execution {
+        panic!("--offline cannot be combined with --queue-execution");
+    }
+
     let flow_input = match case.inputs.get(index as usize) {
         Some(inp) => match inp.input.clone() {
             Some(json_input) => Some(from_json_value(json_input)),
@@ -155,6 +166,30 @@ async fn main() {
         },
         None => None,
     };
+
+    if args.offline {
+        let engine = ExecutionEngine::new();
+        let started_at = now_unix_micros();
+        let start = Instant::now();
+        let report = engine.execute_graph_report(
+            case.flow.starting_node_id,
+            case.flow.node_functions.clone(),
+            flow_input,
+            None,
+            None,
+            true,
+        );
+        let duration_us = start.elapsed().as_micros();
+        let finished_at = now_unix_micros();
+        print_timing_debug(
+            started_at,
+            finished_at,
+            duration_us,
+            &report.node_execution_results,
+        );
+        print_signal(report.signal);
+        return;
+    }
 
     let client = match async_nats::connect(nats_url).await {
         Ok(client) => {
@@ -174,7 +209,10 @@ async fn main() {
     let remote = NATSRemoteRuntime::new(client.clone());
     let emitter = NATSRespondEmitter::new(client);
     let engine = ExecutionEngine::new();
-    let (result, _) = engine.execute_graph(
+
+    let started_at = now_unix_micros();
+    let start = Instant::now();
+    let report = engine.execute_graph_report(
         case.flow.starting_node_id,
         case.flow.node_functions.clone(),
         flow_input,
@@ -182,9 +220,21 @@ async fn main() {
         Some(&emitter),
         false,
     );
+    let duration_us = start.elapsed().as_micros();
+    let finished_at = now_unix_micros();
+    print_timing_debug(
+        started_at,
+        finished_at,
+        duration_us,
+        &report.node_execution_results,
+    );
     emitter.shutdown().await;
 
-    match result {
+    print_signal(report.signal);
+}
+
+fn print_signal(signal: Signal) {
+    match signal {
         Signal::Success(value) => {
             let json = to_json_value(value);
             let pretty = serde_json::to_string_pretty(&json).unwrap();
@@ -248,4 +298,45 @@ async fn queue_execution(
     }
 
     println!("{}", execution_id);
+}
+
+fn print_timing_debug(
+    started_at: i64,
+    finished_at: i64,
+    duration_us: u128,
+    node_results: &[NodeExecutionResult],
+) {
+    eprintln!("[manual timing] unit=microseconds");
+    eprintln!("[manual timing] started_at_unix_us={}", started_at);
+    eprintln!("[manual timing] finished_at_unix_us={}", finished_at);
+    eprintln!("[manual timing] wall_delta_us={}", finished_at - started_at);
+    eprintln!("[manual timing] instant_duration_us={}", duration_us);
+    eprintln!("[manual timing] node_count={}", node_results.len());
+
+    for (execution_index, result) in node_results.iter().enumerate() {
+        let params = result
+            .parameter_results
+            .iter()
+            .enumerate()
+            .map(|(param_index, param)| {
+                let value = param
+                    .value
+                    .clone()
+                    .map(to_json_value)
+                    .unwrap_or(serde_json::Value::Null);
+                format!("{}={}", param_index, value)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        eprintln!(
+            "[manual timing] execution_index={} node_id={} started_at_unix_us={} finished_at_unix_us={} delta_us={} params=[{}]",
+            execution_index,
+            result.node_id,
+            result.started_at,
+            result.finished_at,
+            result.finished_at - result.started_at,
+            params
+        );
+    }
 }

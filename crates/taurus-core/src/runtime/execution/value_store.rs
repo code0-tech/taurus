@@ -9,7 +9,7 @@ use tucana::shared::{
 };
 
 use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
-use crate::time::now_unix_ms;
+use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 
 #[derive(Clone)]
@@ -21,7 +21,8 @@ pub enum ValueStoreResult {
 
 #[derive(Default)]
 pub struct ValueStore {
-    results: HashMap<i64, NodeExecutionResult>,
+    latest_results: HashMap<i64, NodeExecutionResult>,
+    result_history: Vec<NodeExecutionResult>,
     input_types: HashMap<InputType, Value>,
     flow_input: Value,
     current_node_id: i64,
@@ -31,7 +32,8 @@ pub struct ValueStore {
 impl ValueStore {
     pub fn new(flow_input: Value) -> Self {
         Self {
-            results: HashMap::new(),
+            latest_results: HashMap::new(),
+            result_history: Vec::new(),
             input_types: HashMap::new(),
             flow_input,
             current_node_id: 0,
@@ -103,7 +105,7 @@ impl ValueStore {
     }
 
     fn get_result(&mut self, id: i64) -> ValueStoreResult {
-        match self.results.get(&id) {
+        match self.latest_results.get(&id) {
             Some(result) => match &result.result {
                 Some(TucanaNodeResult::Success(value)) => ValueStoreResult::Success(value.clone()),
                 Some(TucanaNodeResult::Error(error)) => {
@@ -155,13 +157,24 @@ impl ValueStore {
         value: Value,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
     ) {
-        let ts = now_unix_ms();
+        let ts = now_unix_micros();
+        self.insert_success_with_timing(id, value, parameter_results, ts, ts);
+    }
+
+    pub fn insert_success_with_timing(
+        &mut self,
+        id: i64,
+        value: Value,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
+    ) {
         self.insert_node_result(
             id,
             NodeExecutionResult {
                 node_id: id,
-                started_at: ts,
-                finished_at: ts,
+                started_at,
+                finished_at,
                 parameter_results,
                 result: Some(TucanaNodeResult::Success(value)),
             },
@@ -178,13 +191,24 @@ impl ValueStore {
         runtime_error: RuntimeError,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
     ) {
-        let ts = now_unix_ms();
+        let ts = now_unix_micros();
+        self.insert_error_with_timing(id, runtime_error, parameter_results, ts, ts);
+    }
+
+    pub fn insert_error_with_timing(
+        &mut self,
+        id: i64,
+        runtime_error: RuntimeError,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
+    ) {
         self.insert_node_result(
             id,
             NodeExecutionResult {
                 node_id: id,
-                started_at: ts,
-                finished_at: ts,
+                started_at,
+                finished_at,
                 parameter_results,
                 result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
             },
@@ -193,13 +217,12 @@ impl ValueStore {
 
     pub fn insert_node_result(&mut self, id: i64, mut result: NodeExecutionResult) {
         result.node_id = id;
-        self.results.insert(id, result);
+        self.latest_results.insert(id, result.clone());
+        self.result_history.push(result);
     }
 
     pub fn node_execution_results(&self) -> Vec<NodeExecutionResult> {
-        let mut results: Vec<_> = self.results.values().cloned().collect();
-        results.sort_by_key(|result| result.node_id);
-        results
+        self.result_history.clone()
     }
 
     pub fn push_runtime_trace_label(&mut self, label: String) {
@@ -211,8 +234,8 @@ impl ValueStore {
     }
 
     pub fn trace_snapshot(&self) -> StoreSnapshot {
-        let mut results = Vec::with_capacity(self.results.len());
-        for (node_id, result) in &self.results {
+        let mut results = Vec::with_capacity(self.latest_results.len());
+        for (node_id, result) in &self.latest_results {
             let preview = match &result.result {
                 Some(TucanaNodeResult::Success(value)) => preview_value(value),
                 Some(TucanaNodeResult::Error(err)) => {

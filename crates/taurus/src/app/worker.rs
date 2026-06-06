@@ -3,7 +3,8 @@ use std::time::Instant;
 use futures_lite::StreamExt;
 use prost::Message;
 use taurus_core::runtime::engine::{EmitType, ExecutionEngine, ExecutionId, RespondEmitter};
-use taurus_core::time::now_unix_ms;
+use taurus_core::runtime::remote::RemoteRuntime;
+use taurus_core::time::now_unix_micros;
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
@@ -113,7 +114,7 @@ async fn process_execution_message(
         requested_execution_id,
         flow,
         engine,
-        nats_remote,
+        Some(nats_remote),
         Some(&respond_emitter),
     );
     log::debug!(
@@ -160,22 +161,22 @@ fn execute_flow(
     execution_id: ExecutionId,
     flow: ExecutionFlow,
     engine: &ExecutionEngine,
-    nats_remote: &NATSRemoteRuntime,
+    remote: Option<&dyn RemoteRuntime>,
     respond_emitter: Option<&dyn RespondEmitter>,
 ) -> FlowRunResult {
-    let started_at = now_unix_ms();
+    let started_at = now_unix_micros();
     let start = Instant::now();
     let flow_id = flow.flow_id;
     let input = flow.input_value.clone();
     let report = engine.execute_flow_with_execution_id_report(
         execution_id,
         flow,
-        Some(nats_remote),
+        remote,
         respond_emitter,
         true,
     );
-    let finished_at = now_unix_ms();
-    let duration_millis = start.elapsed().as_millis() as i64;
+    let finished_at = now_unix_micros();
+    let duration_micros = start.elapsed().as_micros() as i64;
 
     FlowRunResult {
         execution_id,
@@ -187,7 +188,7 @@ fn execute_flow(
         node_execution_results: report.node_execution_results,
         runtime_usage: RuntimeUsage {
             flow_id,
-            duration: duration_millis,
+            duration: duration_micros,
         },
     }
 }
@@ -237,7 +238,7 @@ fn build_execution_result(
 }
 
 fn build_decode_error_result(execution_id: ExecutionId) -> ExecutionResult {
-    let now = now_unix_ms();
+    let now = now_unix_micros();
     let runtime_error = RuntimeError::new(
         "T-TAURUS-000001",
         "ExecutionFlowDecodeError",
@@ -331,6 +332,36 @@ mod tests {
             }
             other => panic!("expected decode error result, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn execute_flow_reports_microsecond_timestamps_and_duration() {
+        let execution_id = ExecutionId::new_v4();
+        let fixture = load_fixture("flows/01_return_object.json");
+        let flow = execution_flow_from_fixture(fixture);
+        let engine = ExecutionEngine::new();
+
+        let run_result = execute_flow(execution_id, flow, &engine, None, None);
+
+        println!(
+            "started_at={} finished_at={} delta={} runtime_usage.duration={}",
+            run_result.started_at,
+            run_result.finished_at,
+            run_result.finished_at - run_result.started_at,
+            run_result.runtime_usage.duration
+        );
+
+        assert_eq!(run_result.execution_id, execution_id);
+        assert!(run_result.started_at >= 1_000_000_000_000_000);
+        assert!(run_result.finished_at >= run_result.started_at);
+        assert!(run_result.runtime_usage.duration > 0);
+        assert!(
+            run_result
+                .node_execution_results
+                .iter()
+                .all(|result| result.started_at >= 1_000_000_000_000_000
+                    && result.finished_at >= result.started_at)
+        );
     }
 
     #[test]

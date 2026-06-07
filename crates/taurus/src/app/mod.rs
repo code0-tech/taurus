@@ -2,6 +2,7 @@ mod worker;
 
 use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::DYNAMIC;
+use code0_flow::flow_definition::Reader;
 use code0_flow::flow_service::FlowUpdateService;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
+use tucana::shared::module_status::StatusVariant;
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_status::TaurusRuntimeStatusService;
@@ -136,14 +138,14 @@ async fn setup_dynamic_services_if_needed(
         TaurusRuntimeStatusService::from_url(
             config.aquila_url.clone(),
             config.aquila_token.clone(),
-            "taurus".into(),
+            read_module_status_identifiers(config.definitions.as_str()),
         )
         .await,
     ));
 
     if let Some(status_service) = runtime_status_service.as_ref() {
         status_service
-            .update_runtime_status(tucana::shared::execution_runtime_status::Status::Running)
+            .update_runtime_status(StatusVariant::Running)
             .await;
     }
 
@@ -164,9 +166,7 @@ async fn setup_dynamic_services_if_needed(
             loop {
                 interval.tick().await;
                 status_service
-                    .update_runtime_status(
-                        tucana::shared::execution_runtime_status::Status::Running,
-                    )
+                    .update_runtime_status(StatusVariant::Running)
                     .await;
             }
         });
@@ -187,6 +187,24 @@ async fn setup_dynamic_services_if_needed(
         runtime_usage_service,
         runtime_status_heartbeat_task,
     )
+}
+
+fn read_module_status_identifiers(definition_path: &str) -> Vec<String> {
+    let reader = Reader::configure(definition_path.to_string(), true, Vec::new(), None);
+    match reader.read_modules() {
+        Ok(modules) => modules
+            .into_iter()
+            .map(|module| module.identifier)
+            .filter(|identifier| !identifier.is_empty())
+            .collect(),
+        Err(err) => {
+            log::error!(
+                "Failed to read module definitions for runtime status: {:?}",
+                err
+            );
+            Vec::new()
+        }
+    }
 }
 
 async fn push_definitions_until_success(config: &Config) {
@@ -216,7 +234,7 @@ async fn push_definitions_until_success(config: &Config) {
 async fn update_stopped_status(runtime_status_service: Option<&Arc<TaurusRuntimeStatusService>>) {
     if let Some(status_service) = runtime_status_service {
         status_service
-            .update_runtime_status(tucana::shared::execution_runtime_status::Status::Stopped)
+            .update_runtime_status(StatusVariant::Stopped)
             .await;
     }
 }
@@ -271,5 +289,38 @@ async fn wait_for_shutdown(
                 worker_task.abort();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn reads_status_identifiers_for_each_readable_module() {
+        let root =
+            std::env::temp_dir().join(format!("taurus-module-status-test-{}", std::process::id()));
+        let module_a = root.join("module-a");
+        let module_b = root.join("module-b");
+        fs::create_dir_all(&module_a).expect("create module-a");
+        fs::create_dir_all(&module_b).expect("create module-b");
+        fs::write(
+            module_a.join("module.json"),
+            r#"{"identifier":"alpha","name":[],"description":[],"documentation":"","author":"","icon":""}"#,
+        )
+        .expect("write module-a");
+        fs::write(
+            module_b.join("module.json"),
+            r#"{"identifier":"beta","name":[],"description":[],"documentation":"","author":"","icon":""}"#,
+        )
+        .expect("write module-b");
+
+        let mut identifiers = read_module_status_identifiers(root.to_str().expect("utf-8 path"));
+        identifiers.sort();
+
+        assert_eq!(identifiers, vec!["alpha".to_string(), "beta".to_string()]);
+
+        fs::remove_dir_all(root).expect("cleanup module status test");
     }
 }

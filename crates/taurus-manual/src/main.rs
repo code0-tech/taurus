@@ -16,6 +16,7 @@ use tucana::shared::NodeExecutionResult;
 use tucana::shared::ValidationFlow;
 use tucana::shared::helper::value::from_json_value;
 use tucana::shared::helper::value::to_json_value;
+use tucana::shared::node_execution_result::Id as NodeExecutionResultId;
 
 #[derive(Clone, Deserialize)]
 pub struct Input {
@@ -330,13 +331,21 @@ fn print_timing_debug(
             .join(", ");
 
         eprintln!(
-            "[manual timing] execution_index={} node_id={} started_at_unix_us={} finished_at_unix_us={} delta_us={} params=[{}]",
+            "[manual timing] execution_index={} {} started_at_unix_us={} finished_at_unix_us={} delta_us={} params=[{}]",
             execution_index,
-            result.node_id,
+            execution_result_id_label(result),
             result.started_at,
             result.finished_at,
             result.finished_at - result.started_at,
             params
         );
+    }
+}
+
+fn execution_result_id_label(result: &NodeExecutionResult) -> String {
+    match result.id {
+        Some(NodeExecutionResultId::NodeId(id)) => format!("node_id={}", id),
+        Some(NodeExecutionResultId::FunctionId(id)) => format!("function_id={}", id),
+        None => "id=<missing>".to_string(),
     }
 }

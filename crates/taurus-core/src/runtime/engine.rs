@@ -411,6 +411,20 @@ mod tests {
         }
     }
 
+    fn assert_node_result_id(result: &NodeExecutionResult, expected_id: i64) {
+        assert_eq!(
+            result.id,
+            Some(node_execution_result::Id::NodeId(expected_id))
+        );
+    }
+
+    fn assert_function_result_id(result: &NodeExecutionResult, expected_id: i64) {
+        assert_eq!(
+            result.id,
+            Some(node_execution_result::Id::FunctionId(expected_id))
+        );
+    }
+
     fn sleep_handler(
         _args: &[Argument],
         _ctx: &mut ValueStore,
@@ -418,6 +432,21 @@ mod tests {
     ) -> Signal {
         std::thread::sleep(Duration::from_micros(2_000));
         Signal::Success(null_value())
+    }
+
+    fn echo_first_arg_handler(
+        args: &[Argument],
+        _ctx: &mut ValueStore,
+        _run: &mut ThunkRunner<'_>,
+    ) -> Signal {
+        match args.first() {
+            Some(Argument::Eval(value)) => Signal::Success(value.clone()),
+            _ => Signal::Failure(crate::types::errors::runtime_error::RuntimeError::new(
+                "T-TEST-000001",
+                "MissingEchoArgument",
+                "expected first eager argument",
+            )),
+        }
     }
 
     #[derive(Clone)]
@@ -849,6 +878,57 @@ mod tests {
     }
 
     #[test]
+    fn execution_report_includes_function_identifier_subflow_results() {
+        let mut handlers = FunctionStore::default();
+        handlers.populate(&[FunctionRegistration::eager("42", echo_first_arg_handler, 1)]);
+        let engine = ExecutionEngine { handlers };
+
+        let add_node = node(
+            1,
+            "std::number::add",
+            vec![
+                function_thunk_param(
+                    100,
+                    "lhs",
+                    "42",
+                    vec![subflow_setting("value", Some(int_value(20)), false, true)],
+                ),
+                literal_param(101, "rhs", int_value(2)),
+            ],
+            None,
+        );
+
+        let report = engine.execute_graph_report(1, vec![add_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(expect_success(report.signal), int_value(22));
+        assert_eq!(report.node_execution_results.len(), 2);
+
+        let function_result = &report.node_execution_results[0];
+        assert_function_result_id(function_result, 42);
+        assert_eq!(function_result.parameter_results.len(), 1);
+        assert_eq!(
+            function_result.parameter_results[0].value,
+            Some(int_value(20))
+        );
+        match function_result.result.as_ref() {
+            Some(node_execution_result::Result::Success(value)) => {
+                assert_eq!(value, &int_value(20));
+            }
+            other => panic!("expected function success result, got {:?}", other),
+        }
+
+        let node_result = &report.node_execution_results[1];
+        assert_node_result_id(node_result, 1);
+        match node_result.result.as_ref() {
+            Some(node_execution_result::Result::Success(value)) => {
+                assert_eq!(value, &int_value(22));
+            }
+            other => panic!("expected node success result, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn execution_report_includes_literal_node_parameter_results() {
         let engine = ExecutionEngine::new();
         let add_node = node(
@@ -867,7 +947,7 @@ mod tests {
         assert_eq!(report.node_execution_results.len(), 1);
 
         let node_result = &report.node_execution_results[0];
-        assert_eq!(node_result.node_id, 1);
+        assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 2);
         assert_eq!(node_result.parameter_results[0].value, Some(int_value(1)));
         assert_eq!(node_result.parameter_results[1].value, Some(int_value(2)));
@@ -906,7 +986,7 @@ mod tests {
         assert_eq!(report.node_execution_results.len(), 2);
 
         let node_result = &report.node_execution_results[1];
-        assert_eq!(node_result.node_id, 2);
+        assert_node_result_id(node_result, 2);
         assert_eq!(node_result.parameter_results.len(), 2);
         assert_eq!(node_result.parameter_results[0].value, Some(int_value(7)));
         assert_eq!(node_result.parameter_results[1].value, Some(int_value(5)));
@@ -939,7 +1019,7 @@ mod tests {
         assert_eq!(report.node_execution_results.len(), 1);
 
         let node_result = &report.node_execution_results[0];
-        assert_eq!(node_result.node_id, 1);
+        assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 3);
         assert_eq!(node_result.parameter_results[0].value, Some(int_value(200)));
         assert_eq!(
@@ -961,10 +1041,10 @@ mod tests {
         let engine = ExecutionEngine::new();
         let remote = StubRemoteRuntime {
             result: NodeExecutionResult {
-                node_id: 99,
                 started_at: 1,
                 finished_at: 2,
                 parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(99)),
                 result: None,
             },
         };
@@ -987,7 +1067,7 @@ mod tests {
         assert_eq!(report.node_execution_results.len(), 1);
 
         let node_result = &report.node_execution_results[0];
-        assert_eq!(node_result.node_id, 1);
+        assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 1);
         assert_eq!(node_result.parameter_results[0].value, Some(int_value(20)));
         match node_result.result.as_ref() {
@@ -1012,7 +1092,7 @@ mod tests {
         assert_eq!(report.node_execution_results.len(), 1);
 
         let node_result = &report.node_execution_results[0];
-        assert_eq!(node_result.node_id, 1);
+        assert_node_result_id(node_result, 1);
         assert!(node_result.started_at >= 1_000_000_000_000_000);
         assert!(node_result.finished_at > node_result.started_at);
         assert!(node_result.finished_at - node_result.started_at >= 1_000);
@@ -1059,7 +1139,7 @@ mod tests {
         let callback_results: Vec<_> = report
             .node_execution_results
             .iter()
-            .filter(|result| result.node_id == 2)
+            .filter(|result| result.id == Some(node_execution_result::Id::NodeId(2)))
             .collect();
         assert_eq!(callback_results.len(), 3);
 
@@ -1093,7 +1173,7 @@ mod tests {
                 vec![Some(int_value(3)), Some(int_value(2))],
             ]
         );
-        assert_eq!(report.node_execution_results[3].node_id, 1);
+        assert_node_result_id(&report.node_execution_results[3], 1);
     }
 
     #[test]

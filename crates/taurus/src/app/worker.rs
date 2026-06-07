@@ -368,12 +368,12 @@ mod tests {
     fn build_execution_result_preserves_node_execution_results() {
         let execution_id = ExecutionId::new_v4();
         let node_result = NodeExecutionResult {
-            node_id: 42,
             started_at: 1,
             finished_at: 2,
             parameter_results: vec![tucana::shared::NodeParameterNodeExecutionResult {
                 value: Some(from_json_value(serde_json::json!("parameter-value"))),
             }],
+            id: Some(tucana::shared::node_execution_result::Id::NodeId(42)),
             result: Some(tucana::shared::node_execution_result::Result::Success(
                 from_json_value(serde_json::json!("node-output")),
             )),

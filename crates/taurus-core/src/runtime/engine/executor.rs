@@ -415,9 +415,14 @@ impl<'a> EngineExecutor<'a> {
             target_service: service.to_string(),
             request,
         })) {
-            Ok(result) => {
-                self.commit_remote_result(node.id, result, parameter_results, value_store)
-            }
+            Ok(result) => self.commit_remote_result(
+                node.id,
+                result,
+                parameter_results,
+                started_at,
+                now_unix_micros(),
+                value_store,
+            ),
             Err(err) => self.commit_result(
                 node.id,
                 Signal::Failure(err),
@@ -747,22 +752,37 @@ impl<'a> EngineExecutor<'a> {
         node_id: i64,
         mut result: TucanaNodeExecutionResult,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
         value_store: &mut ValueStore,
     ) -> Signal {
         if result.parameter_results.is_empty() {
             result.parameter_results = parameter_results;
         }
-        value_store.insert_node_result(node_id, result.clone());
-        match result.result {
-            Some(TucanaNodeResult::Success(value)) => Signal::Success(value),
+        match result.result.clone() {
+            Some(TucanaNodeResult::Success(value)) => {
+                value_store.insert_node_result(node_id, result);
+                Signal::Success(value)
+            }
             Some(TucanaNodeResult::Error(error)) => {
+                value_store.insert_node_result(node_id, result);
                 Signal::Failure(RuntimeError::from_tucana_error(&error))
             }
-            None => Signal::Failure(RuntimeError::new(
-                "T-CORE-000006",
-                "NodeExecutionResultMissingOutcome",
-                "Remote node execution result is missing success/error outcome",
-            )),
+            None => {
+                let runtime_error = RuntimeError::new(
+                    "T-CORE-000006",
+                    "NodeExecutionResultMissingOutcome",
+                    "Remote node execution result is missing success/error outcome",
+                );
+                value_store.insert_error_with_timing(
+                    node_id,
+                    runtime_error.clone(),
+                    result.parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Failure(runtime_error)
+            }
         }
     }
 

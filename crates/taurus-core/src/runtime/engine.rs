@@ -268,12 +268,14 @@ mod tests {
     use crate::handler::argument::Argument;
     use crate::handler::registry::{FunctionRegistration, FunctionStore, ThunkRunner};
     use crate::runtime::execution::value_store::ValueStore;
+    use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
     use crate::types::exit_reason::ExitReason;
+    use async_trait::async_trait;
     use std::cell::RefCell;
     use std::time::Duration;
     use tucana::shared::{
-        InputType, ListValue, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow,
-        SubFlowSetting, Value, node_execution_result, node_value, reference_value,
+        InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
+        Struct, SubFlow, SubFlowSetting, Value, node_execution_result, node_value, reference_value,
         sub_flow::ExecutionReference, value::Kind,
     };
 
@@ -416,6 +418,22 @@ mod tests {
     ) -> Signal {
         std::thread::sleep(Duration::from_micros(2_000));
         Signal::Success(null_value())
+    }
+
+    #[derive(Clone)]
+    struct StubRemoteRuntime {
+        result: NodeExecutionResult,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for StubRemoteRuntime {
+        async fn execute_remote(
+            &self,
+            _execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            Ok(self.result.clone())
+        }
     }
 
     fn input_type_ref_param(
@@ -936,6 +954,49 @@ mod tests {
             node_result.result,
             Some(node_execution_result::Result::Success(_))
         ));
+    }
+
+    #[test]
+    fn remote_execution_report_converts_missing_outcome_to_node_error() {
+        let engine = ExecutionEngine::new();
+        let remote = StubRemoteRuntime {
+            result: NodeExecutionResult {
+                node_id: 99,
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                result: None,
+            },
+        };
+        let mut remote_node = node(
+            1,
+            "remote::missing_outcome",
+            vec![literal_param(100, "payload", int_value(20))],
+            None,
+        );
+        remote_node.definition_source = Some("remote-service".to_string());
+
+        let report =
+            engine.execute_graph_report(1, vec![remote_node], None, Some(&remote), None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Failure);
+        match report.signal {
+            Signal::Failure(err) => assert_eq!(err.code, "T-CORE-000006"),
+            other => panic!("expected missing-outcome failure, got {:?}", other),
+        }
+        assert_eq!(report.node_execution_results.len(), 1);
+
+        let node_result = &report.node_execution_results[0];
+        assert_eq!(node_result.node_id, 1);
+        assert_eq!(node_result.parameter_results.len(), 1);
+        assert_eq!(node_result.parameter_results[0].value, Some(int_value(20)));
+        match node_result.result.as_ref() {
+            Some(node_execution_result::Result::Error(error)) => {
+                assert_eq!(error.code, "T-CORE-000006");
+                assert_eq!(error.category, "NodeExecutionResultMissingOutcome");
+            }
+            other => panic!("expected node error result, got {:?}", other),
+        }
     }
 
     #[test]

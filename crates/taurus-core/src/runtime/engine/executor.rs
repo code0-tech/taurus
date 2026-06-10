@@ -183,15 +183,27 @@ impl<'a> EngineExecutor<'a> {
         function: &FunctionThunk,
         value_store: &mut ValueStore,
     ) -> ExecutionResult {
+        let started_at = now_unix_micros();
+        let function_result_id = parse_function_result_id(function);
         let entry = match self.handlers.get(function.identifier.as_str()).copied() {
             Some(entry) => entry,
             None => {
+                let error = RuntimeError::new(
+                    "T-CORE-000002",
+                    "FunctionNotFound",
+                    format!("Function {} not found", function.identifier),
+                );
+                if let Some(function_id) = function_result_id {
+                    value_store.insert_function_error_with_timing(
+                        function_id,
+                        error.clone(),
+                        Vec::new(),
+                        started_at,
+                        now_unix_micros(),
+                    );
+                }
                 return ExecutionResult {
-                    signal: Signal::Failure(RuntimeError::new(
-                        "T-CORE-000002",
-                        "FunctionNotFound",
-                        format!("Function {} not found", function.identifier),
-                    )),
+                    signal: Signal::Failure(error),
                     root_frame: None,
                 };
             }
@@ -208,12 +220,24 @@ impl<'a> EngineExecutor<'a> {
             Err(err) => {
                 let signal = Signal::Failure(err);
                 self.trace_exit(frame_id, &signal, value_store);
+                if let Some(function_id) = function_result_id {
+                    let parameter_results = Vec::new();
+                    self.commit_function_result(
+                        function_id,
+                        signal.clone(),
+                        parameter_results,
+                        started_at,
+                        now_unix_micros(),
+                        value_store,
+                    );
+                }
                 return ExecutionResult {
                     signal,
                     root_frame: frame_id,
                 };
             }
         };
+        let parameter_results = parameter_results_from_args(&args);
 
         let signal =
             if let Some(signal) = self.force_eager_args(&entry, &mut args, value_store, frame_id) {
@@ -233,6 +257,16 @@ impl<'a> EngineExecutor<'a> {
             };
 
         self.trace_exit(frame_id, &signal, value_store);
+        if let Some(function_id) = function_result_id {
+            self.commit_function_result(
+                function_id,
+                signal.clone(),
+                parameter_results,
+                started_at,
+                now_unix_micros(),
+                value_store,
+            );
+        }
 
         ExecutionResult {
             signal,
@@ -747,6 +781,40 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
+    fn commit_function_result(
+        &self,
+        function_id: i64,
+        signal: Signal,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
+        value_store: &mut ValueStore,
+    ) -> Signal {
+        match signal {
+            Signal::Success(value) => {
+                value_store.insert_function_success_with_timing(
+                    function_id,
+                    value.clone(),
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Success(value)
+            }
+            Signal::Failure(err) => {
+                value_store.insert_function_error_with_timing(
+                    function_id,
+                    err.clone(),
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Failure(err)
+            }
+            other => other,
+        }
+    }
+
     fn commit_remote_result(
         &self,
         node_id: i64,
@@ -899,6 +967,10 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             settings: settings.clone(),
         }),
     }
+}
+
+fn parse_function_result_id(function: &FunctionThunk) -> Option<i64> {
+    function.identifier.parse::<i64>().ok()
 }
 
 fn resolve_function_setting(

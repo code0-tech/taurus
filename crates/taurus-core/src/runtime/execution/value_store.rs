@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::node_execution_result::Result as TucanaNodeResult;
+use tucana::shared::node_execution_result::{Id as TucanaNodeResultId, Result as TucanaNodeResult};
 use tucana::shared::{
     InputType, NodeExecutionResult, NodeParameterNodeExecutionResult, ReferenceValue, Value,
     value::Kind,
@@ -157,10 +157,10 @@ impl ValueStore {
         self.insert_node_result(
             id,
             NodeExecutionResult {
-                node_id: id,
                 started_at,
                 finished_at,
                 parameter_results,
+                id: Some(TucanaNodeResultId::NodeId(id)),
                 result: Some(TucanaNodeResult::Success(value)),
             },
         );
@@ -177,19 +177,53 @@ impl ValueStore {
         self.insert_node_result(
             id,
             NodeExecutionResult {
-                node_id: id,
                 started_at,
                 finished_at,
                 parameter_results,
+                id: Some(TucanaNodeResultId::NodeId(id)),
                 result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
             },
         );
     }
 
     pub fn insert_node_result(&mut self, id: i64, mut result: NodeExecutionResult) {
-        result.node_id = id;
+        result.id = Some(TucanaNodeResultId::NodeId(id));
         self.latest_results.insert(id, result.clone());
         self.result_history.push(result);
+    }
+
+    pub fn insert_function_success_with_timing(
+        &mut self,
+        id: i64,
+        value: Value,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
+    ) {
+        self.result_history.push(NodeExecutionResult {
+            started_at,
+            finished_at,
+            parameter_results,
+            id: Some(TucanaNodeResultId::FunctionId(id)),
+            result: Some(TucanaNodeResult::Success(value)),
+        });
+    }
+
+    pub fn insert_function_error_with_timing(
+        &mut self,
+        id: i64,
+        runtime_error: RuntimeError,
+        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        started_at: i64,
+        finished_at: i64,
+    ) {
+        self.result_history.push(NodeExecutionResult {
+            started_at,
+            finished_at,
+            parameter_results,
+            id: Some(TucanaNodeResultId::FunctionId(id)),
+            result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
+        });
     }
 
     pub fn node_execution_results(&self) -> Vec<NodeExecutionResult> {

@@ -7,69 +7,115 @@ use tonic::{Extensions, Request, transport::Channel};
 use tucana::{
     aquila::{
         RuntimeStatusUpdateRequest, runtime_status_service_client::RuntimeStatusServiceClient,
-        runtime_status_update_request::Status,
     },
-    shared::ExecutionRuntimeStatus,
+    shared::{ModuleStatus, module_status::StatusVariant},
 };
 
 pub struct TaurusRuntimeStatusService {
     channel: Channel,
-    identifier: String,
+    identifiers: Vec<String>,
     aquila_token: String,
 }
 
 impl TaurusRuntimeStatusService {
-    pub async fn from_url(aquila_url: String, aquila_token: String, identifier: String) -> Self {
+    pub async fn from_url(
+        aquila_url: String,
+        aquila_token: String,
+        identifiers: Vec<String>,
+    ) -> Self {
         let channel = create_channel_with_retry("Aquila", aquila_url).await;
-        Self::new(channel, aquila_token, identifier)
+        Self::new(channel, aquila_token, identifiers)
     }
 
-    pub fn new(channel: Channel, aquila_token: String, identifier: String) -> Self {
+    pub fn new(channel: Channel, aquila_token: String, identifiers: Vec<String>) -> Self {
         TaurusRuntimeStatusService {
             channel,
-            identifier,
+            identifiers,
             aquila_token,
         }
     }
 
-    pub async fn update_runtime_status(
-        &self,
-        status: tucana::shared::execution_runtime_status::Status,
-    ) {
+    pub async fn update_runtime_status(&self, status: StatusVariant) {
         log::info!("Updating the current Runtime Status!");
         let mut client = RuntimeStatusServiceClient::new(self.channel.clone());
+        let timestamp = now_unix_seconds();
 
-        let now = SystemTime::now();
-        let timestamp = match now.duration_since(UNIX_EPOCH) {
-            Ok(time) => time.as_secs(),
-            Err(err) => {
-                log::error!("cannot get current system time: {:?}", err);
-                0
-            }
-        };
+        for request in build_runtime_status_requests(&self.identifiers, status, timestamp) {
+            let request = Request::from_parts(
+                get_authorization_metadata(&self.aquila_token),
+                Extensions::new(),
+                request,
+            );
 
-        let request = Request::from_parts(
-            get_authorization_metadata(&self.aquila_token),
-            Extensions::new(),
-            RuntimeStatusUpdateRequest {
-                status: Some(Status::ExecutionRuntimeStatus(ExecutionRuntimeStatus {
-                    status: status.into(),
-                    timestamp: timestamp as i64,
-                    identifier: self.identifier.clone(),
-                })),
-            },
-        );
-
-        match client.update(request).await {
-            Ok(response) => {
-                log::info!(
-                    "Was the update of the RuntimeStatus accepted by Sagittarius? {}",
-                    response.into_inner().success
-                );
-            }
-            Err(err) => {
-                log::error!("Failed to update RuntimeStatus: {:?}", err);
+            match client.update(request).await {
+                Ok(response) => {
+                    log::info!(
+                        "Was the update of the RuntimeStatus accepted by Sagittarius? {}",
+                        response.into_inner().success
+                    );
+                }
+                Err(err) => {
+                    log::error!("Failed to update RuntimeStatus: {:?}", err);
+                }
             }
         }
+    }
+}
+
+fn now_unix_seconds() -> i64 {
+    let now = SystemTime::now();
+    match now.duration_since(UNIX_EPOCH) {
+        Ok(time) => time.as_secs() as i64,
+        Err(err) => {
+            log::error!("cannot get current system time: {:?}", err);
+            0
+        }
+    }
+}
+
+pub(crate) fn build_runtime_status_requests(
+    identifiers: &[String],
+    status: StatusVariant,
+    timestamp: i64,
+) -> Vec<RuntimeStatusUpdateRequest> {
+    identifiers
+        .iter()
+        .map(|identifier| RuntimeStatusUpdateRequest {
+            status: Some(ModuleStatus {
+                status: status.into(),
+                timestamp,
+                identifier: identifier.clone(),
+            }),
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_one_runtime_status_request_per_module_identifier() {
+        let identifiers = vec!["taurus".to_string(), "http".to_string()];
+
+        let requests = build_runtime_status_requests(&identifiers, StatusVariant::Running, 123);
+
+        assert_eq!(requests.len(), 2);
+        assert_eq!(
+            requests[0].status,
+            Some(ModuleStatus {
+                identifier: "taurus".to_string(),
+                timestamp: 123,
+                status: StatusVariant::Running.into(),
+            })
+        );
+        assert_eq!(
+            requests[1].status,
+            Some(ModuleStatus {
+                identifier: "http".to_string(),
+                timestamp: 123,
+                status: StatusVariant::Running.into(),
+            })
+        );
     }
 }

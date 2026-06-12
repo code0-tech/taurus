@@ -734,7 +734,7 @@ impl<'a> EngineExecutor<'a> {
         }
 
         let mut fields = HashMap::new();
-        for (parameter, value) in node.parameters.iter().zip(values.into_iter()) {
+        for (parameter, value) in node.parameters.iter().zip(values) {
             fields.insert(parameter.runtime_parameter_id.clone(), value);
         }
 

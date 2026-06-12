@@ -297,11 +297,9 @@ fn decode_response_payload(response: http::Response<Body>) -> Result<Value, Stri
             .as_deref()
             .map(content_type_is_json)
             .unwrap_or(false)
-        {
-            if let Ok(json) = serde_json::from_str::<JsonValue>(&text) {
+            && let Ok(json) = serde_json::from_str::<JsonValue>(&text) {
                 return Ok(from_json_value(json));
             }
-        }
 
         return Ok(text.to_value());
     }

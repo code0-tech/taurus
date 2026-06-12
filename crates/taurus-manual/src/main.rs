@@ -164,10 +164,7 @@ async fn main() {
     }
 
     let flow_input = match case.inputs.get(index as usize) {
-        Some(inp) => match inp.input.clone() {
-            Some(json_input) => Some(from_json_value(json_input)),
-            None => None,
-        },
+        Some(inp) => inp.input.clone().map(from_json_value),
         None => None,
     };
 

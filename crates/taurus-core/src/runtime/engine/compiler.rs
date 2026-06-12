@@ -162,7 +162,6 @@ pub fn compile_flow(
                         Some(sub_flow::ExecutionReference::FunctionIdentifier(identifier)) => {
                             CompiledArg::Deferred(CompiledThunk::Function {
                                 identifier: identifier.clone(),
-                                result_id: identifier.parse().ok().or(Some(parameter.database_id)),
                                 parameter_index: parameter_index as i64,
                                 settings: sub_flow.settings.clone(),
                             })

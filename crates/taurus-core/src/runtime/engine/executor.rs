@@ -184,7 +184,6 @@ impl<'a> EngineExecutor<'a> {
         value_store: &mut ValueStore,
     ) -> ExecutionResult {
         let started_at = now_unix_micros();
-        let function_result_id = parse_function_result_id(function);
         let entry = match self.handlers.get(function.identifier.as_str()).copied() {
             Some(entry) => entry,
             None => {
@@ -193,15 +192,13 @@ impl<'a> EngineExecutor<'a> {
                     "FunctionNotFound",
                     format!("Function {} not found", function.identifier),
                 );
-                if let Some(function_id) = function_result_id {
-                    value_store.insert_function_error_with_timing(
-                        function_id,
-                        error.clone(),
-                        Vec::new(),
-                        started_at,
-                        now_unix_micros(),
-                    );
-                }
+                value_store.insert_function_error_with_timing(
+                    function.identifier.clone(),
+                    error.clone(),
+                    Vec::new(),
+                    started_at,
+                    now_unix_micros(),
+                );
                 return ExecutionResult {
                     signal: Signal::Failure(error),
                     root_frame: None,
@@ -220,17 +217,15 @@ impl<'a> EngineExecutor<'a> {
             Err(err) => {
                 let signal = Signal::Failure(err);
                 self.trace_exit(frame_id, &signal, value_store);
-                if let Some(function_id) = function_result_id {
-                    let parameter_results = Vec::new();
-                    self.commit_function_result(
-                        function_id,
-                        signal.clone(),
-                        parameter_results,
-                        started_at,
-                        now_unix_micros(),
-                        value_store,
-                    );
-                }
+                let parameter_results = Vec::new();
+                self.commit_function_result(
+                    function.identifier.as_str(),
+                    signal.clone(),
+                    parameter_results,
+                    started_at,
+                    now_unix_micros(),
+                    value_store,
+                );
                 return ExecutionResult {
                     signal,
                     root_frame: frame_id,
@@ -257,16 +252,14 @@ impl<'a> EngineExecutor<'a> {
             };
 
         self.trace_exit(frame_id, &signal, value_store);
-        if let Some(function_id) = function_result_id {
-            self.commit_function_result(
-                function_id,
-                signal.clone(),
-                parameter_results,
-                started_at,
-                now_unix_micros(),
-                value_store,
-            );
-        }
+        self.commit_function_result(
+            function.identifier.as_str(),
+            signal.clone(),
+            parameter_results,
+            started_at,
+            now_unix_micros(),
+            value_store,
+        );
 
         ExecutionResult {
             signal,
@@ -783,7 +776,7 @@ impl<'a> EngineExecutor<'a> {
 
     fn commit_function_result(
         &self,
-        function_id: i64,
+        function_id: &str,
         signal: Signal,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
         started_at: i64,
@@ -793,7 +786,7 @@ impl<'a> EngineExecutor<'a> {
         match signal {
             Signal::Success(value) => {
                 value_store.insert_function_success_with_timing(
-                    function_id,
+                    function_id.to_string(),
                     value.clone(),
                     parameter_results,
                     started_at,
@@ -803,7 +796,7 @@ impl<'a> EngineExecutor<'a> {
             }
             Signal::Failure(err) => {
                 value_store.insert_function_error_with_timing(
-                    function_id,
+                    function_id.to_string(),
                     err.clone(),
                     parameter_results,
                     started_at,
@@ -959,22 +952,14 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
         CompiledThunk::Node(node_id) => Thunk::Node(*node_id),
         CompiledThunk::Function {
             identifier,
-            result_id,
             parameter_index,
             settings,
         } => Thunk::Function(FunctionThunk {
             identifier: identifier.clone(),
-            result_id: *result_id,
             parameter_index: *parameter_index,
             settings: settings.clone(),
         }),
     }
-}
-
-fn parse_function_result_id(function: &FunctionThunk) -> Option<i64> {
-    function
-        .result_id
-        .or_else(|| function.identifier.parse::<i64>().ok())
 }
 
 fn resolve_function_setting(

@@ -418,9 +418,11 @@ fn null_value() -> Value {
 }
 
 fn execution_result_id_label(result: &NodeExecutionResult) -> String {
-    match result.id {
+    match &result.id {
         Some(NodeExecutionResultId::NodeId(id)) => format!("node_id={}", id),
-        Some(NodeExecutionResultId::FunctionId(id)) => format!("function_id={}", id),
+        Some(NodeExecutionResultId::FunctionIdentifier(id)) => {
+            format!("function_identifier={}", id)
+        }
         None => "id=<missing>".to_string(),
     }
 }

@@ -194,7 +194,7 @@ impl ValueStore {
 
     pub fn insert_function_success_with_timing(
         &mut self,
-        id: i64,
+        id: String,
         value: Value,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
         started_at: i64,
@@ -204,14 +204,14 @@ impl ValueStore {
             started_at,
             finished_at,
             parameter_results,
-            id: Some(TucanaNodeResultId::FunctionId(id)),
+            id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
             result: Some(TucanaNodeResult::Success(value)),
         });
     }
 
     pub fn insert_function_error_with_timing(
         &mut self,
-        id: i64,
+        id: String,
         runtime_error: RuntimeError,
         parameter_results: Vec<NodeParameterNodeExecutionResult>,
         started_at: i64,
@@ -221,7 +221,7 @@ impl ValueStore {
             started_at,
             finished_at,
             parameter_results,
-            id: Some(TucanaNodeResultId::FunctionId(id)),
+            id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
             result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
         });
     }

@@ -418,10 +418,12 @@ mod tests {
         );
     }
 
-    fn assert_function_result_id(result: &NodeExecutionResult, expected_id: i64) {
+    fn assert_function_result_id(result: &NodeExecutionResult, expected_id: &str) {
         assert_eq!(
             result.id,
-            Some(node_execution_result::Id::FunctionId(expected_id))
+            Some(node_execution_result::Id::FunctionIdentifier(
+                expected_id.to_string()
+            ))
         );
     }
 
@@ -880,7 +882,11 @@ mod tests {
     #[test]
     fn execution_report_includes_function_identifier_subflow_results() {
         let mut handlers = FunctionStore::default();
-        handlers.populate(&[FunctionRegistration::eager("42", echo_first_arg_handler, 1)]);
+        handlers.populate(&[FunctionRegistration::eager(
+            "std::test::echo",
+            echo_first_arg_handler,
+            1,
+        )]);
         let engine = ExecutionEngine { handlers };
 
         let add_node = node(
@@ -890,7 +896,7 @@ mod tests {
                 function_thunk_param(
                     100,
                     "lhs",
-                    "42",
+                    "std::test::echo",
                     vec![subflow_setting("value", Some(int_value(20)), false, true)],
                 ),
                 literal_param(101, "rhs", int_value(2)),
@@ -905,7 +911,7 @@ mod tests {
         assert_eq!(report.node_execution_results.len(), 2);
 
         let function_result = &report.node_execution_results[0];
-        assert_function_result_id(function_result, 42);
+        assert_function_result_id(function_result, "std::test::echo");
         assert_eq!(function_result.parameter_results.len(), 1);
         assert_eq!(
             function_result.parameter_results[0].value,
@@ -1234,7 +1240,12 @@ mod tests {
         let function_results: Vec<_> = report
             .node_execution_results
             .iter()
-            .filter(|result| result.id == Some(node_execution_result::Id::FunctionId(5)))
+            .filter(|result| {
+                result.id
+                    == Some(node_execution_result::Id::FunctionIdentifier(
+                        "std::boolean::from_number".to_string(),
+                    ))
+            })
             .collect();
         assert_eq!(function_results.len(), 3);
 
@@ -1257,9 +1268,18 @@ mod tests {
             }
         }
 
-        assert_function_result_id(&report.node_execution_results[0], 5);
-        assert_function_result_id(&report.node_execution_results[1], 5);
-        assert_function_result_id(&report.node_execution_results[2], 5);
+        assert_function_result_id(
+            &report.node_execution_results[0],
+            "std::boolean::from_number",
+        );
+        assert_function_result_id(
+            &report.node_execution_results[1],
+            "std::boolean::from_number",
+        );
+        assert_function_result_id(
+            &report.node_execution_results[2],
+            "std::boolean::from_number",
+        );
         assert_node_result_id(&report.node_execution_results[3], 2);
         assert_node_result_id(&report.node_execution_results[4], 1);
     }

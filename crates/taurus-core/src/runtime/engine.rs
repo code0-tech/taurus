@@ -1177,6 +1177,94 @@ mod tests {
     }
 
     #[test]
+    fn execution_report_keeps_every_for_each_function_identifier_callback_execution() {
+        let engine = ExecutionEngine::new();
+        let mut respond_node = node(
+            1,
+            "rest::control::respond",
+            vec![
+                literal_param(1, "http_status_code", int_value(200)),
+                literal_param(2, "headers", empty_struct_value()),
+                literal_param(3, "payload", string_value("20")),
+            ],
+            None,
+        );
+        respond_node.definition_source = Some("draco-draco-cron".to_string());
+        let mut for_each_node = node(
+            2,
+            "std::list::for_each",
+            vec![
+                literal_param(
+                    4,
+                    "list",
+                    list_value(vec![int_value(1), int_value(2), int_value(3)]),
+                ),
+                function_thunk_param(
+                    5,
+                    "consumer",
+                    "std::boolean::from_number",
+                    vec![subflow_setting("value", Some(null_value()), false, false)],
+                ),
+            ],
+            Some(1),
+        );
+        for_each_node.definition_source = Some("draco-draco-cron".to_string());
+
+        let report = engine.execute_graph_report(
+            2,
+            vec![respond_node, for_each_node],
+            None,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(expect_success(report.signal), {
+            let mut fields = std::collections::HashMap::new();
+            fields.insert("http_status_code".to_string(), int_value(200));
+            fields.insert("headers".to_string(), empty_struct_value());
+            fields.insert("payload".to_string(), string_value("20"));
+            Value {
+                kind: Some(Kind::StructValue(Struct { fields })),
+            }
+        });
+        assert_eq!(report.node_execution_results.len(), 5);
+
+        let function_results: Vec<_> = report
+            .node_execution_results
+            .iter()
+            .filter(|result| result.id == Some(node_execution_result::Id::FunctionId(5)))
+            .collect();
+        assert_eq!(function_results.len(), 3);
+
+        for (index, result) in function_results.iter().enumerate() {
+            assert_eq!(result.parameter_results.len(), 1);
+            assert_eq!(
+                result.parameter_results[0].value,
+                Some(int_value(index as i64 + 1))
+            );
+            match result.result.as_ref() {
+                Some(node_execution_result::Result::Success(value)) => {
+                    assert_eq!(
+                        value,
+                        &Value {
+                            kind: Some(Kind::BoolValue(true)),
+                        }
+                    );
+                }
+                other => panic!("expected function success result, got {:?}", other),
+            }
+        }
+
+        assert_function_result_id(&report.node_execution_results[0], 5);
+        assert_function_result_id(&report.node_execution_results[1], 5);
+        assert_function_result_id(&report.node_execution_results[2], 5);
+        assert_node_result_id(&report.node_execution_results[3], 2);
+        assert_node_result_id(&report.node_execution_results[4], 1);
+    }
+
+    #[test]
     fn emitter_emits_start_and_finish_for_successful_execution() {
         let engine = ExecutionEngine::new();
         let events = RefCell::new(Vec::<EmitType>::new());

@@ -13,6 +13,7 @@ use tucana::shared::SubFlowSetting;
 #[derive(Clone)]
 pub struct FunctionThunk {
     pub identifier: String,
+    pub result_id: Option<i64>,
     pub parameter_index: i64,
     pub settings: Vec<SubFlowSetting>,
 }
@@ -21,6 +22,7 @@ impl fmt::Debug for FunctionThunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FunctionThunk")
             .field("identifier", &self.identifier)
+            .field("result_id", &self.result_id)
             .field("parameter_index", &self.parameter_index)
             .field("settings_len", &self.settings.len())
             .finish()

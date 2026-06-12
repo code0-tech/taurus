@@ -1,0 +1,114 @@
+{
+	"name": "12_for_each_function_subflow",
+	"description": "This flow validates for_each execution result reporting for function identifier sub_flow callbacks",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"http_status_code": 200,
+				"headers": {},
+				"payload": "20"
+			}
+		}
+	],
+	"flow": {
+		"flowId": "1",
+		"projectId": "1",
+		"startingNodeId": "2",
+		"nodeFunctions": [
+			{
+				"databaseId": "1",
+				"runtimeFunctionId": "rest::control::respond",
+				"parameters": [
+					{
+						"databaseId": "1",
+						"runtimeParameterId": "http_status_code",
+						"value": {
+							"literalValue": {
+								"numberValue": {
+									"integer": "200"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "3",
+						"runtimeParameterId": "payload",
+						"value": {
+							"literalValue": {
+								"stringValue": "20"
+							}
+						}
+					}
+				],
+				"definitionSource": "draco-draco-cron"
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::list::for_each",
+				"parameters": [
+					{
+						"databaseId": "4",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"listValue": {
+									"values": [
+										{
+											"numberValue": {
+												"integer": "1"
+											}
+										},
+										{
+											"numberValue": {
+												"integer": "2"
+											}
+										},
+										{
+											"numberValue": {
+												"integer": "3"
+											}
+										}
+									]
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "5",
+						"runtimeParameterId": "consumer",
+						"value": {
+							"subFlow": {
+								"signature": "(value: NUMBER): BOOLEAN",
+								"settings": [
+									{
+										"identifier": "value",
+										"defaultValue": {
+											"nullValue": "NULL_VALUE"
+										},
+										"optional": false,
+										"hidden": false
+									}
+								],
+								"functionIdentifier": "std::boolean::from_number"
+							}
+						}
+					}
+				],
+				"nextNodeId": "1",
+				"definitionSource": "draco-draco-cron"
+			}
+		]
+	}
+}

@@ -734,7 +734,7 @@ impl<'a> EngineExecutor<'a> {
         }
 
         let mut fields = HashMap::new();
-        for (parameter, value) in node.parameters.iter().zip(values.into_iter()) {
+        for (parameter, value) in node.parameters.iter().zip(values) {
             fields.insert(parameter.runtime_parameter_id.clone(), value);
         }
 
@@ -959,10 +959,12 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
         CompiledThunk::Node(node_id) => Thunk::Node(*node_id),
         CompiledThunk::Function {
             identifier,
+            result_id,
             parameter_index,
             settings,
         } => Thunk::Function(FunctionThunk {
             identifier: identifier.clone(),
+            result_id: *result_id,
             parameter_index: *parameter_index,
             settings: settings.clone(),
         }),
@@ -970,7 +972,9 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
 }
 
 fn parse_function_result_id(function: &FunctionThunk) -> Option<i64> {
-    function.identifier.parse::<i64>().ok()
+    function
+        .result_id
+        .or_else(|| function.identifier.parse::<i64>().ok())
 }
 
 fn resolve_function_setting(

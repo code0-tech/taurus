@@ -14,9 +14,12 @@ use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tucana::shared::ExecutionFlow;
 use tucana::shared::NodeExecutionResult;
 use tucana::shared::ValidationFlow;
+use tucana::shared::Value;
 use tucana::shared::helper::value::from_json_value;
 use tucana::shared::helper::value::to_json_value;
 use tucana::shared::node_execution_result::Id as NodeExecutionResultId;
+use tucana::shared::node_execution_result::Result as NodeExecutionResultResult;
+use tucana::shared::value::Kind;
 
 #[derive(Clone, Deserialize)]
 pub struct Input {
@@ -182,7 +185,7 @@ async fn main() {
         );
         let duration_us = start.elapsed().as_micros();
         let finished_at = now_unix_micros();
-        print_timing_debug(
+        print_manual_execution_debug(
             started_at,
             finished_at,
             duration_us,
@@ -223,7 +226,7 @@ async fn main() {
     );
     let duration_us = start.elapsed().as_micros();
     let finished_at = now_unix_micros();
-    print_timing_debug(
+    print_manual_execution_debug(
         started_at,
         finished_at,
         duration_us,
@@ -301,6 +304,18 @@ async fn queue_execution(
     println!("{}", execution_id);
 }
 
+fn print_manual_execution_debug(
+    started_at: i64,
+    finished_at: i64,
+    duration_us: u128,
+    node_results: &[NodeExecutionResult],
+) {
+    let mut normalized_results = node_results.to_vec();
+    normalize_node_execution_results(&mut normalized_results);
+    print_timing_debug(started_at, finished_at, duration_us, &normalized_results);
+    print_execution_result_debug(&normalized_results);
+}
+
 fn print_timing_debug(
     started_at: i64,
     finished_at: i64,
@@ -339,6 +354,69 @@ fn print_timing_debug(
             result.finished_at - result.started_at,
             params
         );
+    }
+}
+
+fn print_execution_result_debug(node_results: &[NodeExecutionResult]) {
+    eprintln!("[manual execution result] {:#?}", node_results);
+}
+
+fn normalize_node_execution_results(node_results: &mut [NodeExecutionResult]) {
+    for result in node_results {
+        normalize_node_execution_result(result);
+    }
+}
+
+fn normalize_node_execution_result(result: &mut NodeExecutionResult) {
+    for parameter_result in &mut result.parameter_results {
+        match &mut parameter_result.value {
+            Some(value) => normalize_value(value),
+            None => {
+                parameter_result.value = Some(null_value());
+            }
+        }
+    }
+
+    match &mut result.result {
+        Some(NodeExecutionResultResult::Success(value)) => normalize_value(value),
+        Some(NodeExecutionResultResult::Error(error)) => {
+            if let Some(details) = &mut error.details {
+                for value in details.fields.values_mut() {
+                    normalize_value(value);
+                }
+            }
+        }
+        None => {
+            result.result = Some(NodeExecutionResultResult::Success(null_value()));
+        }
+    }
+}
+
+fn normalize_value(value: &mut Value) {
+    match &mut value.kind {
+        Some(Kind::StructValue(struct_value)) => {
+            for field in struct_value.fields.values_mut() {
+                normalize_value(field);
+            }
+        }
+        Some(Kind::ListValue(list_value)) => {
+            for item in &mut list_value.values {
+                normalize_value(item);
+            }
+        }
+        Some(Kind::NumberValue(number)) if number.number.is_none() => {
+            value.kind = Some(Kind::NullValue(0));
+        }
+        Some(_) => {}
+        None => {
+            value.kind = Some(Kind::NullValue(0));
+        }
+    }
+}
+
+fn null_value() -> Value {
+    Value {
+        kind: Some(Kind::NullValue(0)),
     }
 }
 

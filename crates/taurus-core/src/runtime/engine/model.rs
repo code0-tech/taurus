@@ -26,6 +26,7 @@ pub enum CompiledThunk {
     Node(i64),
     Function {
         identifier: String,
+        result_id: Option<i64>,
         parameter_index: i64,
         settings: Vec<SubFlowSetting>,
     },

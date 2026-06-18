@@ -51,9 +51,10 @@ pub async fn run() {
     if let Some(handle) = runtime_status_heartbeat_task.take() {
         handle.abort();
         if let Err(err) = handle.await
-            && !err.is_cancelled() {
-                log::warn!("Runtime status heartbeat task ended unexpectedly: {}", err);
-            }
+            && !err.is_cancelled()
+        {
+            log::warn!("Runtime status heartbeat task ended unexpectedly: {}", err);
+        }
     }
     update_stopped_status(runtime_status_service.as_ref()).await;
 

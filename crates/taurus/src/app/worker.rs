@@ -116,7 +116,8 @@ async fn process_execution_message(
         engine,
         Some(nats_remote),
         Some(&respond_emitter),
-    );
+    )
+    .await;
     log::debug!(
         "Flow {} execution completed; no direct reply message published",
         flow_id
@@ -157,7 +158,7 @@ struct FlowRunResult {
     runtime_usage: RuntimeUsage,
 }
 
-fn execute_flow(
+async fn execute_flow(
     execution_id: ExecutionId,
     flow: ExecutionFlow,
     engine: &ExecutionEngine,
@@ -168,13 +169,15 @@ fn execute_flow(
     let start = Instant::now();
     let flow_id = flow.flow_id;
     let input = flow.input_value.clone();
-    let report = engine.execute_flow_with_execution_id_report(
-        execution_id,
-        flow,
-        remote,
-        respond_emitter,
-        true,
-    );
+    let report = engine
+        .execute_flow_with_execution_id_report_async(
+            execution_id,
+            flow,
+            remote,
+            respond_emitter,
+            true,
+        )
+        .await;
     let finished_at = now_unix_micros();
     let duration_micros = start.elapsed().as_micros() as i64;
 
@@ -334,14 +337,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn execute_flow_reports_microsecond_timestamps_and_duration() {
+    #[tokio::test]
+    async fn execute_flow_reports_microsecond_timestamps_and_duration() {
         let execution_id = ExecutionId::new_v4();
         let fixture = load_fixture("flows/01_return_object.json");
         let flow = execution_flow_from_fixture(fixture);
         let engine = ExecutionEngine::new();
 
-        let run_result = execute_flow(execution_id, flow, &engine, None, None);
+        let run_result = execute_flow(execution_id, flow, &engine, None, None).await;
 
         println!(
             "started_at={} finished_at={} delta={} runtime_usage.duration={}",

@@ -22,13 +22,13 @@ pub enum EmitType {
 }
 
 /// Callback interface for streaming execution lifecycle events.
-pub trait RespondEmitter {
+pub trait RespondEmitter: Send + Sync {
     fn emit(&self, execution_id: ExecutionId, emit_type: EmitType, value: Value);
 }
 
 impl<F> RespondEmitter for F
 where
-    F: Fn(ExecutionId, EmitType, Value) + ?Sized,
+    F: Fn(ExecutionId, EmitType, Value) + Send + Sync + ?Sized,
 {
     fn emit(&self, execution_id: ExecutionId, emit_type: EmitType, value: Value) {
         self(execution_id, emit_type, value);

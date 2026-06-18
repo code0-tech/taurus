@@ -35,6 +35,10 @@ pub enum CompileError {
         node_id: i64,
         parameter_index: usize,
     },
+    EmptyRemoteService {
+        node_id: i64,
+        definition_source: String,
+    },
 }
 
 impl CompileError {
@@ -88,6 +92,17 @@ impl CompileError {
                     node_id, parameter_index
                 ),
             ),
+            CompileError::EmptyRemoteService {
+                node_id,
+                definition_source,
+            } => RuntimeError::new(
+                "T-CORE-000106",
+                "FlowCompileError",
+                format!(
+                    "Node {} definition_source '{}' does not contain a remote service name",
+                    node_id, definition_source
+                ),
+            ),
         }
     }
 }
@@ -134,7 +149,7 @@ pub fn compile_flow(
             None => None,
         };
 
-        let execution_target = execution_target_for(&node);
+        let execution_target = execution_target_for(node_id, &node)?;
 
         let mut parameters = Vec::with_capacity(node.parameters.len());
         for (parameter_index, parameter) in node.parameters.iter().enumerate() {
@@ -198,12 +213,21 @@ pub fn compile_flow(
     })
 }
 
-fn execution_target_for(node: &NodeFunction) -> NodeExecutionTarget {
+fn execution_target_for(
+    node_id: i64,
+    node: &NodeFunction,
+) -> Result<NodeExecutionTarget, CompileError> {
     match node.definition_source.as_deref() {
-        None | Some("") | Some("taurus") => NodeExecutionTarget::Local,
-        Some(source) if source.starts_with("draco") => NodeExecutionTarget::Local,
-        Some(service) => NodeExecutionTarget::Remote {
-            service: service.to_string(),
+        None | Some("") | Some("taurus") => Ok(NodeExecutionTarget::Local),
+        Some(source) if source.starts_with("draco") => Ok(NodeExecutionTarget::Local),
+        Some(service) => match service.strip_prefix("action.").unwrap_or(service) {
+            "" => Err(CompileError::EmptyRemoteService {
+                node_id,
+                definition_source: service.to_string(),
+            }),
+            service => Ok(NodeExecutionTarget::Remote {
+                service: service.to_string(),
+            }),
         },
     }
 }

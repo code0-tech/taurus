@@ -8,6 +8,7 @@ mod emitter;
 mod executor;
 mod model;
 
+use futures_lite::future::block_on;
 use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
 
 use crate::handler::registry::FunctionStore;
@@ -59,13 +60,33 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        let report = self.execute_flow_with_execution_id_report(
+        let report = block_on(self.execute_flow_with_execution_id_report_async(
             ExecutionId::new_v4(),
             flow,
             remote,
             respond_emitter,
             with_trace,
-        );
+        ));
+        (report.signal, report.exit_reason)
+    }
+
+    /// Execute an `ExecutionFlow` asynchronously.
+    pub async fn execute_flow_async(
+        &self,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> (Signal, ExitReason) {
+        let report = self
+            .execute_flow_with_execution_id_report_async(
+                ExecutionId::new_v4(),
+                flow,
+                remote,
+                respond_emitter,
+                with_trace,
+            )
+            .await;
         (report.signal, report.exit_reason)
     }
 
@@ -78,13 +99,34 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        let report = self.execute_flow_with_execution_id_report(
+        let report = block_on(self.execute_flow_with_execution_id_report_async(
             execution_id,
             flow,
             remote,
             respond_emitter,
             with_trace,
-        );
+        ));
+        (report.signal, report.exit_reason)
+    }
+
+    /// Execute an `ExecutionFlow` asynchronously with a caller-provided execution id.
+    pub async fn execute_flow_with_execution_id_async(
+        &self,
+        execution_id: ExecutionId,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> (Signal, ExitReason) {
+        let report = self
+            .execute_flow_with_execution_id_report_async(
+                execution_id,
+                flow,
+                remote,
+                respond_emitter,
+                with_trace,
+            )
+            .await;
         (report.signal, report.exit_reason)
     }
 
@@ -96,13 +138,31 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        self.execute_flow_with_execution_id_report(
+        block_on(self.execute_flow_with_execution_id_report_async(
+            ExecutionId::new_v4(),
+            flow,
+            remote,
+            respond_emitter,
+            with_trace,
+        ))
+    }
+
+    /// Execute an `ExecutionFlow` asynchronously and return per-node execution results.
+    pub async fn execute_flow_report_async(
+        &self,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        self.execute_flow_with_execution_id_report_async(
             ExecutionId::new_v4(),
             flow,
             remote,
             respond_emitter,
             with_trace,
         )
+        .await
     }
 
     /// Execute an `ExecutionFlow` with a caller-provided execution id and return per-node results.
@@ -114,7 +174,25 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        self.execute_graph_with_execution_id_report(
+        block_on(self.execute_flow_with_execution_id_report_async(
+            execution_id,
+            flow,
+            remote,
+            respond_emitter,
+            with_trace,
+        ))
+    }
+
+    /// Execute an `ExecutionFlow` asynchronously with a caller-provided execution id and return per-node results.
+    pub async fn execute_flow_with_execution_id_report_async(
+        &self,
+        execution_id: ExecutionId,
+        flow: ExecutionFlow,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        self.execute_graph_with_execution_id_report_async(
             execution_id,
             flow.starting_node_id,
             flow.node_functions,
@@ -123,6 +201,7 @@ impl ExecutionEngine {
             respond_emitter,
             with_trace,
         )
+        .await
     }
 
     /// Execute a graph described by node list and start node.
@@ -135,7 +214,7 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        let report = self.execute_graph_with_execution_id_report(
+        let report = block_on(self.execute_graph_with_execution_id_report_async(
             ExecutionId::new_v4(),
             start_node_id,
             node_functions,
@@ -143,7 +222,31 @@ impl ExecutionEngine {
             remote,
             respond_emitter,
             with_trace,
-        );
+        ));
+        (report.signal, report.exit_reason)
+    }
+
+    /// Execute a graph asynchronously.
+    pub async fn execute_graph_async(
+        &self,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> (Signal, ExitReason) {
+        let report = self
+            .execute_graph_with_execution_id_report_async(
+                ExecutionId::new_v4(),
+                start_node_id,
+                node_functions,
+                flow_input,
+                remote,
+                respond_emitter,
+                with_trace,
+            )
+            .await;
         (report.signal, report.exit_reason)
     }
 
@@ -158,7 +261,7 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        let report = self.execute_graph_with_execution_id_report(
+        let report = block_on(self.execute_graph_with_execution_id_report_async(
             execution_id,
             start_node_id,
             node_functions,
@@ -166,7 +269,32 @@ impl ExecutionEngine {
             remote,
             respond_emitter,
             with_trace,
-        );
+        ));
+        (report.signal, report.exit_reason)
+    }
+
+    /// Execute a graph asynchronously with a caller-provided execution id.
+    pub async fn execute_graph_with_execution_id_async(
+        &self,
+        execution_id: ExecutionId,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> (Signal, ExitReason) {
+        let report = self
+            .execute_graph_with_execution_id_report_async(
+                execution_id,
+                start_node_id,
+                node_functions,
+                flow_input,
+                remote,
+                respond_emitter,
+                with_trace,
+            )
+            .await;
         (report.signal, report.exit_reason)
     }
 
@@ -180,7 +308,28 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        self.execute_graph_with_execution_id_report(
+        block_on(self.execute_graph_with_execution_id_report_async(
+            ExecutionId::new_v4(),
+            start_node_id,
+            node_functions,
+            flow_input,
+            remote,
+            respond_emitter,
+            with_trace,
+        ))
+    }
+
+    /// Execute a graph asynchronously and return per-node execution results.
+    pub async fn execute_graph_report_async(
+        &self,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        self.execute_graph_with_execution_id_report_async(
             ExecutionId::new_v4(),
             start_node_id,
             node_functions,
@@ -189,10 +338,33 @@ impl ExecutionEngine {
             respond_emitter,
             with_trace,
         )
+        .await
     }
 
     /// Execute a graph with a caller-provided execution id and return per-node results.
     pub fn execute_graph_with_execution_id_report(
+        &self,
+        execution_id: ExecutionId,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
+        block_on(self.execute_graph_with_execution_id_report_async(
+            execution_id,
+            start_node_id,
+            node_functions,
+            flow_input,
+            remote,
+            respond_emitter,
+            with_trace,
+        ))
+    }
+
+    /// Execute a graph asynchronously with a caller-provided execution id and return per-node results.
+    pub async fn execute_graph_with_execution_id_report_async(
         &self,
         execution_id: ExecutionId,
         start_node_id: i64,
@@ -235,7 +407,8 @@ impl ExecutionEngine {
             execution_id,
             respond_emitter,
             with_trace,
-        );
+        )
+        .await;
         if with_trace && let Some(trace_run) = trace_run {
             println!(
                 "{}",
@@ -271,7 +444,7 @@ mod tests {
     use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
     use crate::types::exit_reason::ExitReason;
     use async_trait::async_trait;
-    use std::cell::RefCell;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tucana::shared::{
         InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
@@ -454,15 +627,23 @@ mod tests {
     #[derive(Clone)]
     struct StubRemoteRuntime {
         result: NodeExecutionResult,
+        target_services: Option<Arc<Mutex<Vec<String>>>>,
     }
 
     #[async_trait]
     impl RemoteRuntime for StubRemoteRuntime {
         async fn execute_remote(
             &self,
-            _execution: RemoteExecution,
+            execution: RemoteExecution,
         ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
         {
+            if let Some(target_services) = &self.target_services {
+                target_services
+                    .lock()
+                    .expect("target service recorder should not be poisoned")
+                    .push(execution.target_service);
+            }
+
             Ok(self.result.clone())
         }
     }
@@ -1053,6 +1234,7 @@ mod tests {
                 id: Some(node_execution_result::Id::NodeId(99)),
                 result: None,
             },
+            target_services: None,
         };
         let mut remote_node = node(
             1,
@@ -1082,6 +1264,67 @@ mod tests {
                 assert_eq!(error.category, "NodeExecutionResultMissingOutcome");
             }
             other => panic!("expected node error result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn remote_execution_strips_action_prefix_from_definition_source() {
+        let engine = ExecutionEngine::new();
+        let target_services = Arc::new(Mutex::new(Vec::new()));
+        let remote = StubRemoteRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(99)),
+                result: Some(node_execution_result::Result::Success(string_value("ok"))),
+            },
+            target_services: Some(Arc::clone(&target_services)),
+        };
+        let mut remote_node = node(
+            1,
+            "remote::stripped_service",
+            vec![literal_param(100, "payload", int_value(20))],
+            None,
+        );
+        remote_node.definition_source = Some("action.example".to_string());
+
+        let report =
+            engine.execute_graph_report(1, vec![remote_node], None, Some(&remote), None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(
+            *target_services
+                .lock()
+                .expect("target service recorder should not be poisoned"),
+            vec!["example".to_string()]
+        );
+    }
+
+    #[test]
+    fn remote_execution_rejects_empty_action_definition_source() {
+        let engine = ExecutionEngine::new();
+        let mut remote_node = node(
+            1,
+            "remote::empty_service",
+            vec![literal_param(100, "payload", int_value(20))],
+            None,
+        );
+        remote_node.definition_source = Some("action.".to_string());
+
+        let report = engine.execute_graph_report(1, vec![remote_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Failure);
+        assert!(report.node_execution_results.is_empty());
+        match report.signal {
+            Signal::Failure(err) => {
+                assert_eq!(err.code, "T-CORE-000106");
+                assert_eq!(err.category, "FlowCompileError");
+            }
+            other => panic!(
+                "expected invalid definition_source failure, got {:?}",
+                other
+            ),
         }
     }
 
@@ -1287,9 +1530,12 @@ mod tests {
     #[test]
     fn emitter_emits_start_and_finish_for_successful_execution() {
         let engine = ExecutionEngine::new();
-        let events = RefCell::new(Vec::<EmitType>::new());
+        let events = Mutex::new(Vec::<EmitType>::new());
         let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
-            events.borrow_mut().push(emit_type);
+            events
+                .lock()
+                .expect("event recorder should not be poisoned")
+                .push(emit_type);
         };
 
         let add_node = node(
@@ -1306,7 +1552,9 @@ mod tests {
             engine.execute_graph(1, vec![add_node], None, None, Some(&emitter), false);
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
-            *events.borrow(),
+            *events
+                .lock()
+                .expect("event recorder should not be poisoned"),
             vec![EmitType::StartingExec, EmitType::FinishedExec]
         );
     }
@@ -1314,9 +1562,12 @@ mod tests {
     #[test]
     fn emitter_emits_ongoing_for_intermediate_respond() {
         let engine = ExecutionEngine::new();
-        let events = RefCell::new(Vec::<EmitType>::new());
+        let events = Mutex::new(Vec::<EmitType>::new());
         let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
-            events.borrow_mut().push(emit_type);
+            events
+                .lock()
+                .expect("event recorder should not be poisoned")
+                .push(emit_type);
         };
 
         let respond_node = node(
@@ -1349,7 +1600,9 @@ mod tests {
         );
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
-            *events.borrow(),
+            *events
+                .lock()
+                .expect("event recorder should not be poisoned"),
             vec![
                 EmitType::StartingExec,
                 EmitType::OngoingExec,
@@ -1361,9 +1614,12 @@ mod tests {
     #[test]
     fn emitter_emits_failed_for_runtime_failure() {
         let engine = ExecutionEngine::new();
-        let events = RefCell::new(Vec::<EmitType>::new());
+        let events = Mutex::new(Vec::<EmitType>::new());
         let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
-            events.borrow_mut().push(emit_type);
+            events
+                .lock()
+                .expect("event recorder should not be poisoned")
+                .push(emit_type);
         };
 
         let invalid_add_node = node(1, "std::number::add", vec![], None);
@@ -1372,7 +1628,9 @@ mod tests {
             engine.execute_graph(1, vec![invalid_add_node], None, None, Some(&emitter), false);
         assert_eq!(reason, ExitReason::Failure);
         assert_eq!(
-            *events.borrow(),
+            *events
+                .lock()
+                .expect("event recorder should not be poisoned"),
             vec![EmitType::StartingExec, EmitType::FailedExec]
         );
     }

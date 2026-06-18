@@ -1,9 +1,8 @@
 //! Runtime engine execution loop for compiled flow plans.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
-use futures_lite::future::block_on;
 use tucana::aquila::ActionExecutionRequest;
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
@@ -30,7 +29,7 @@ use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 
-pub fn execute_compiled(
+pub async fn execute_compiled(
     flow: &CompiledFlow,
     handlers: &FunctionStore,
     value_store: &mut ValueStore,
@@ -40,7 +39,7 @@ pub fn execute_compiled(
     with_trace: bool,
 ) -> (Signal, Option<TraceRun>) {
     // Keep trace allocation fully optional so the hot path stays lean when tracing is disabled.
-    let tracer = with_trace.then(RefCell::default);
+    let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
         flow,
         handlers,
@@ -50,8 +49,10 @@ pub fn execute_compiled(
         tracer: tracer.as_ref(),
     };
 
-    let result = executor.execute_from_index(flow.start_idx, value_store);
-    let trace = tracer.and_then(|collector| collector.into_inner().take_run());
+    let result = executor
+        .execute_from_index(flow.start_idx, value_store)
+        .await;
+    let trace = tracer.and_then(|collector| collector.into_inner().ok()?.take_run());
     (result.signal, trace)
 }
 
@@ -82,11 +83,11 @@ struct EngineExecutor<'a> {
     remote: Option<&'a dyn RemoteRuntime>,
     execution_id: ExecutionId,
     respond_emitter: Option<&'a dyn RespondEmitter>,
-    tracer: Option<&'a RefCell<Tracer>>,
+    tracer: Option<&'a Mutex<Tracer>>,
 }
 
 impl<'a> EngineExecutor<'a> {
-    fn execute_from_index(
+    async fn execute_from_index(
         &self,
         start_idx: usize,
         value_store: &mut ValueStore,
@@ -99,7 +100,7 @@ impl<'a> EngineExecutor<'a> {
         loop {
             let node_id = self.flow.nodes[current_idx].id;
             let next_idx = self.flow.nodes[current_idx].next_idx;
-            let result = self.execute_single_node(current_idx, value_store);
+            let result = self.execute_single_node(current_idx, value_store).await;
 
             if call_root_frame.is_none() {
                 call_root_frame = result.frame_id;
@@ -156,10 +157,77 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
+    fn execute_from_index_sync(
+        &self,
+        start_idx: usize,
+        value_store: &mut ValueStore,
+    ) -> ExecutionResult {
+        // Synchronous thunk execution is retained for local handler callbacks.
+        let mut current_idx = start_idx;
+        let mut call_root_frame = None;
+        let mut previous_frame = None;
+
+        loop {
+            let node_id = self.flow.nodes[current_idx].id;
+            let next_idx = self.flow.nodes[current_idx].next_idx;
+            let result = self.execute_single_node_sync(current_idx, value_store);
+
+            if call_root_frame.is_none() {
+                call_root_frame = result.frame_id;
+            }
+            if let (Some(prev), Some(current)) = (previous_frame, result.frame_id) {
+                self.trace_link_child(prev, current, EdgeKind::Next);
+            }
+            if let Some(frame) = result.frame_id {
+                previous_frame = Some(frame);
+            }
+
+            match result.signal {
+                Signal::Success(value) => match next_idx {
+                    Some(next) => current_idx = next,
+                    None => {
+                        return ExecutionResult {
+                            signal: Signal::Success(value),
+                            root_frame: call_root_frame,
+                        };
+                    }
+                },
+                Signal::Respond(value) => {
+                    if let Some(emitter) = self.respond_emitter {
+                        emitter.emit(self.execution_id, EmitType::OngoingExec, value.clone());
+                    }
+
+                    value_store.insert_success_with_timing(
+                        node_id,
+                        value.clone(),
+                        result.parameter_results,
+                        result.started_at,
+                        result.finished_at,
+                    );
+                    match next_idx {
+                        Some(next) => current_idx = next,
+                        None => {
+                            return ExecutionResult {
+                                signal: Signal::Success(value),
+                                root_frame: call_root_frame,
+                            };
+                        }
+                    }
+                }
+                other => {
+                    return ExecutionResult {
+                        signal: other,
+                        root_frame: call_root_frame,
+                    };
+                }
+            }
+        }
+    }
+
     fn execute_from_node_id(&self, node_id: i64, value_store: &mut ValueStore) -> ExecutionResult {
         // Used by thunk execution (callbacks, branch blocks, eager parameter nodes).
         match self.flow.node_idx_by_id.get(&node_id).copied() {
-            Some(idx) => self.execute_from_index(idx, value_store),
+            Some(idx) => self.execute_from_index_sync(idx, value_store),
             None => ExecutionResult {
                 signal: Signal::Failure(RuntimeError::new(
                     "T-CORE-000001",
@@ -267,7 +335,11 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn execute_single_node(&self, node_idx: usize, value_store: &mut ValueStore) -> NodeResult {
+    async fn execute_single_node(
+        &self,
+        node_idx: usize,
+        value_store: &mut ValueStore,
+    ) -> NodeResult {
         let node = &self.flow.nodes[node_idx];
         // InputType references resolve against the currently running node.
         value_store.set_current_node_id(node.id);
@@ -297,7 +369,9 @@ impl<'a> EngineExecutor<'a> {
             }
             NodeExecutionTarget::Remote { service } => {
                 let started_at = now_unix_micros();
-                let signal = self.execute_remote_node(node, service, value_store, frame_id);
+                let signal = self
+                    .execute_remote_node(node, service, value_store, frame_id)
+                    .await;
                 let finished_at = now_unix_micros();
                 NodeResult {
                     signal,
@@ -305,6 +379,65 @@ impl<'a> EngineExecutor<'a> {
                     parameter_results: Vec::new(),
                     started_at,
                     finished_at,
+                }
+            }
+        };
+        self.trace_exit(frame_id, &result.signal, value_store);
+
+        result
+    }
+
+    fn execute_single_node_sync(
+        &self,
+        node_idx: usize,
+        value_store: &mut ValueStore,
+    ) -> NodeResult {
+        let node = &self.flow.nodes[node_idx];
+        value_store.set_current_node_id(node.id);
+
+        let frame_id = self.trace_enter(node, value_store);
+        let result = match &node.execution_target {
+            NodeExecutionTarget::Local => {
+                let started_at = now_unix_micros();
+                let executed = self.execute_local_node(node, value_store, frame_id);
+                let finished_at = now_unix_micros();
+                let parameter_results = executed.parameter_results;
+                let signal = self.commit_result(
+                    node.id,
+                    executed.signal,
+                    parameter_results.clone(),
+                    started_at,
+                    finished_at,
+                    value_store,
+                );
+                NodeResult {
+                    signal,
+                    frame_id,
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                }
+            }
+            NodeExecutionTarget::Remote { .. } => {
+                let started_at = now_unix_micros();
+                let signal = self.commit_result(
+                    node.id,
+                    Signal::Failure(RuntimeError::new(
+                        "T-CORE-000004",
+                        "RemoteRuntimeRequiresAsyncExecution",
+                        "Remote runtime nodes cannot be executed from a synchronous thunk callback",
+                    )),
+                    Vec::new(),
+                    started_at,
+                    now_unix_micros(),
+                    value_store,
+                );
+                NodeResult {
+                    signal,
+                    frame_id,
+                    parameter_results: Vec::new(),
+                    started_at,
+                    finished_at: now_unix_micros(),
                 }
             }
         };
@@ -369,7 +502,7 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn execute_remote_node(
+    async fn execute_remote_node(
         &self,
         node: &CompiledNode,
         service: &str,
@@ -438,10 +571,13 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        match block_on(remote_runtime.execute_remote(RemoteExecution {
-            target_service: service.to_string(),
-            request,
-        })) {
+        match remote_runtime
+            .execute_remote(RemoteExecution {
+                target_service: service.to_string(),
+                request,
+            })
+            .await
+        {
             Ok(result) => self.commit_remote_result(
                 node.id,
                 result,
@@ -859,7 +995,8 @@ impl<'a> EngineExecutor<'a> {
     ) -> Option<u64> {
         self.tracer.map(|tracer| {
             tracer
-                .borrow_mut()
+                .lock()
+                .expect("trace collector should not be poisoned")
                 .enter_node(node_id, function_name, value_store.trace_snapshot())
         })
     }
@@ -888,19 +1025,26 @@ impl<'a> EngineExecutor<'a> {
             Signal::Stop => Outcome::Stop,
         };
         tracer
-            .borrow_mut()
+            .lock()
+            .expect("trace collector should not be poisoned")
             .exit_node(frame_id, outcome, value_store.trace_snapshot());
     }
 
     fn trace_record_arg(&self, frame_id: Option<u64>, arg: ArgTrace) {
         if let (Some(frame_id), Some(tracer)) = (frame_id, self.tracer) {
-            tracer.borrow_mut().record_arg(frame_id, arg);
+            tracer
+                .lock()
+                .expect("trace collector should not be poisoned")
+                .record_arg(frame_id, arg);
         }
     }
 
     fn trace_link_child(&self, parent: u64, child: u64, edge: EdgeKind) {
         if let Some(tracer) = self.tracer {
-            tracer.borrow_mut().link_child(parent, child, edge);
+            tracer
+                .lock()
+                .expect("trace collector should not be poisoned")
+                .link_child(parent, child, edge);
         }
     }
 
@@ -913,7 +1057,8 @@ impl<'a> EngineExecutor<'a> {
     ) {
         if let (Some(frame_id), Some(tracer)) = (frame_id, self.tracer) {
             tracer
-                .borrow_mut()
+                .lock()
+                .expect("trace collector should not be poisoned")
                 .mark_thunk(frame_id, arg_index, eager, executed);
         }
     }
@@ -921,7 +1066,8 @@ impl<'a> EngineExecutor<'a> {
     fn trace_mark_thunk_executed(&self, frame_id: Option<u64>, thunk: &Thunk) {
         if let (Some(frame_id), Some(tracer)) = (frame_id, self.tracer) {
             tracer
-                .borrow_mut()
+                .lock()
+                .expect("trace collector should not be poisoned")
                 .mark_thunk_executed(frame_id, thunk.trace_target().as_str());
         }
     }

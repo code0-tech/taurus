@@ -16,7 +16,7 @@ pub struct RemoteExecution {
 }
 
 #[async_trait]
-pub trait RemoteRuntime {
+pub trait RemoteRuntime: Send + Sync {
     /// Execute a remote node invocation and return its resulting value.
     async fn execute_remote(
         &self,

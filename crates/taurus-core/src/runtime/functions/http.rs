@@ -9,6 +9,7 @@ use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::number_to_string;
+use base64::Engine;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::io::Read;
@@ -19,8 +20,8 @@ use ureq::http;
 use ureq::{Body, RequestExt};
 
 pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("http::request::send", send_request, 4),
-    FunctionRegistration::eager("rest::control::respond", respond, 3),
+    FunctionRegistration::eager("http::request::send", send_request, 8),
+    FunctionRegistration::eager("rest::control::respond", respond, 4),
 ];
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {
@@ -32,7 +33,7 @@ fn respond(
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => http_status_code: i64, headers: Struct, payload: Value);
+    args!(args => http_status_code: i64, headers: Struct, _http_schema: String, payload: Value);
 
     let mut fields = HashMap::new();
     fields.insert("http_status_code".to_string(), http_status_code.to_value());
@@ -50,17 +51,113 @@ fn respond(
     })
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum HttpAuthType {
+    None,
+    Bearer,
+    Basic,
+    XApiKey,
+    Custom(String),
+}
+
+impl HttpAuthType {
+    fn from_value(input: &Value) -> Result<HttpAuthType, String> {
+        match input.kind.as_ref() {
+            Some(Kind::NullValue(_)) | None => Ok(HttpAuthType::None),
+            Some(Kind::StringValue(value)) => match value.as_str() {
+                "Bearer" => Ok(HttpAuthType::Bearer),
+                "Basic" => Ok(HttpAuthType::Basic),
+                "X-API-Key" => Ok(HttpAuthType::XApiKey),
+                "undefined" | "" => Ok(HttpAuthType::None),
+                custom => Ok(HttpAuthType::Custom(custom.to_string())),
+            },
+            _ => Err("Auth Type must be a string or undefined".to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HttpAuthPlace {
+    Header,
+    Url,
+}
+
+impl HttpAuthPlace {
+    fn from_value(input: &Value) -> Result<Option<HttpAuthPlace>, String> {
+        match input.kind.as_ref() {
+            Some(Kind::NullValue(_)) | None => Ok(None),
+            Some(Kind::StringValue(value)) => match value.as_str() {
+                "Header" => Ok(Some(HttpAuthPlace::Header)),
+                "Url" => Ok(Some(HttpAuthPlace::Url)),
+                "undefined" | "" => Ok(None),
+                other => Err(format!(
+                    "Auth Placement must be 'Header', 'Url', or undefined, got '{}'",
+                    other
+                )),
+            },
+            _ => Err("Auth Placement must be a string or undefined".to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+fn null_value() -> Value {
+    Value {
+        kind: Some(Kind::NullValue(0)),
+    }
+}
+
+fn headers_from_value(value: &Value) -> Result<Struct, Signal> {
+    match value.kind.as_ref() {
+        Some(Kind::StructValue(headers)) => Ok(headers.clone()),
+        Some(Kind::NullValue(_)) | None => Ok(Struct {
+            fields: HashMap::new(),
+        }),
+        _ => Err(fail(
+            "InvalidArgumentRuntimeError",
+            "Headers must be an object or undefined",
+        )),
+    }
+}
+
 fn send_request(
     args: &[Argument],
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => http_method: String, headers: Struct, http_url: String, payload: Value);
+    args!(args =>
+        http_method: String,
+        url: String,
+        http_auth: Value,
+        http_auth_value: Value,
+        http_auth_place: Value,
+        _http_schema: Value,
+        payload: Value,
+        headers: Value,
+    );
+    let mut url = url;
 
-    let mut headers = match encode_headers(&headers) {
+    let http_headers = match headers_from_value(&headers) {
+        Ok(headers) => headers,
+        Err(signal) => return signal,
+    };
+
+    let mut headers = match encode_headers(&http_headers) {
         Ok(headers) => headers,
         Err(message) => return fail("InvalidArgumentRuntimeError", message),
     };
+
+    let auth = match HttpAuthType::from_value(&http_auth) {
+        Ok(auth) => auth,
+        Err(message) => return fail("InvalidArgumentRuntimeError", message),
+    };
+    let auth_place = match HttpAuthPlace::from_value(&http_auth_place) {
+        Ok(auth_place) => auth_place,
+        Err(message) => return fail("InvalidArgumentRuntimeError", message),
+    };
+    if let Err(message) = apply_auth(&auth, &http_auth_value, auth_place, &mut headers, &mut url) {
+        return fail("InvalidArgumentRuntimeError", message);
+    }
 
     let request_content_type = content_type_header_value(&headers);
     let (request_body, default_content_type) =
@@ -72,7 +169,11 @@ fn send_request(
     if let Some(default_content_type) = default_content_type
         && request_content_type.is_none()
     {
-        headers.insert("content-type".to_string(), default_content_type.to_string());
+        insert_header(
+            &mut headers,
+            "content-type",
+            default_content_type.to_string(),
+        );
     }
 
     let http_method = match http::Method::from_bytes(http_method.as_bytes()) {
@@ -85,7 +186,7 @@ fn send_request(
         }
     };
 
-    let mut request_builder = http::Request::builder().method(http_method).uri(&http_url);
+    let mut request_builder = http::Request::builder().method(http_method).uri(&url);
     for (name, value) in &headers {
         request_builder = request_builder.header(name, value);
     }
@@ -170,6 +271,123 @@ fn encode_headers(headers: &Struct) -> Result<HashMap<String, String>, String> {
     Ok(out)
 }
 
+fn insert_header(headers: &mut HashMap<String, String>, name: &str, value: String) {
+    if let Some(existing_name) = headers
+        .keys()
+        .find(|existing_name| existing_name.eq_ignore_ascii_case(name))
+        .cloned()
+    {
+        headers.insert(existing_name, value);
+    } else {
+        headers.insert(name.to_string(), value);
+    }
+}
+
+fn apply_auth(
+    auth: &HttpAuthType,
+    auth_value: &Value,
+    auth_place: Option<HttpAuthPlace>,
+    headers: &mut HashMap<String, String>,
+    url: &mut String,
+) -> Result<(), String> {
+    let Some(place) = auth_place.or(match auth {
+        HttpAuthType::None => None,
+        _ => Some(HttpAuthPlace::Header),
+    }) else {
+        return Ok(());
+    };
+
+    match auth {
+        HttpAuthType::None => Ok(()),
+        HttpAuthType::Bearer => {
+            if place != HttpAuthPlace::Header {
+                return Err("Bearer auth must use Header placement".to_string());
+            }
+            let token = auth_string_value(auth_value, "Bearer auth value")?;
+            insert_header(headers, "authorization", format!("Bearer {}", token));
+            Ok(())
+        }
+        HttpAuthType::Basic => {
+            if place != HttpAuthPlace::Header {
+                return Err("Basic auth must use Header placement".to_string());
+            }
+            let (username, password) = basic_auth_credentials(auth_value)?;
+            let encoded =
+                base64::prelude::BASE64_STANDARD.encode(format!("{}:{}", username, password));
+            insert_header(headers, "authorization", format!("Basic {}", encoded));
+            Ok(())
+        }
+        HttpAuthType::XApiKey => {
+            let key = auth_string_value(auth_value, "X-API-Key auth value")?;
+            match place {
+                HttpAuthPlace::Header => insert_header(headers, "X-API-Key", key),
+                HttpAuthPlace::Url => append_query_param(url, "X-API-Key", &key),
+            }
+            Ok(())
+        }
+        HttpAuthType::Custom(scheme) => {
+            let value = auth_string_value(auth_value, "Custom auth value")?;
+            match place {
+                HttpAuthPlace::Header => {
+                    insert_header(headers, "authorization", format!("{} {}", scheme, value))
+                }
+                HttpAuthPlace::Url => append_query_param(url, scheme, &value),
+            }
+            Ok(())
+        }
+    }
+}
+
+fn auth_string_value(value: &Value, label: &str) -> Result<String, String> {
+    match value.kind.as_ref() {
+        Some(Kind::StringValue(value)) => Ok(value.clone()),
+        Some(Kind::NullValue(_)) | None => Err(format!("{} must be provided", label)),
+        _ => Err(format!("{} must be a string", label)),
+    }
+}
+
+fn basic_auth_credentials(value: &Value) -> Result<(String, String), String> {
+    let Some(Kind::StructValue(credentials)) = value.kind.as_ref() else {
+        return Err("Basic auth value must be an object with username and password".to_string());
+    };
+
+    let username = credentials
+        .fields
+        .get("username")
+        .ok_or_else(|| "Basic auth value is missing username".to_string())
+        .and_then(|value| auth_string_value(value, "Basic auth username"))?;
+    let password = credentials
+        .fields
+        .get("password")
+        .ok_or_else(|| "Basic auth value is missing password".to_string())
+        .and_then(|value| auth_string_value(value, "Basic auth password"))?;
+    Ok((username, password))
+}
+
+fn append_query_param(url: &mut String, name: &str, value: &str) {
+    let fragment = url.find('#').map(|index| url.split_off(index));
+    let separator = if url.contains('?') { '&' } else { '?' };
+    url.push(separator);
+    url.push_str(&percent_encode_query(name));
+    url.push('=');
+    url.push_str(&percent_encode_query(value));
+    if let Some(fragment) = fragment {
+        url.push_str(&fragment);
+    }
+}
+
+fn percent_encode_query(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{:02X}", byte));
+        }
+    }
+    encoded
+}
+
 fn value_to_string(value: &Value) -> Result<String, String> {
     match &value.kind {
         Some(Kind::StringValue(str_val)) => Ok(str_val.clone()),
@@ -202,14 +420,10 @@ fn normalize_content_type(content_type: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn content_type_is_text_plain(content_type: &str) -> bool {
-    content_type == "text/plain"
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RequestBodyEncoding {
     Json,
-    TextPlain,
+    Text,
 }
 
 fn resolve_request_body_encoding(
@@ -221,18 +435,12 @@ fn resolve_request_body_encoding(
         if content_type_is_json(&normalized) {
             return Ok(Some(RequestBodyEncoding::Json));
         }
-        if content_type_is_text_plain(&normalized) {
-            return Ok(Some(RequestBodyEncoding::TextPlain));
-        }
-        return Err(format!(
-            "Unsupported content-type '{}' for http::request::send. Supported types: application/json, text/plain",
-            content_type
-        ));
+        return Ok(Some(RequestBodyEncoding::Text));
     }
 
     match payload.kind.as_ref() {
         Some(Kind::NullValue(_)) | None => Ok(None),
-        Some(Kind::StringValue(_)) => Ok(Some(RequestBodyEncoding::TextPlain)),
+        Some(Kind::StringValue(_)) => Ok(Some(RequestBodyEncoding::Text)),
         _ => Ok(Some(RequestBodyEncoding::Json)),
     }
 }
@@ -252,12 +460,12 @@ fn encode_request_payload(
                 .map_err(|err| format!("Unable to serialize request payload: {}", err))?;
             Ok((Some(body), Some("application/json")))
         }
-        RequestBodyEncoding::TextPlain => match payload.kind.as_ref() {
+        RequestBodyEncoding::Text => match payload.kind.as_ref() {
             Some(Kind::NullValue(_)) | None => Ok((None, Some("text/plain"))),
             Some(Kind::StringValue(body)) => {
                 Ok((Some(body.as_bytes().to_vec()), Some("text/plain")))
             }
-            _ => Err("Payload must be StringValue when content-type is text/plain".to_string()),
+            _ => Err("Payload must be StringValue when content-type is not JSON".to_string()),
         },
     }
 }
@@ -374,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn encode_request_payload_uses_text_plain_header_and_rejects_unsupported_content_type() {
+    fn encode_request_payload_uses_text_for_non_json_content_type() {
         let (text_body, text_content_type) =
             encode_request_payload(&string_value("hello"), Some("text/plain; charset=utf-8"))
                 .unwrap_or((None, None));
@@ -383,22 +591,21 @@ mod tests {
         let body = text_body.unwrap_or_default();
         assert_eq!(body, b"hello");
 
-        let err = encode_request_payload(&string_value("hello"), Some("application/xml"));
-        let Err(err) = err else {
-            panic!("expected unsupported content-type error");
-        };
-        assert!(err.contains("Supported types: application/json, text/plain"));
+        let (xml_body, xml_content_type) =
+            encode_request_payload(&string_value("<ok />"), Some("application/xml"))
+                .unwrap_or((None, None));
+        assert_eq!(xml_content_type, Some("text/plain"));
+        assert_eq!(xml_body.unwrap_or_default(), b"<ok />");
 
-        let err = encode_request_payload(
+        let (empty_body, empty_content_type) = encode_request_payload(
             &Value {
                 kind: Some(Kind::NullValue(0)),
             },
             Some("application/octet-stream"),
-        );
-        let Err(err) = err else {
-            panic!("expected unsupported content-type error for null payload");
-        };
-        assert!(err.contains("Supported types: application/json, text/plain"));
+        )
+        .unwrap_or((Some(vec![1]), None));
+        assert_eq!(empty_content_type, Some("text/plain"));
+        assert!(empty_body.is_none());
 
         let err = encode_request_payload(
             &Value {
@@ -412,6 +619,55 @@ mod tests {
             panic!("expected text/plain payload validation error");
         };
         assert!(err.contains("Payload must be StringValue"));
+    }
+
+    #[test]
+    fn apply_auth_maps_supported_auth_variants() {
+        let mut headers = HashMap::new();
+        let mut url = "https://example.test/resource".to_string();
+        apply_auth(
+            &HttpAuthType::Bearer,
+            &string_value("token"),
+            Some(HttpAuthPlace::Header),
+            &mut headers,
+            &mut url,
+        )
+        .unwrap_or_else(|err| panic!("bearer auth failed: {}", err));
+        assert_eq!(
+            headers.get("authorization").map(String::as_str),
+            Some("Bearer token")
+        );
+
+        let basic_value = Value {
+            kind: Some(Kind::StructValue(Struct {
+                fields: HashMap::from([
+                    ("username".to_string(), string_value("u")),
+                    ("password".to_string(), string_value("p")),
+                ]),
+            })),
+        };
+        apply_auth(
+            &HttpAuthType::Basic,
+            &basic_value,
+            Some(HttpAuthPlace::Header),
+            &mut headers,
+            &mut url,
+        )
+        .unwrap_or_else(|err| panic!("basic auth failed: {}", err));
+        assert_eq!(
+            headers.get("authorization").map(String::as_str),
+            Some("Basic dTpw")
+        );
+
+        apply_auth(
+            &HttpAuthType::XApiKey,
+            &string_value("a b"),
+            Some(HttpAuthPlace::Url),
+            &mut headers,
+            &mut url,
+        )
+        .unwrap_or_else(|err| panic!("api key auth failed: {}", err));
+        assert_eq!(url, "https://example.test/resource?X-API-Key=a%20b");
     }
 
     #[test]
@@ -566,11 +822,15 @@ mod tests {
         };
         let args = vec![
             Argument::Eval(string_value("POST")),
+            Argument::Eval(string_value(&format!("http://{}/echo?x=1", addr))),
+            Argument::Eval(null_value()),
+            Argument::Eval(null_value()),
+            Argument::Eval(null_value()),
+            Argument::Eval(string_value("application/json")),
+            Argument::Eval(request_payload),
             Argument::Eval(Value {
                 kind: Some(Kind::StructValue(request_headers)),
             }),
-            Argument::Eval(string_value(&format!("http://{}/echo?x=1", addr))),
-            Argument::Eval(request_payload),
         ];
         let mut ctx = ValueStore::default();
         let mut run = |_: &crate::handler::argument::Thunk, _: &mut ValueStore| Signal::Stop;

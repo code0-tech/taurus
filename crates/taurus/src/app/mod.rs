@@ -17,7 +17,6 @@ use tucana::shared::module_status::StatusVariant;
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_status::TaurusRuntimeStatusService;
-use crate::client::runtime_usage::TaurusRuntimeUsageService;
 use crate::config::Config;
 
 pub async fn run() {
@@ -32,7 +31,6 @@ pub async fn run() {
     let (
         runtime_status_service,
         runtime_execution_service,
-        runtime_usage_service,
         mut runtime_status_heartbeat_task,
     ) = setup_dynamic_services_if_needed(&config).await;
 
@@ -44,7 +42,6 @@ pub async fn run() {
         nats_remote,
         runtime_emitter,
         runtime_execution_service,
-        runtime_usage_service,
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task).await;
@@ -112,11 +109,10 @@ async fn setup_dynamic_services_if_needed(
 ) -> (
     Option<Arc<TaurusRuntimeStatusService>>,
     Option<TaurusRuntimeExecutionService>,
-    Option<TaurusRuntimeUsageService>,
     Option<JoinHandle<()>>,
 ) {
     if config.mode != DYNAMIC {
-        return (None, None, None, None);
+        return (None, None, None);
     }
 
     push_definitions_until_success(config).await;
@@ -127,11 +123,6 @@ async fn setup_dynamic_services_if_needed(
             config.aquila_token.clone(),
         )
         .await,
-    );
-
-    let runtime_usage_service = Some(
-        TaurusRuntimeUsageService::from_url(config.aquila_url.clone(), config.aquila_token.clone())
-            .await,
     );
 
     let runtime_status_service = Some(Arc::new(
@@ -184,7 +175,6 @@ async fn setup_dynamic_services_if_needed(
     (
         runtime_status_service,
         runtime_execution_service,
-        runtime_usage_service,
         runtime_status_heartbeat_task,
     )
 }

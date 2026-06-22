@@ -346,6 +346,15 @@
 						}
 					},
 					{
+						"databaseId": "32",
+						"runtimeParameterId": "http_schema",
+						"value": {
+							"literalValue": {
+								"stringValue": "application/json"
+							}
+						}
+					},
+					{
 						"databaseId": "31",
 						"runtimeParameterId": "payload",
 						"value": {

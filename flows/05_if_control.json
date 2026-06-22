@@ -97,6 +97,15 @@
 						}
 					},
 					{
+						"databaseId": "57",
+						"runtimeParameterId": "http_schema",
+						"value": {
+							"literalValue": {
+								"stringValue": "application/json"
+							}
+						}
+					},
+					{
 						"databaseId": "56",
 						"runtimeParameterId": "payload",
 						"value": {
@@ -163,6 +172,15 @@
 						"value": {
 							"literalValue": {
 								"structValue": {}
+							}
+						}
+					},
+					{
+						"databaseId": "54",
+						"runtimeParameterId": "http_schema",
+						"value": {
+							"literalValue": {
+								"stringValue": "application/json"
 							}
 						}
 					},

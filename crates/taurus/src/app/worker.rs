@@ -11,10 +11,9 @@ use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::task::JoinHandle;
 use tucana::shared::execution_result;
-use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, RuntimeUsage, Value};
+use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, Value};
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
-use crate::client::runtime_usage::TaurusRuntimeUsageService;
 
 pub fn spawn_worker(
     client: async_nats::Client,
@@ -22,7 +21,6 @@ pub fn spawn_worker(
     nats_remote: NATSRemoteRuntime,
     runtime_emitter: NATSRespondEmitter,
     mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
-    runtime_usage_service: Option<TaurusRuntimeUsageService>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut execution_subscription = match client
@@ -52,7 +50,6 @@ pub fn spawn_worker(
                                 &nats_remote,
                                 &runtime_emitter,
                                 runtime_execution_service.as_mut(),
-                                runtime_usage_service.as_ref(),
                             ).await;
                         }
                         None => {
@@ -74,7 +71,6 @@ async fn process_execution_message(
     nats_remote: &NATSRemoteRuntime,
     runtime_emitter: &NATSRespondEmitter,
     mut runtime_execution_service: Option<&mut TaurusRuntimeExecutionService>,
-    runtime_usage_service: Option<&TaurusRuntimeUsageService>,
 ) {
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")
         .unwrap_or_else(|| {
@@ -138,12 +134,6 @@ async fn process_execution_message(
             .update_runtime_execution(execution_result)
             .await;
     }
-
-    if let Some(usage_service) = runtime_usage_service {
-        usage_service
-            .update_runtime_usage(run_result.runtime_usage)
-            .await;
-    }
 }
 
 #[derive(Clone)]
@@ -155,7 +145,6 @@ struct FlowRunResult {
     input: Option<Value>,
     signal: Signal,
     node_execution_results: Vec<NodeExecutionResult>,
-    runtime_usage: RuntimeUsage,
 }
 
 async fn execute_flow(
@@ -166,7 +155,6 @@ async fn execute_flow(
     respond_emitter: Option<&dyn RespondEmitter>,
 ) -> FlowRunResult {
     let started_at = now_unix_micros();
-    let start = Instant::now();
     let flow_id = flow.flow_id;
     let input = flow.input_value.clone();
     let report = engine
@@ -179,7 +167,6 @@ async fn execute_flow(
         )
         .await;
     let finished_at = now_unix_micros();
-    let duration_micros = start.elapsed().as_micros() as i64;
 
     FlowRunResult {
         execution_id,
@@ -189,11 +176,7 @@ async fn execute_flow(
         input,
         signal: report.signal,
         node_execution_results: report.node_execution_results,
-        runtime_usage: RuntimeUsage {
-            flow_id,
-            duration: duration_micros,
-        },
-    }
+   }
 }
 
 fn parse_execution_id_from_subject(
@@ -347,17 +330,15 @@ mod tests {
         let run_result = execute_flow(execution_id, flow, &engine, None, None).await;
 
         println!(
-            "started_at={} finished_at={} delta={} runtime_usage.duration={}",
+            "started_at={} finished_at={} delta={}",
             run_result.started_at,
             run_result.finished_at,
             run_result.finished_at - run_result.started_at,
-            run_result.runtime_usage.duration
         );
 
         assert_eq!(run_result.execution_id, execution_id);
         assert!(run_result.started_at >= 1_000_000_000_000_000);
         assert!(run_result.finished_at >= run_result.started_at);
-        assert!(run_result.runtime_usage.duration > 0);
         assert!(
             run_result
                 .node_execution_results

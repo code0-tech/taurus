@@ -9,7 +9,8 @@
 				"headers": {
 					"Authentication": "X"
 				},
-				"payload": null
+				"payload": null,
+				"http_schema": "application/json"
 			}
 		},
 		{
@@ -35,7 +36,8 @@
 						"cat",
 						"bird"
 					]
-				}
+				},
+				"http_schema": "application/json"
 			}
 		}
 	],
@@ -61,21 +63,6 @@
 						}
 					},
 					{
-						"databaseId": "6",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"Authentication": {
-											"stringValue": "X"
-										}
-									}
-								}
-							}
-						}
-					},
-					{
 						"databaseId": "8",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -90,6 +77,21 @@
 						"value": {
 							"referenceValue": {
 								"flowInput": {}
+							}
+						}
+					},
+					{
+						"databaseId": "6",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"Authentication": {
+											"stringValue": "X"
+										}
+									}
+								}
 							}
 						}
 					}

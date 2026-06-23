@@ -41,7 +41,8 @@
 				"payload": [
 					"timmy doe",
 					"willy wokner"
-				]
+				],
+				"http_schema": "application/json"
 			}
 		},
 		{
@@ -57,7 +58,8 @@
 					"x": "y"
 				},
 				"http_status_code": 200,
-				"payload": []
+				"payload": [],
+				"http_schema": "application/json"
 			}
 		}
 	],
@@ -318,21 +320,6 @@
 						}
 					},
 					{
-						"databaseId": "30",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"x": {
-											"stringValue": "y"
-										}
-									}
-								}
-							}
-						}
-					},
-					{
 						"databaseId": "32",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -347,6 +334,21 @@
 						"value": {
 							"referenceValue": {
 								"nodeId": "10"
+							}
+						}
+					},
+					{
+						"databaseId": "30",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"x": {
+											"stringValue": "y"
+										}
+									}
+								}
 							}
 						}
 					}
@@ -370,21 +372,6 @@
 						}
 					},
 					{
-						"databaseId": "30",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"x": {
-											"stringValue": "y"
-										}
-									}
-								}
-							}
-						}
-					},
-					{
 						"databaseId": "32",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -399,6 +386,21 @@
 						"value": {
 							"referenceValue": {
 								"nodeId": "10"
+							}
+						}
+					},
+					{
+						"databaseId": "30",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"x": {
+											"stringValue": "y"
+										}
+									}
+								}
 							}
 						}
 					}
@@ -421,21 +423,6 @@
 						}
 					},
 					{
-						"databaseId": "30",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"x": {
-											"stringValue": "y"
-										}
-									}
-								}
-							}
-						}
-					},
-					{
 						"databaseId": "32",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -450,6 +437,21 @@
 						"value": {
 							"referenceValue": {
 								"nodeId": "10"
+							}
+						}
+					},
+					{
+						"databaseId": "30",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"x": {
+											"stringValue": "y"
+										}
+									}
+								}
 							}
 						}
 					}

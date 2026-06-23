@@ -30,7 +30,8 @@
 			"expected_result": {
 				"http_status_code": 200,
 				"headers": {},
-				"payload": "Blub"
+				"payload": "Blub",
+				"http_schema": "application/json"
 			}
 		},
 		{
@@ -46,7 +47,8 @@
 			"expected_result": {
 				"http_status_code": 200,
 				"headers": {},
-				"payload": "Blob"
+				"payload": "Blob",
+				"http_schema": "application/json"
 			}
 		}
 	],
@@ -88,15 +90,6 @@
 						}
 					},
 					{
-						"databaseId": "78",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
-							}
-						}
-					},
-					{
 						"databaseId": "80",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -111,6 +104,15 @@
 						"value": {
 							"literalValue": {
 								"stringValue": "Blub"
+							}
+						}
+					},
+					{
+						"databaseId": "78",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {}
 							}
 						}
 					}
@@ -177,15 +179,6 @@
 						}
 					},
 					{
-						"databaseId": "73",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
-							}
-						}
-					},
-					{
 						"databaseId": "76",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -200,6 +193,15 @@
 						"value": {
 							"literalValue": {
 								"stringValue": "Blob"
+							}
+						}
+					},
+					{
+						"databaseId": "73",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {}
 							}
 						}
 					}

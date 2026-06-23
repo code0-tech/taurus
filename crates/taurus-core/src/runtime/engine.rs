@@ -1194,9 +1194,9 @@ mod tests {
             "rest::control::respond",
             vec![
                 literal_param(100, "http_status_code", int_value(200)),
-                literal_param(101, "headers", empty_struct_value()),
                 literal_param(102, "http_schema", string_value("application/json")),
                 literal_param(103, "payload", string_value("hello")),
+                literal_param(101, "headers", empty_struct_value()),
             ],
             None,
         );
@@ -1212,15 +1212,15 @@ mod tests {
         assert_eq!(node_result.parameter_results[0].value, Some(int_value(200)));
         assert_eq!(
             node_result.parameter_results[1].value,
-            Some(empty_struct_value())
-        );
-        assert_eq!(
-            node_result.parameter_results[2].value,
             Some(string_value("application/json"))
         );
         assert_eq!(
-            node_result.parameter_results[3].value,
+            node_result.parameter_results[2].value,
             Some(string_value("hello"))
+        );
+        assert_eq!(
+            node_result.parameter_results[3].value,
+            Some(empty_struct_value())
         );
         assert!(matches!(
             node_result.result,
@@ -1438,9 +1438,9 @@ mod tests {
             "rest::control::respond",
             vec![
                 literal_param(1, "http_status_code", int_value(200)),
-                literal_param(2, "headers", empty_struct_value()),
                 literal_param(3, "http_schema", string_value("text/plain")),
                 literal_param(4, "payload", string_value("20")),
+                literal_param(2, "headers", empty_struct_value()),
             ],
             None,
         );
@@ -1480,6 +1480,7 @@ mod tests {
             fields.insert("http_status_code".to_string(), int_value(200));
             fields.insert("headers".to_string(), empty_struct_value());
             fields.insert("payload".to_string(), string_value("20"));
+            fields.insert("http_schema".to_string(), string_value("text/plain"));
             Value {
                 kind: Some(Kind::StructValue(Struct { fields })),
             }
@@ -1581,9 +1582,9 @@ mod tests {
             "rest::control::respond",
             vec![
                 literal_param(100, "http_status_code", int_value(200)),
-                literal_param(101, "headers", empty_struct_value()),
                 literal_param(102, "http_schema", string_value("application/json")),
                 literal_param(103, "payload", string_value("hello")),
+                literal_param(101, "headers", empty_struct_value()),
             ],
             Some(2),
         );

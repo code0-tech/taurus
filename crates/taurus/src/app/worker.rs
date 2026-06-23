@@ -176,7 +176,7 @@ async fn execute_flow(
         input,
         signal: report.signal,
         node_execution_results: report.node_execution_results,
-   }
+    }
 }
 
 fn parse_execution_id_from_subject(

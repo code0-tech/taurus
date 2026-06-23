@@ -28,11 +28,8 @@ pub async fn run() {
     let client = connect_nats(&config).await;
 
     let mut health_task = spawn_health_task(&config);
-    let (
-        runtime_status_service,
-        runtime_execution_service,
-        mut runtime_status_heartbeat_task,
-    ) = setup_dynamic_services_if_needed(&config).await;
+    let (runtime_status_service, runtime_execution_service, mut runtime_status_heartbeat_task) =
+        setup_dynamic_services_if_needed(&config).await;
 
     let nats_remote = NATSRemoteRuntime::new(client.clone());
     let runtime_emitter = NATSRespondEmitter::new(client.clone());

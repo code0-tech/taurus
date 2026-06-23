@@ -7,7 +7,8 @@
 			"expected_result": {
 				"http_status_code": 200,
 				"headers": {},
-				"payload": "20"
+				"payload": "20",
+				"http_schema": "application/json"
 			}
 		}
 	],
@@ -32,17 +33,6 @@
 						}
 					},
 					{
-						"databaseId": "2",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {}
-								}
-							}
-						}
-					},
-					{
 						"databaseId": "4",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -57,6 +47,17 @@
 						"value": {
 							"literalValue": {
 								"stringValue": "20"
+							}
+						}
+					},
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {}
+								}
 							}
 						}
 					}

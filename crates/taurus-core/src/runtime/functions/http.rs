@@ -71,13 +71,20 @@ impl HttpAuthType {
     fn from_value(input: &Value) -> Result<HttpAuthType, String> {
         match input.kind.as_ref() {
             Some(Kind::NullValue(_)) | None => Ok(HttpAuthType::None),
-            Some(Kind::StringValue(value)) => match value.as_str() {
-                "Bearer" => Ok(HttpAuthType::Bearer),
-                "Basic" => Ok(HttpAuthType::Basic),
-                "X-API-Key" => Ok(HttpAuthType::XApiKey),
-                "undefined" | "" => Ok(HttpAuthType::None),
-                custom => Ok(HttpAuthType::Custom(custom.to_string())),
-            },
+            Some(Kind::StringValue(value)) => {
+                if value.eq_ignore_ascii_case("bearer") {
+                    Ok(HttpAuthType::Bearer)
+                } else if value.eq_ignore_ascii_case("basic") {
+                    Ok(HttpAuthType::Basic)
+                } else if value.eq_ignore_ascii_case("x-api-key") {
+                    Ok(HttpAuthType::XApiKey)
+                } else {
+                    match value.as_str() {
+                        "undefined" | "" => Ok(HttpAuthType::None),
+                        custom => Ok(HttpAuthType::Custom(custom.to_string())),
+                    }
+                }
+            }
             _ => Err("Auth Type must be a string or undefined".to_string()),
         }
     }
@@ -335,9 +342,7 @@ fn apply_auth(
         HttpAuthType::Custom(scheme) => {
             let value = auth_string_value(auth_value, "Custom auth value")?;
             match place {
-                HttpAuthPlace::Header => {
-                    insert_header(headers, "authorization", format!("{} {}", scheme, value))
-                }
+                HttpAuthPlace::Header => insert_header(headers, "authorization", value),
                 HttpAuthPlace::Url => append_query_param(url, scheme, &value),
             }
             Ok(())
@@ -675,6 +680,22 @@ mod tests {
         )
         .unwrap_or_else(|err| panic!("api key auth failed: {}", err));
         assert_eq!(url, "https://example.test/resource?X-API-Key=a%20b");
+    }
+
+    #[test]
+    fn auth_type_parses_builtin_values_case_insensitively() {
+        assert_eq!(
+            HttpAuthType::from_value(&string_value("bearer")),
+            Ok(HttpAuthType::Bearer)
+        );
+        assert_eq!(
+            HttpAuthType::from_value(&string_value("basic")),
+            Ok(HttpAuthType::Basic)
+        );
+        assert_eq!(
+            HttpAuthType::from_value(&string_value("x-api-key")),
+            Ok(HttpAuthType::XApiKey)
+        );
     }
 
     #[test]

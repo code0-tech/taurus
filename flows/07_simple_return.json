@@ -23,7 +23,8 @@
 					null,
 					null,
 					"username"
-				]
+				],
+				"http_schema": "application/json"
 			}
 		}
 	],
@@ -204,15 +205,6 @@
 						}
 					},
 					{
-						"databaseId": "36",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
-							}
-						}
-					},
-					{
 						"databaseId": "38",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -227,6 +219,15 @@
 						"value": {
 							"referenceValue": {
 								"nodeId": "9"
+							}
+						}
+					},
+					{
+						"databaseId": "36",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {}
 							}
 						}
 					}

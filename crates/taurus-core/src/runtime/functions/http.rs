@@ -34,7 +34,7 @@ fn respond(
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
     args!(args => http_status_code: i64, http_schema: String, payload: Value, headers: Value);
-        
+
     let http_headers = match headers_from_value(&headers) {
         Ok(headers) => headers,
         Err(signal) => return signal,
@@ -42,9 +42,12 @@ fn respond(
 
     let mut fields = HashMap::new();
     fields.insert("http_status_code".to_string(), http_status_code.to_value());
-    fields.insert("headers".to_string(), Value {
-        kind: Some(Kind::StructValue(http_headers))
-    });
+    fields.insert(
+        "headers".to_string(),
+        Value {
+            kind: Some(Kind::StructValue(http_headers)),
+        },
+    );
 
     fields.insert("payload".to_string(), payload);
     fields.insert("http_schema".to_string(), http_schema.to_value());

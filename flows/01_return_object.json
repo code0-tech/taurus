@@ -9,7 +9,8 @@
 				"headers": {
 					"Header": "X"
 				},
-				"payload": "Hello World"
+				"payload": "Hello World",
+				"http_schema": "application/json"
 			}
 		}
 	],
@@ -33,21 +34,6 @@
 						}
 					},
 					{
-						"databaseId": "2",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"Header": {
-											"stringValue": "X"
-										}
-									}
-								}
-							}
-						}
-					},
-					{
 						"databaseId": "4",
 						"runtimeParameterId": "http_schema",
 						"value": {
@@ -62,6 +48,21 @@
 						"value": {
 							"literalValue": {
 								"stringValue": "Hello World"
+							}
+						}
+					},
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "headers",
+						"value": {
+							"literalValue": {
+								"structValue": {
+									"fields": {
+										"Header": {
+											"stringValue": "X"
+										}
+									}
+								}
 							}
 						}
 					}

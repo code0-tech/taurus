@@ -33,17 +33,21 @@ fn respond(
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => http_status_code: i64, headers: Struct, _http_schema: String, payload: Value);
+    args!(args => http_status_code: i64, http_schema: String, payload: Value, headers: Value);
+        
+    let http_headers = match headers_from_value(&headers) {
+        Ok(headers) => headers,
+        Err(signal) => return signal,
+    };
 
     let mut fields = HashMap::new();
     fields.insert("http_status_code".to_string(), http_status_code.to_value());
-    fields.insert(
-        "headers".to_string(),
-        Value {
-            kind: Some(Kind::StructValue(headers)),
-        },
-    );
+    fields.insert("headers".to_string(), Value {
+        kind: Some(Kind::StructValue(http_headers))
+    });
+
     fields.insert("payload".to_string(), payload);
+    fields.insert("http_schema".to_string(), http_schema.to_value());
 
     // `Respond` is a control signal; the executor can still continue with `next` if present.
     Signal::Respond(Value {

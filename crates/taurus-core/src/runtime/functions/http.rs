@@ -100,15 +100,21 @@ impl HttpAuthPlace {
     fn from_value(input: &Value) -> Result<Option<HttpAuthPlace>, String> {
         match input.kind.as_ref() {
             Some(Kind::NullValue(_)) | None => Ok(None),
-            Some(Kind::StringValue(value)) => match value.as_str() {
-                "Header" => Ok(Some(HttpAuthPlace::Header)),
-                "Url" => Ok(Some(HttpAuthPlace::Url)),
-                "undefined" | "" => Ok(None),
-                other => Err(format!(
-                    "Auth Placement must be 'Header', 'Url', or undefined, got '{}'",
-                    other
-                )),
-            },
+            Some(Kind::StringValue(value)) => {
+                if value.eq_ignore_ascii_case("header") {
+                    Ok(Some(HttpAuthPlace::Header))
+                } else if value.eq_ignore_ascii_case("url") {
+                    Ok(Some(HttpAuthPlace::Url))
+                } else {
+                    match value.as_str() {
+                        "undefined" | "" => Ok(None),
+                        other => Err(format!(
+                            "Auth Placement must be 'Header', 'Url', or undefined, got '{}'",
+                            other
+                        )),
+                    }
+                }
+            }
             _ => Err("Auth Placement must be a string or undefined".to_string()),
         }
     }
@@ -695,6 +701,18 @@ mod tests {
         assert_eq!(
             HttpAuthType::from_value(&string_value("x-api-key")),
             Ok(HttpAuthType::XApiKey)
+        );
+    }
+
+    #[test]
+    fn auth_place_parses_values_case_insensitively() {
+        assert_eq!(
+            HttpAuthPlace::from_value(&string_value("header")),
+            Ok(Some(HttpAuthPlace::Header))
+        );
+        assert_eq!(
+            HttpAuthPlace::from_value(&string_value("url")),
+            Ok(Some(HttpAuthPlace::Url))
         );
     }
 

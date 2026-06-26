@@ -1,6 +1,7 @@
 use code0_flow::flow_service::{
     auth::get_authorization_metadata, retry::create_channel_with_retry,
 };
+use std::time::Duration;
 use tonic::{Extensions, Request, transport::Channel};
 use tucana::{
     aquila::{ExecutionRequest, execution_service_client::ExecutionServiceClient},
@@ -16,8 +17,14 @@ pub struct TaurusRuntimeExecutionService {
 }
 
 impl TaurusRuntimeExecutionService {
-    pub async fn from_url(aquila_url: String, aquila_token: String) -> Self {
-        let channel = create_channel_with_retry("Aquila", aquila_url).await;
+    pub async fn from_url(
+        aquila_url: String,
+        aquila_token: String,
+        connect_timeout: Duration,
+        request_timeout: Duration,
+    ) -> Self {
+        let channel =
+            create_channel_with_retry("Aquila", aquila_url, connect_timeout, request_timeout).await;
         let client = ExecutionServiceClient::new(channel);
 
         TaurusRuntimeExecutionService {

@@ -30,6 +30,12 @@ pub struct Config {
     /// Runtime status heartbeat interval in seconds while Taurus is running.
     /// Set to 0 to disable periodic heartbeat updates.
     pub runtime_status_update_interval_seconds: u64,
+
+    /// Timeout in seconds for establishing Aquila gRPC channels.
+    pub aquila_grpc_connect_timeout_secs: u64,
+
+    /// Timeout in seconds for Aquila gRPC requests.
+    pub aquila_grpc_request_timeout_secs: u64,
 }
 
 /// Implementation for all relevant `Taurus` startup configurations
@@ -51,6 +57,14 @@ impl Config {
             runtime_status_update_interval_seconds: env_with_default(
                 "RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS",
                 30_u64,
+            ),
+            aquila_grpc_connect_timeout_secs: env_with_default(
+                "AQUILA_GRPC_CONNECT_TIMEOUT_SECS",
+                2_u64,
+            ),
+            aquila_grpc_request_timeout_secs: env_with_default(
+                "AQUILA_GRPC_REQUEST_TIMEOUT_SECS",
+                10_u64,
             ),
         }
     }

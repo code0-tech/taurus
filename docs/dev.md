@@ -100,6 +100,8 @@ Defaults are defined in `crates/taurus/src/config/mod.rs`.
 | `GRPC_PORT` | Health server port | `50051` |
 | `DEFINITIONS` | Path sent to `FlowUpdateService` for definition sync | `./definitions` |
 | `RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS` | Heartbeat interval in dynamic mode (`0` disables heartbeat) | `30` |
+| `AQUILA_GRPC_CONNECT_TIMEOUT_SECS` | Timeout in seconds for establishing Aquila gRPC channels | `2` |
+| `AQUILA_GRPC_REQUEST_TIMEOUT_SECS` | Timeout in seconds for Aquila gRPC requests | `10` |
 
 ## Local Development
 

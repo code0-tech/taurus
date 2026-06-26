@@ -118,6 +118,8 @@ async fn setup_dynamic_services_if_needed(
         TaurusRuntimeExecutionService::from_url(
             config.aquila_url.clone(),
             config.aquila_token.clone(),
+            Duration::from_secs(config.aquila_grpc_connect_timeout_secs),
+            Duration::from_secs(config.aquila_grpc_request_timeout_secs),
         )
         .await,
     );
@@ -127,6 +129,8 @@ async fn setup_dynamic_services_if_needed(
             config.aquila_url.clone(),
             config.aquila_token.clone(),
             read_module_status_identifiers(config.definitions.as_str()),
+            Duration::from_secs(config.aquila_grpc_connect_timeout_secs),
+            Duration::from_secs(config.aquila_grpc_request_timeout_secs),
         )
         .await,
     ));
@@ -199,6 +203,8 @@ async fn push_definitions_until_success(config: &Config) {
         config.aquila_url.clone(),
         config.definitions.as_str(),
         config.aquila_token.clone(),
+        Duration::from_secs(config.aquila_grpc_connect_timeout_secs),
+        Duration::from_secs(config.aquila_grpc_request_timeout_secs),
     )
     .await
     .with_definition_source(String::from("taurus"));

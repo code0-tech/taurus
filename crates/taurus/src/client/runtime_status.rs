@@ -1,4 +1,4 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use code0_flow::flow_service::{
     auth::get_authorization_metadata, retry::create_channel_with_retry,
@@ -22,8 +22,11 @@ impl TaurusRuntimeStatusService {
         aquila_url: String,
         aquila_token: String,
         identifiers: Vec<String>,
+        connect_timeout: Duration,
+        request_timeout: Duration,
     ) -> Self {
-        let channel = create_channel_with_retry("Aquila", aquila_url).await;
+        let channel =
+            create_channel_with_retry("Aquila", aquila_url, connect_timeout, request_timeout).await;
         Self::new(channel, aquila_token, identifiers)
     }
 

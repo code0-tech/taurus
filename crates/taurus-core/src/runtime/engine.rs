@@ -192,8 +192,9 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        self.execute_graph_with_execution_id_report_async(
+        self.execute_graph_with_project_id_report_async(
             execution_id,
+            flow.project_id,
             flow.starting_node_id,
             flow.node_functions,
             flow.input_value,
@@ -374,6 +375,30 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
+        self.execute_graph_with_project_id_report_async(
+            execution_id,
+            0,
+            start_node_id,
+            node_functions,
+            flow_input,
+            remote,
+            respond_emitter,
+            with_trace,
+        )
+        .await
+    }
+
+    async fn execute_graph_with_project_id_report_async(
+        &self,
+        execution_id: ExecutionId,
+        project_id: i64,
+        start_node_id: i64,
+        node_functions: Vec<NodeFunction>,
+        flow_input: Option<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        respond_emitter: Option<&dyn RespondEmitter>,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
         if let Some(emitter) = respond_emitter {
             emitter.emit(execution_id, EmitType::StartingExec, null_value());
         }
@@ -383,7 +408,7 @@ impl ExecutionEngine {
             None => ValueStore::default(),
         };
 
-        let compiled = match compile_flow(start_node_id, node_functions) {
+        let compiled = match compile_flow(project_id, start_node_id, node_functions) {
             Ok(plan) => plan,
             Err(err) => {
                 let runtime_error = err.as_runtime_error();
@@ -628,6 +653,7 @@ mod tests {
     struct StubRemoteRuntime {
         result: NodeExecutionResult,
         target_services: Option<Arc<Mutex<Vec<String>>>>,
+        project_ids: Option<Arc<Mutex<Vec<i64>>>>,
     }
 
     #[async_trait]
@@ -642,6 +668,12 @@ mod tests {
                     .lock()
                     .expect("target service recorder should not be poisoned")
                     .push(execution.target_service);
+            }
+            if let Some(project_ids) = &self.project_ids {
+                project_ids
+                    .lock()
+                    .expect("project id recorder should not be poisoned")
+                    .push(execution.request.project_id);
             }
 
             Ok(self.result.clone())
@@ -1240,6 +1272,7 @@ mod tests {
                 result: None,
             },
             target_services: None,
+            project_ids: None,
         };
         let mut remote_node = node(
             1,
@@ -1285,6 +1318,7 @@ mod tests {
                 result: Some(node_execution_result::Result::Success(string_value("ok"))),
             },
             target_services: Some(Arc::clone(&target_services)),
+            project_ids: None,
         };
         let mut remote_node = node(
             1,
@@ -1303,6 +1337,47 @@ mod tests {
                 .lock()
                 .expect("target service recorder should not be poisoned"),
             vec!["example".to_string()]
+        );
+    }
+
+    #[test]
+    fn remote_execution_uses_flow_project_id() {
+        let engine = ExecutionEngine::new();
+        let project_ids = Arc::new(Mutex::new(Vec::new()));
+        let remote = StubRemoteRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(99)),
+                result: Some(node_execution_result::Result::Success(string_value("ok"))),
+            },
+            target_services: None,
+            project_ids: Some(Arc::clone(&project_ids)),
+        };
+        let mut remote_node = node(
+            1,
+            "remote::project",
+            vec![literal_param(100, "payload", int_value(20))],
+            None,
+        );
+        remote_node.definition_source = Some("action.example".to_string());
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![remote_node],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report(flow, Some(&remote), None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(
+            *project_ids
+                .lock()
+                .expect("project id recorder should not be poisoned"),
+            vec![42]
         );
     }
 

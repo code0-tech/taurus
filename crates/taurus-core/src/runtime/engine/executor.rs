@@ -871,7 +871,7 @@ impl<'a> EngineExecutor<'a> {
             execution_identifier: Uuid::new_v4().to_string(),
             function_identifier: node.handler_id.clone(),
             parameters: Some(Struct { fields }),
-            project_id: 0,
+            project_id: self.flow.project_id,
         })
     }
 

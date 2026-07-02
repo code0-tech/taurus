@@ -51,6 +51,7 @@ pub struct CompiledNode {
 /// Compiled flow plan.
 #[derive(Debug, Clone)]
 pub struct CompiledFlow {
+    pub project_id: i64,
     pub start_idx: usize,
     pub nodes: Vec<CompiledNode>,
     pub node_idx_by_id: HashMap<i64, usize>,

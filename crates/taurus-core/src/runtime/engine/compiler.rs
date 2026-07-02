@@ -108,6 +108,7 @@ impl CompileError {
 }
 
 pub fn compile_flow(
+    project_id: i64,
     start_node_id: i64,
     nodes: Vec<NodeFunction>,
 ) -> Result<CompiledFlow, CompileError> {
@@ -207,6 +208,7 @@ pub fn compile_flow(
     }
 
     Ok(CompiledFlow {
+        project_id,
         start_idx,
         nodes: compiled_nodes,
         node_idx_by_id,

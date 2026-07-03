@@ -43,8 +43,6 @@ impl TaurusRuntimeExecutionService {
 
         normalize_execution_result(&mut runtime_execution);
 
-        log::debug!("{:#?}", runtime_execution);
-
         let request = Request::from_parts(
             get_authorization_metadata(&self.aquila_token),
             Extensions::new(),

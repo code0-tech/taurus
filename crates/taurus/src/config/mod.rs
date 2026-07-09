@@ -36,6 +36,9 @@ pub struct Config {
 
     /// Timeout in seconds for Aquila gRPC requests.
     pub aquila_grpc_request_timeout_secs: u64,
+
+    /// Timeout in seconds for remote runtime NATS flush and response waits.
+    pub remote_runtime_timeout_secs: u64,
 }
 
 /// Implementation for all relevant `Taurus` startup configurations
@@ -66,6 +69,7 @@ impl Config {
                 "AQUILA_GRPC_REQUEST_TIMEOUT_SECS",
                 10_u64,
             ),
+            remote_runtime_timeout_secs: env_with_default("REMOTE_RUNTIME_TIMEOUT_SECS", 30_u64),
         }
     }
 }

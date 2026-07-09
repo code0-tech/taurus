@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use log::error;
@@ -207,7 +207,8 @@ async fn main() {
         return;
     }
 
-    let remote = NATSRemoteRuntime::new(client.clone());
+    let remote =
+        NATSRemoteRuntime::with_execution_result_timeout(client.clone(), Duration::from_secs(30));
     let emitter = NATSRespondEmitter::new(client);
     let engine = ExecutionEngine::new();
 

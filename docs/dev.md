@@ -102,6 +102,11 @@ Defaults are defined in `crates/taurus/src/config/mod.rs`.
 | `RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS` | Heartbeat interval in dynamic mode (`0` disables heartbeat) | `30` |
 | `AQUILA_GRPC_CONNECT_TIMEOUT_SECS` | Timeout in seconds for establishing Aquila gRPC channels | `2` |
 | `AQUILA_GRPC_REQUEST_TIMEOUT_SECS` | Timeout in seconds for Aquila gRPC requests | `10` |
+| `OPENTELEMETRY_ENABLED` | Enables OpenTelemetry export when an endpoint is configured | `false` |
+| `OPENTELEMETRY_SERVICE_NAME` | Service name used for exported telemetry | `taurus` |
+| `OPENTELEMETRY_LOGS_ENDPOINT` | OTLP logs endpoint | empty |
+| `OPENTELEMETRY_METRICS_ENDPOINT` | OTLP metrics endpoint | empty |
+| `OPENTELEMETRY_TRACES_ENDPOINT` | OTLP traces endpoint | empty |
 
 ## Local Development
 

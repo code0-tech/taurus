@@ -31,7 +31,10 @@ pub async fn run() {
     let (runtime_status_service, runtime_execution_service, mut runtime_status_heartbeat_task) =
         setup_dynamic_services_if_needed(&config).await;
 
-    let nats_remote = NATSRemoteRuntime::new(client.clone());
+    let nats_remote = NATSRemoteRuntime::with_execution_result_timeout(
+        client.clone(),
+        Duration::from_secs(config.remote_runtime_timeout_secs),
+    );
     let runtime_emitter = NATSRespondEmitter::new(client.clone());
     let mut worker_task = worker::spawn_worker(
         client,

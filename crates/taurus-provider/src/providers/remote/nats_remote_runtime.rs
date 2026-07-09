@@ -11,13 +11,18 @@ use tucana::shared::NodeExecutionResult;
 
 pub struct NATSRemoteRuntime {
     client: Client,
+    execution_result_timeout: Duration,
 }
 
-const REMOTE_EXECUTION_RESULT_TIMEOUT: Duration = Duration::from_secs(30);
-
 impl NATSRemoteRuntime {
-    pub fn new(client: Client) -> Self {
-        NATSRemoteRuntime { client }
+    pub fn with_execution_result_timeout(
+        client: Client,
+        execution_result_timeout: Duration,
+    ) -> Self {
+        NATSRemoteRuntime {
+            client,
+            execution_result_timeout,
+        }
     }
 }
 
@@ -64,7 +69,7 @@ impl RemoteRuntime for NATSRemoteRuntime {
                 "Failed to receive any response messages from a remote runtime.",
             ));
         }
-        match tokio::time::timeout(REMOTE_EXECUTION_RESULT_TIMEOUT, self.client.flush()).await {
+        match tokio::time::timeout(self.execution_result_timeout, self.client.flush()).await {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
                 log::error!(
@@ -90,8 +95,7 @@ impl RemoteRuntime for NATSRemoteRuntime {
             }
         }
 
-        let message = match tokio::time::timeout(REMOTE_EXECUTION_RESULT_TIMEOUT, sub.next()).await
-        {
+        let message = match tokio::time::timeout(self.execution_result_timeout, sub.next()).await {
             Ok(Some(message)) => message,
             Ok(None) => {
                 log::error!("RemoteRuntimeException: NATS reply subscription closed");

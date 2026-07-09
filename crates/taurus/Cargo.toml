@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-code0-flow = { workspace = true, features = ["flow_service"] }
+code0-flow = { workspace = true, features = ["flow_service", "flow_health", "flow_config"] }
 tucana = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }

@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use futures_lite::StreamExt;
 use prost::Message;
 use taurus_core::runtime::engine::{EmitType, ExecutionEngine, ExecutionId, RespondEmitter};
@@ -14,6 +12,7 @@ use tucana::shared::execution_result;
 use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, Value};
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
+use crate::telemetry::metrics;
 
 pub fn spawn_worker(
     client: async_nats::Client,
@@ -21,6 +20,7 @@ pub fn spawn_worker(
     nats_remote: NATSRemoteRuntime,
     runtime_emitter: NATSRespondEmitter,
     mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
+    flow_type: String,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut execution_subscription = match client
@@ -50,6 +50,7 @@ pub fn spawn_worker(
                                 &nats_remote,
                                 &runtime_emitter,
                                 runtime_execution_service.as_mut(),
+                                flow_type.as_str(),
                             ).await;
                         }
                         None => {
@@ -71,6 +72,7 @@ async fn process_execution_message(
     nats_remote: &NATSRemoteRuntime,
     runtime_emitter: &NATSRespondEmitter,
     mut runtime_execution_service: Option<&mut TaurusRuntimeExecutionService>,
+    flow_type: &str,
 ) {
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")
         .unwrap_or_else(|| {
@@ -101,6 +103,7 @@ async fn process_execution_message(
     };
 
     let flow_id = flow.flow_id;
+    let function_identifiers = function_identifiers_by_node_id(&flow);
     // Taurus app forwards all lifecycle events to emitter.
     // Direct request/reply responses remain disabled; delivery is emitter-only.
     let respond_emitter = |execution_id, emit_type: EmitType, value: Value| {
@@ -112,6 +115,8 @@ async fn process_execution_message(
         engine,
         Some(nats_remote),
         Some(&respond_emitter),
+        flow_type,
+        function_identifiers,
     )
     .await;
     log::debug!(
@@ -153,9 +158,12 @@ async fn execute_flow(
     engine: &ExecutionEngine,
     remote: Option<&dyn RemoteRuntime>,
     respond_emitter: Option<&dyn RespondEmitter>,
+    flow_type: &str,
+    function_identifiers: std::collections::HashMap<i64, String>,
 ) -> FlowRunResult {
     let started_at = now_unix_micros();
     let flow_id = flow.flow_id;
+    let project_id = flow.project_id;
     let input = flow.input_value.clone();
     let report = engine
         .execute_flow_with_execution_id_report_async(
@@ -167,6 +175,16 @@ async fn execute_flow(
         )
         .await;
     let finished_at = now_unix_micros();
+    record_flow_metrics(
+        flow_id,
+        project_id,
+        flow_type,
+        started_at,
+        finished_at,
+        &report.signal,
+        &report.node_execution_results,
+        &function_identifiers,
+    );
 
     FlowRunResult {
         execution_id,
@@ -176,6 +194,67 @@ async fn execute_flow(
         input,
         signal: report.signal,
         node_execution_results: report.node_execution_results,
+    }
+}
+
+fn function_identifiers_by_node_id(flow: &ExecutionFlow) -> std::collections::HashMap<i64, String> {
+    flow.node_functions
+        .iter()
+        .filter_map(|function| {
+            function
+                .database_id
+                .map(|id| (id, function.runtime_function_id.clone()))
+        })
+        .collect()
+}
+
+fn record_flow_metrics(
+    flow_id: i64,
+    project_id: i64,
+    flow_type: &str,
+    started_at: i64,
+    finished_at: i64,
+    signal: &Signal,
+    node_execution_results: &[NodeExecutionResult],
+    function_identifiers: &std::collections::HashMap<i64, String>,
+) {
+    metrics::flow_execution(metrics::FlowExecution {
+        flow_id,
+        project_id,
+        flow_type,
+        outcome: signal_outcome(signal),
+        duration_seconds: metrics::duration_seconds(started_at, finished_at),
+    });
+
+    for result in node_execution_results {
+        let node_id = metrics::result_node_id(result);
+        let function_identifier = metrics::result_function_identifier(result)
+            .map(ToOwned::to_owned)
+            .or_else(|| node_id.and_then(|id| function_identifiers.get(&id).cloned()))
+            .unwrap_or_else(|| "unknown".to_string());
+        let (error_code, error_category) = metrics::node_result_error(result);
+
+        metrics::function_execution(metrics::FunctionExecution {
+            flow_id,
+            project_id,
+            flow_type,
+            function_identifier: function_identifier.as_str(),
+            node_id,
+            outcome: metrics::node_result_outcome(result),
+            duration_seconds: metrics::duration_seconds(result.started_at, result.finished_at),
+            error_code,
+            error_category,
+        });
+    }
+}
+
+fn signal_outcome(signal: &Signal) -> &'static str {
+    match signal {
+        Signal::Success(_) => "success",
+        Signal::Failure(_) => "failure",
+        Signal::Return(_) => "return",
+        Signal::Respond(_) => "respond",
+        Signal::Stop => "stop",
     }
 }
 
@@ -327,7 +406,17 @@ mod tests {
         let flow = execution_flow_from_fixture(fixture);
         let engine = ExecutionEngine::new();
 
-        let run_result = execute_flow(execution_id, flow, &engine, None, None).await;
+        let function_identifiers = function_identifiers_by_node_id(&flow);
+        let run_result = execute_flow(
+            execution_id,
+            flow,
+            &engine,
+            None,
+            None,
+            "test",
+            function_identifiers,
+        )
+        .await;
 
         println!(
             "started_at={} finished_at={} delta={}",

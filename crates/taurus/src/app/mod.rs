@@ -1,7 +1,8 @@
 mod worker;
 
+use code0_flow::flow_config::environment::Environment;
 use code0_flow::flow_config::load_env_file;
-use code0_flow::flow_config::mode::Mode::DYNAMIC;
+use code0_flow::flow_config::mode::Mode::{DYNAMIC, STATIC};
 use code0_flow::flow_definition::Reader;
 use code0_flow::flow_service::FlowUpdateService;
 use std::sync::Arc;
@@ -18,12 +19,13 @@ use tucana::shared::module_status::StatusVariant;
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_status::TaurusRuntimeStatusService;
 use crate::config::Config;
+use crate::telemetry::{self, TelemetrySettings};
 
 pub async fn run() {
-    init_logging();
     load_env_file();
 
     let config = Config::new();
+    let telemetry = init_telemetry(&config);
     let engine = ExecutionEngine::new();
     let client = connect_nats(&config).await;
 
@@ -42,6 +44,7 @@ pub async fn run() {
         nats_remote,
         runtime_emitter,
         runtime_execution_service,
+        mode_label(&config).to_string(),
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task).await;
@@ -56,12 +59,36 @@ pub async fn run() {
     update_stopped_status(runtime_status_service.as_ref()).await;
 
     log::info!("Taurus shutdown complete");
+    telemetry.shutdown();
 }
 
-fn init_logging() {
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Debug)
-        .init();
+fn init_telemetry(config: &Config) -> telemetry::Telemetry {
+    telemetry::Telemetry::initialize(
+        &config.opentelemetry,
+        TelemetrySettings {
+            environment: environment_label(&config.environment),
+            default_log_level: "debug",
+            service_version: env!("CARGO_PKG_VERSION"),
+            instrumentation_name: env!("CARGO_PKG_NAME"),
+            initialize_metrics: Some(telemetry::metrics::initialize),
+        },
+    )
+    .unwrap_or_else(|error| panic!("failed to initialize telemetry: {error}"))
+}
+
+fn environment_label(environment: &Environment) -> &'static str {
+    match environment {
+        Environment::Development => "development",
+        Environment::Staging => "staging",
+        Environment::Production => "production",
+    }
+}
+
+fn mode_label(config: &Config) -> &'static str {
+    match config.mode {
+        STATIC => "static",
+        DYNAMIC => "dynamic",
+    }
 }
 
 async fn connect_nats(config: &Config) -> async_nats::Client {

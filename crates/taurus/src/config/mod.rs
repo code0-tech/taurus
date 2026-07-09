@@ -2,6 +2,8 @@ use code0_flow::flow_config::env_with_default;
 use code0_flow::flow_config::environment::Environment;
 use code0_flow::flow_config::mode::Mode;
 
+use crate::telemetry::OpenTelemetry;
+
 /// Struct for all relevant `Taurus` startup configurations
 pub struct Config {
     pub environment: Environment,
@@ -39,6 +41,9 @@ pub struct Config {
 
     /// Timeout in seconds for remote runtime NATS flush and response waits.
     pub remote_runtime_timeout_secs: u64,
+
+    /// OpenTelemetry exporter configuration.
+    pub opentelemetry: OpenTelemetry,
 }
 
 /// Implementation for all relevant `Taurus` startup configurations
@@ -70,6 +75,23 @@ impl Config {
                 10_u64,
             ),
             remote_runtime_timeout_secs: env_with_default("REMOTE_RUNTIME_TIMEOUT_SECS", 30_u64),
+            opentelemetry: OpenTelemetry {
+                enabled: env_with_default("OPENTELEMETRY_ENABLED", false),
+                service_name: env_with_default(
+                    "OPENTELEMETRY_SERVICE_NAME",
+                    env!("CARGO_PKG_NAME").to_string(),
+                ),
+                logs_endpoint: optional_env("OPENTELEMETRY_LOGS_ENDPOINT"),
+                metrics_endpoint: optional_env("OPENTELEMETRY_METRICS_ENDPOINT"),
+                traces_endpoint: optional_env("OPENTELEMETRY_TRACES_ENDPOINT"),
+            },
         }
     }
+}
+
+fn optional_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }

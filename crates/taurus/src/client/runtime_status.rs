@@ -11,6 +11,8 @@ use tucana::{
     shared::{ModuleStatus, module_status::StatusVariant},
 };
 
+use crate::telemetry::errors;
+
 pub struct TaurusRuntimeStatusService {
     channel: Channel,
     identifiers: Vec<String>,
@@ -59,6 +61,12 @@ impl TaurusRuntimeStatusService {
                 }
                 Err(err) => {
                     log::error!("Failed to update RuntimeStatus: {:?}", err);
+                    errors::record(
+                        "transport",
+                        "aquila.runtime_status.update",
+                        &err,
+                        "service=runtime_status",
+                    );
                 }
             }
         }
@@ -71,6 +79,7 @@ fn now_unix_seconds() -> i64 {
         Ok(time) => time.as_secs() as i64,
         Err(err) => {
             log::error!("cannot get current system time: {:?}", err);
+            errors::record("system", "time.now", &err, "clock=system");
             0
         }
     }

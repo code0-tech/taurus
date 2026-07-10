@@ -11,6 +11,8 @@ use tucana::{
     },
 };
 
+use crate::telemetry::errors;
+
 pub struct TaurusRuntimeExecutionService {
     client: ExecutionServiceClient<Channel>,
     aquila_token: String,
@@ -60,6 +62,12 @@ impl TaurusRuntimeExecutionService {
             }
             Err(err) => {
                 log::error!("Failed to update RuntimeExecution: {:?}", err);
+                errors::record(
+                    "transport",
+                    "aquila.execution.update",
+                    &err,
+                    "service=runtime_execution",
+                );
             }
         }
     }

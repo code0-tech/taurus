@@ -19,13 +19,14 @@ use tucana::shared::module_status::StatusVariant;
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_status::TaurusRuntimeStatusService;
 use crate::config::Config;
-use crate::telemetry::{self, TelemetrySettings};
+use crate::telemetry::{self, TelemetrySettings, errors};
 
 pub async fn run() {
     load_env_file();
 
     let config = Config::new();
     let telemetry = init_telemetry(&config);
+    install_panic_logging();
     let engine = ExecutionEngine::new();
     let client = connect_nats(&config).await;
 
@@ -54,6 +55,12 @@ pub async fn run() {
             && !err.is_cancelled()
         {
             log::warn!("Runtime status heartbeat task ended unexpectedly: {}", err);
+            errors::record(
+                "task",
+                "runtime_status_heartbeat.task",
+                &err,
+                "mode=dynamic",
+            );
         }
     }
     update_stopped_status(runtime_status_service.as_ref()).await;
@@ -74,6 +81,31 @@ fn init_telemetry(config: &Config) -> telemetry::Telemetry {
         },
     )
     .unwrap_or_else(|error| panic!("failed to initialize telemetry: {error}"))
+}
+
+fn install_panic_logging() {
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let message = if let Some(message) = panic_info.payload().downcast_ref::<&str>() {
+            *message
+        } else if let Some(message) = panic_info.payload().downcast_ref::<String>() {
+            message.as_str()
+        } else {
+            "<non-string panic payload>"
+        };
+
+        let location = panic_info
+            .location()
+            .map(|location| {
+                format!(
+                    "{}:{}:{}",
+                    location.file(),
+                    location.line(),
+                    location.column()
+                )
+            })
+            .unwrap_or_else(|| "unknown".into());
+        errors::panic(message, &location);
+    }));
 }
 
 fn environment_label(environment: &Environment) -> &'static str {
@@ -98,6 +130,7 @@ async fn connect_nats(config: &Config) -> async_nats::Client {
             client
         }
         Err(err) => {
+            errors::record("transport", "nats.connect", &err, "component=nats");
             panic!("Failed to connect to NATS server: {}", err);
         }
     }
@@ -113,6 +146,12 @@ fn spawn_health_task(config: &Config) -> Option<JoinHandle<()>> {
         Ok(address) => address,
         Err(err) => {
             log::error!("Failed to parse gRPC address: {:?}", err);
+            errors::record(
+                "configuration",
+                "health.address.parse",
+                &err,
+                "service=health",
+            );
             return None;
         }
     };
@@ -125,6 +164,7 @@ fn spawn_health_task(config: &Config) -> Option<JoinHandle<()>> {
             .await
         {
             log::error!("Health server error: {:?}", err);
+            errors::record("server", "health.serve", &err, "service=health");
         } else {
             log::info!("Health server stopped gracefully");
         }
@@ -222,6 +262,12 @@ fn read_module_status_identifiers(definition_path: &str) -> Vec<String> {
             log::error!(
                 "Failed to read module definitions for runtime status: {:?}",
                 err
+            );
+            errors::record_message(
+                "configuration",
+                "definitions.read_modules",
+                format!("{err:?}"),
+                format!("path={definition_path}"),
             );
             Vec::new()
         }

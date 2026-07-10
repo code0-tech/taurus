@@ -12,7 +12,7 @@ use tucana::shared::execution_result;
 use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, Value};
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
-use crate::telemetry::metrics;
+use crate::telemetry::{errors, metrics};
 
 pub fn spawn_worker(
     client: async_nats::Client,
@@ -33,6 +33,12 @@ pub fn spawn_worker(
             }
             Err(err) => {
                 log::error!("Failed to subscribe to 'execution.*': {:?}", err);
+                errors::record(
+                    "transport",
+                    "nats.subscribe",
+                    &err,
+                    "subject=execution.* queue=taurus",
+                );
                 return;
             }
         };
@@ -92,6 +98,16 @@ async fn process_execution_message(
                 "Failed to deserialize flow: {:?}, payload: {:?}",
                 err,
                 &message.payload
+            );
+            errors::record(
+                "serialization",
+                "execution_flow.decode",
+                &err,
+                format!(
+                    "subject={} payload_bytes={}",
+                    message.subject,
+                    message.payload.len()
+                ),
             );
             if let Some(execution_service) = runtime_execution_service.as_mut() {
                 execution_service

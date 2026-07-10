@@ -90,6 +90,11 @@ Taurus configuration is split into shared variables and mode-specific variables.
 | `GRPC_HOST`           | Hostname for the Taurus gRPC server.                                                                         | `127.0.0.1`                     |
 | `GRPC_PORT`           | Port for the Taurus gRPC server.                                                                             | `50051`                          |
 | `WITH_HEALTH_SERVICE` | Enables the gRPC health service when set to `true`.                                                          | `false`                         |
+| `OPENTELEMETRY_ENABLED` | Enables OpenTelemetry logs, traces, and metrics export when an endpoint is configured.                     | `false`                         |
+| `OPENTELEMETRY_SERVICE_NAME` | Service name used for exported telemetry.                                                           | `taurus`                        |
+| `OPENTELEMETRY_LOGS_ENDPOINT` | OTLP logs endpoint. Empty disables log export.                                                     |                                  |
+| `OPENTELEMETRY_METRICS_ENDPOINT` | OTLP metrics endpoint. Empty disables metric export.                                           |                                  |
+| `OPENTELEMETRY_TRACES_ENDPOINT` | OTLP traces endpoint. Empty disables trace export.                                               |                                  |
 
 ### Dynamic Mode
 

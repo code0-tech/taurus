@@ -4,14 +4,14 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-code0-flow = { workspace = true, features = ["flow_service", "flow_health", "flow_config"] }
+code0-flow = { workspace = true, features = ["flow_service", "flow_health", "flow_config", "flow_telemetry"] }
 tucana = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
+opentelemetry = { workspace = true }
 futures-lite ={ workspace = true }
 rand = { workspace = true }
 base64 = { workspace = true }
-env_logger = { workspace = true }
 async-nats = { workspace = true }
 prost = { workspace = true }
 tonic-health = { workspace = true }

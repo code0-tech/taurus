@@ -9,7 +9,7 @@ edition = "2024"
 [workspace.dependencies]
 async-trait = "0.1.89"
 code0-flow = { version = "0.0.40" }
-tucana = { version = "0.0.75" }
+tucana = { version = "0.0.76" }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "signal"] }
 log = "0.4.27"
 opentelemetry = { version = "0.32.0", features = ["metrics"] }

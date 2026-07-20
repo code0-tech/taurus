@@ -10,6 +10,7 @@ use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::number_to_string;
 use base64::Engine;
+use lupus::{DecodeContext, EncodeContext, Engine as ConversionEngine, Format};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::io::Read;
@@ -151,7 +152,7 @@ fn send_request(
         http_auth: Value,
         http_auth_value: Value,
         http_auth_place: Value,
-        _http_schema: Value,
+        http_schema: String,
         payload: Value,
         headers: Value,
     );
@@ -179,22 +180,12 @@ fn send_request(
         return fail("InvalidArgumentRuntimeError", message);
     }
 
-    let request_content_type = content_type_header_value(&headers);
-    let (request_body, default_content_type) =
-        match encode_request_payload(&payload, request_content_type.as_deref()) {
-            Ok(result) => result,
-            Err(message) => return fail("InvalidArgumentRuntimeError", message),
-        };
+    let request_body = match encode_request_payload(&payload, &http_schema) {
+        Ok(result) => result,
+        Err(message) => return fail("InvalidArgumentRuntimeError", message),
+    };
 
-    if let Some(default_content_type) = default_content_type
-        && request_content_type.is_none()
-    {
-        insert_header(
-            &mut headers,
-            "content-type",
-            default_content_type.to_string(),
-        );
-    }
+    insert_header(&mut headers, "content-type", http_schema);
 
     let http_method = match http::Method::from_bytes(http_method.as_bytes()) {
         Ok(value) => value,
@@ -419,16 +410,6 @@ fn value_to_string(value: &Value) -> Result<String, String> {
     }
 }
 
-fn content_type_header_value(headers: &HashMap<String, String>) -> Option<String> {
-    headers.iter().find_map(|(name, value)| {
-        if name.eq_ignore_ascii_case("content-type") {
-            Some(value.clone())
-        } else {
-            None
-        }
-    })
-}
-
 fn normalize_content_type(content_type: &str) -> String {
     content_type
         .split(';')
@@ -438,54 +419,52 @@ fn normalize_content_type(content_type: &str) -> String {
         .to_ascii_lowercase()
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RequestBodyEncoding {
-    Json,
-    Text,
+fn encode_request_payload(payload: &Value, content_type: &str) -> Result<Option<Vec<u8>>, String> {
+    if matches!(payload.kind.as_ref(), Some(Kind::NullValue(_)) | None) {
+        return Ok(None);
+    }
+
+    let format = format_for_content_type(content_type)?;
+    let protobuf = serde_json::to_vec(payload)
+        .map_err(|err| format!("Unable to serialize protobuf request payload: {err}"))?;
+    let engine = ConversionEngine::with_default_codecs();
+    let body = engine
+        .convert(
+            &protobuf,
+            Format::Protobuf,
+            format,
+            &DecodeContext,
+            &EncodeContext::default(),
+        )
+        .map_err(|err| {
+            format!(
+                "Unable to convert request payload to '{}': {err}",
+                content_type
+            )
+        })?;
+    Ok(Some(body))
 }
 
-fn resolve_request_body_encoding(
-    payload: &Value,
-    request_content_type: Option<&str>,
-) -> Result<Option<RequestBodyEncoding>, String> {
-    if let Some(content_type) = request_content_type {
-        let normalized = normalize_content_type(content_type);
-        if content_type_is_json(&normalized) {
-            return Ok(Some(RequestBodyEncoding::Json));
+fn format_for_content_type(content_type: &str) -> Result<Format, String> {
+    let normalized = normalize_content_type(content_type);
+    let format = match normalized.as_str() {
+        "application/json" | "text/json" => Format::Json,
+        value if value.ends_with("+json") => Format::Json,
+        "application/xhtml+xml" => Format::Html,
+        "application/xml" | "text/xml" => Format::Xml,
+        value if value.ends_with("+xml") => Format::Xml,
+        "text/html" => Format::Html,
+        "text/plain" => Format::Text,
+        "text/csv" | "application/csv" => Format::Csv,
+        "application/x-www-form-urlencoded" => Format::HttpForm,
+        _ => {
+            return Err(format!(
+                "Unsupported content-type '{}' for http::request::send",
+                content_type
+            ));
         }
-        return Ok(Some(RequestBodyEncoding::Text));
-    }
-
-    match payload.kind.as_ref() {
-        Some(Kind::NullValue(_)) | None => Ok(None),
-        Some(Kind::StringValue(_)) => Ok(Some(RequestBodyEncoding::Text)),
-        _ => Ok(Some(RequestBodyEncoding::Json)),
-    }
-}
-
-fn encode_request_payload(
-    payload: &Value,
-    request_content_type: Option<&str>,
-) -> Result<(Option<Vec<u8>>, Option<&'static str>), String> {
-    let Some(encoding) = resolve_request_body_encoding(payload, request_content_type)? else {
-        return Ok((None, None));
     };
-
-    match encoding {
-        RequestBodyEncoding::Json => {
-            let json = to_json_value(payload.clone());
-            let body = serde_json::to_vec(&json)
-                .map_err(|err| format!("Unable to serialize request payload: {}", err))?;
-            Ok((Some(body), Some("application/json")))
-        }
-        RequestBodyEncoding::Text => match payload.kind.as_ref() {
-            Some(Kind::NullValue(_)) | None => Ok((None, Some("text/plain"))),
-            Some(Kind::StringValue(body)) => {
-                Ok((Some(body.as_bytes().to_vec()), Some("text/plain")))
-            }
-            _ => Err("Payload must be StringValue when content-type is not JSON".to_string()),
-        },
-    }
+    Ok(format)
 }
 
 fn decode_headers(response: &http::Response<Body>) -> Struct {
@@ -555,88 +534,163 @@ mod tests {
         value.to_string().to_value()
     }
 
-    #[test]
-    fn encode_request_payload_serializes_non_string_values_to_json() {
-        let payload = Value {
-            kind: Some(Kind::StructValue(Struct {
-                fields: HashMap::from([(
-                    "ok".to_string(),
-                    Value {
-                        kind: Some(Kind::BoolValue(true)),
-                    },
-                )]),
-            })),
-        };
-
-        let (body, content_type) = match encode_request_payload(&payload, None) {
-            Ok(result) => result,
-            Err(err) => panic!("unexpected error: {}", err),
-        };
-
-        assert_eq!(content_type, Some("application/json"));
-        let body = body.unwrap_or_default();
-        let text = match String::from_utf8(body) {
-            Ok(text) => text,
-            Err(err) => panic!("payload was not valid utf8: {}", err),
-        };
-        let decoded = serde_json::from_str::<JsonValue>(&text).unwrap_or(JsonValue::Null);
-        let JsonValue::Object(map) = decoded else {
-            panic!("expected encoded payload to be json object");
-        };
-        let Some(JsonValue::Bool(ok)) = map.get("ok") else {
-            panic!("missing ok field in json payload");
-        };
-        assert!(*ok);
-
-        let (empty_body, empty_content_type) = encode_request_payload(
-            &Value {
-                kind: Some(Kind::NullValue(0)),
-            },
-            None,
-        )
-        .unwrap_or((Some(vec![1]), Some("application/json")));
-        assert_eq!(empty_content_type, None);
-        assert!(empty_body.is_none());
+    fn encoded_body(payload: &Value, content_type: &str) -> Vec<u8> {
+        encode_request_payload(payload, content_type)
+            .unwrap_or_else(|err| panic!("unable to encode {content_type} payload: {err}"))
+            .unwrap_or_default()
     }
 
     #[test]
-    fn encode_request_payload_uses_text_for_non_json_content_type() {
-        let (text_body, text_content_type) =
-            encode_request_payload(&string_value("hello"), Some("text/plain; charset=utf-8"))
-                .unwrap_or((None, None));
+    fn encode_request_payload_serializes_every_non_null_value_kind_to_json() {
+        let cases = [
+            (serde_json::json!(true), "true"),
+            (serde_json::json!(42), "42"),
+            (serde_json::json!(1.5), "1.5"),
+            (serde_json::json!("hello"), r#""hello""#),
+            (serde_json::json!(["hello", 42]), r#"["hello",42]"#),
+            (
+                serde_json::json!({"active": true, "name": "Tom"}),
+                r#"{"active":true,"name":"Tom"}"#,
+            ),
+        ];
 
-        assert_eq!(text_content_type, Some("text/plain"));
+        for (input, expected) in cases {
+            let payload = from_json_value(input);
+            assert_eq!(
+                encoded_body(&payload, "application/json"),
+                expected.as_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn encode_request_payload_omits_null_and_missing_values() {
+        for payload in [
+            Value {
+                kind: Some(Kind::NullValue(0)),
+            },
+            Value { kind: None },
+        ] {
+            assert_eq!(
+                encode_request_payload(&payload, "application/json").unwrap_or(Some(vec![1])),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn encode_request_payload_does_not_detect_formats_inside_strings() {
+        let text_body = encode_request_payload(&string_value("hello"), "text/plain; charset=utf-8")
+            .unwrap_or(None);
+
         let body = text_body.unwrap_or_default();
         assert_eq!(body, b"hello");
 
-        let (xml_body, xml_content_type) =
-            encode_request_payload(&string_value("<ok />"), Some("application/xml"))
-                .unwrap_or((None, None));
-        assert_eq!(xml_content_type, Some("text/plain"));
-        assert_eq!(xml_body.unwrap_or_default(), b"<ok />");
+        let json_body =
+            encode_request_payload(&string_value(r#"{"user":"tom"}"#), "application/json")
+                .unwrap_or(None);
+        assert_eq!(json_body.unwrap_or_default(), br#""{\"user\":\"tom\"}""#);
 
-        let (empty_body, empty_content_type) = encode_request_payload(
-            &Value {
-                kind: Some(Kind::NullValue(0)),
-            },
-            Some("application/octet-stream"),
-        )
-        .unwrap_or((Some(vec![1]), None));
-        assert_eq!(empty_content_type, Some("text/plain"));
-        assert!(empty_body.is_none());
+        let xml_body =
+            encode_request_payload(&string_value("<ok />"), "application/xml").unwrap_or(None);
+        assert_eq!(xml_body.unwrap_or_default(), b"<data>&lt;ok /&gt;</data>");
+    }
 
-        let err = encode_request_payload(
-            &Value {
-                kind: Some(Kind::StructValue(Struct {
-                    fields: HashMap::from([("a".to_string(), 1i64.to_value())]),
-                })),
-            },
-            Some("text/plain"),
+    #[test]
+    fn encode_request_payload_supports_every_http_target_format() {
+        let object = from_json_value(serde_json::json!({
+            "user": {
+                "name": "Tom"
+            }
+        }));
+        assert_eq!(
+            encoded_body(&object, "application/json"),
+            br#"{"user":{"name":"Tom"}}"#
         );
+        assert_eq!(
+            encoded_body(&object, "application/xml"),
+            b"<user><name>Tom</name></user>"
+        );
+        assert_eq!(
+            encoded_body(&object, "text/html"),
+            b"<user><name>Tom</name></user>"
+        );
+        assert_eq!(
+            encoded_body(&string_value("hello world"), "text/plain"),
+            b"hello world"
+        );
+
+        let rows = from_json_value(serde_json::json!([
+            {"name": "Tom", "role": "admin"},
+            {"name": "Ada", "role": "user"}
+        ]));
+        assert_eq!(
+            encoded_body(&rows, "text/csv"),
+            b"name,role\nTom,admin\nAda,user\n"
+        );
+
+        let form = from_json_value(serde_json::json!({
+            "email": "tom@example.com",
+            "name": "Tom Doe"
+        }));
+        assert_eq!(
+            encoded_body(&form, "application/x-www-form-urlencoded"),
+            b"email=tom%40example.com&name=Tom+Doe"
+        );
+    }
+
+    #[test]
+    fn format_for_content_type_supports_parameters_and_standard_aliases() {
+        let cases = [
+            ("application/json; charset=utf-8", Format::Json),
+            ("text/json", Format::Json),
+            ("application/problem+json", Format::Json),
+            ("application/xml; charset=utf-8", Format::Xml),
+            ("text/xml", Format::Xml),
+            ("application/atom+xml", Format::Xml),
+            ("text/html", Format::Html),
+            ("application/xhtml+xml", Format::Html),
+            ("text/plain; charset=utf-8", Format::Text),
+            ("text/csv", Format::Csv),
+            ("application/csv", Format::Csv),
+            ("application/x-www-form-urlencoded", Format::HttpForm),
+        ];
+
+        for (content_type, expected) in cases {
+            assert_eq!(
+                format_for_content_type(content_type),
+                Ok(expected),
+                "unexpected mapping for {content_type}"
+            );
+        }
+    }
+
+    #[test]
+    fn encode_request_payload_rejects_unsupported_content_types() {
+        let err = encode_request_payload(&string_value("hello"), "application/octet-stream");
         let Err(err) = err else {
-            panic!("expected text/plain payload validation error");
+            panic!("expected unsupported content-type error");
         };
-        assert!(err.contains("Payload must be StringValue"));
+        assert!(err.contains("Unsupported content-type"));
+    }
+
+    #[test]
+    fn encode_request_payload_propagates_information_loss_errors() {
+        let invalid_csv = from_json_value(serde_json::json!({
+            "name": "Tom"
+        }));
+        let csv_error = encode_request_payload(&invalid_csv, "text/csv")
+            .expect_err("object should not encode as CSV rows");
+        assert!(csv_error.contains("conversion would lose information"));
+        assert!(csv_error.contains("top-level array"));
+
+        let invalid_form = from_json_value(serde_json::json!({
+            "active": true
+        }));
+        let form_error = encode_request_payload(&invalid_form, "application/x-www-form-urlencoded")
+            .expect_err("typed form value should not be coerced to a string");
+        assert!(form_error.contains("conversion would lose information"));
+        assert!(form_error.contains("form fields must be strings"));
     }
 
     #[test]
@@ -864,7 +918,10 @@ mod tests {
             })),
         };
         let request_headers = Struct {
-            fields: HashMap::from([("x-bool".to_string(), true.to_value())]),
+            fields: HashMap::from([
+                ("x-bool".to_string(), true.to_value()),
+                ("Content-Type".to_string(), string_value("text/plain")),
+            ]),
         };
         let args = vec![
             Argument::Eval(string_value("POST")),

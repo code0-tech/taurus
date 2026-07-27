@@ -130,6 +130,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-nats"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d83a251fa1a4c9d0fe6e816b7acd60549e473e08d14f27a1d992c2675abff05f"
+dependencies = [
+ "base64",
+ "bytes",
+ "futures-util",
+ "memchr",
+ "nkeys",
+ "nuid",
+ "pin-project",
+ "portable-atomic",
+ "rand 0.10.2",
+ "regex",
+ "ring",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "serde",
+ "serde_json",
+ "serde_nanos",
+ "serde_repr",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-util",
+ "tokio-websockets",
+ "tracing",
+ "tryhard",
+ "url",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -386,7 +422,7 @@ version = "0.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6bac81931da426429ac4ca93b80ff246900d64e8190ec2c4e0382ff35157857"
 dependencies = [
- "async-nats",
+ "async-nats 0.49.1",
  "dotenv",
  "futures-core",
  "log",
@@ -1400,7 +1436,7 @@ dependencies = [
 name = "manual"
 version = "0.1.0"
 dependencies = [
- "async-nats",
+ "async-nats 0.50.0",
  "clap",
  "env_logger",
  "log",
@@ -2590,7 +2626,7 @@ dependencies = [
 name = "taurus"
 version = "0.1.0"
 dependencies = [
- "async-nats",
+ "async-nats 0.50.0",
  "base64",
  "code0-flow",
  "futures-lite",
@@ -2628,7 +2664,7 @@ dependencies = [
 name = "taurus-provider"
 version = "0.1.0"
 dependencies = [
- "async-nats",
+ "async-nats 0.50.0",
  "base64",
  "code0-flow",
  "env_logger",

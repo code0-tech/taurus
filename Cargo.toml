@@ -16,7 +16,7 @@ opentelemetry = { version = "0.32.0", features = ["metrics"] }
 lupus = "0.0.2"
 futures-lite = "2.6.0"
 rand = "0.10.0"
-base64 = "0.22.1"
+base64 = "0.23.0"
 env_logger = "0.11.8"
 async-nats = "0.50.0"
 prost = "0.14.1"

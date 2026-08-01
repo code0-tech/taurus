@@ -27,4 +27,4 @@ jobs:
         env:
           NATS_URL: nats://127.0.0.1:4222
       - name: Run tests package flow suite
-        run: cargo run --package tests
+        run: cargo run --package taurus-tests

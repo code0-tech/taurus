@@ -1,5 +1,5 @@
 [package]
-name = "manual"
+name = "taurus-manual"
 version.workspace = true
 edition.workspace = true
 
@@ -10,7 +10,6 @@ taurus-provider = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 serde_json = { workspace = true }
-serde = { workspace = true }
 prost = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }

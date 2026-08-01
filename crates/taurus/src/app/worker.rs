@@ -1,5 +1,16 @@
+//! The NATS-driven flow execution loop: subscribes to `execution.*`, decodes
+//! each message into an `ExecutionFlow`, runs it through
+//! `taurus_core::runtime::engine::ExecutionEngine`, and (in dynamic mode)
+//! reports the result back to Aquila via [`TaurusRuntimeExecutionService`].
+//!
+//! [`spawn_worker`] owns the `NATSRespondEmitter` for the lifetime of the
+//! task; it is only drained (via `NATSRespondEmitter::shutdown`) once the
+//! loop exits, so callers must signal shutdown cooperatively (see
+//! [`crate::app::wait_for_shutdown`]) rather than aborting this task.
+
 use futures_lite::StreamExt;
 use prost::Message;
+use std::sync::Arc;
 use taurus_core::runtime::engine::{EmitType, ExecutionEngine, ExecutionId, RespondEmitter};
 use taurus_core::runtime::remote::RemoteRuntime;
 use taurus_core::time::now_unix_micros;
@@ -7,6 +18,7 @@ use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tucana::shared::execution_result;
 use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, Value};
@@ -21,6 +33,7 @@ pub fn spawn_worker(
     runtime_emitter: NATSRespondEmitter,
     mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     flow_type: String,
+    shutdown: Arc<Notify>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut execution_subscription = match client
@@ -39,6 +52,7 @@ pub fn spawn_worker(
                     &err,
                     "subject=execution.* queue=taurus",
                 );
+                runtime_emitter.shutdown().await;
                 return;
             }
         };
@@ -65,10 +79,15 @@ pub fn spawn_worker(
                         }
                     }
                 }
+                _ = shutdown.notified() => {
+                    execution_closed = true;
+                    log::info!("NATS worker received shutdown signal");
+                }
             }
         }
 
         log::info!("NATS worker loop ended");
+        runtime_emitter.shutdown().await;
     })
 }
 

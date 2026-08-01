@@ -1,20 +1,27 @@
 {
-	"name": "11_function_subflow",
-	"description": "This flow validates sub_flow execution by function identifier with settings and defaults",
+	"name": "13_remote_function_subflow",
+	"description": "This flow validates that a non-local function-backed sub_flow is dispatched to the remote runtime with its callback input",
 	"inputs": [
 		{
 			"input": null,
 			"expected_result": [
-				3,
-				4
+				1,
+				2
 			]
 		}
 	],
+	"remote": {
+		"targetService": "example",
+		"functionIdentifier": "remote::identity",
+		"resultParameter": "value"
+	},
 	"flow": {
+		"flowId": "13",
+		"projectId": "1",
 		"startingNodeId": "1",
 		"nodeFunctions": [
 			{
-				"definition_source": "taurus",
+				"definitionSource": "taurus",
 				"databaseId": "1",
 				"runtimeFunctionId": "std::list::map",
 				"parameters": [
@@ -44,27 +51,18 @@
 						"databaseId": "101",
 						"runtimeParameterId": "transform",
 						"value": {
-							"sub_flow": {
-								"signature": "",
+							"subFlow": {
+								"signature": "(value: NUMBER): NUMBER",
 								"settings": [
 									{
-										"identifier": "lhs",
+										"identifier": "value",
 										"optional": false,
 										"hidden": false
-									},
-									{
-										"identifier": "rhs",
-										"defaultValue": {
-											"numberValue": {
-												"integer": "2"
-											}
-										},
-										"optional": false,
-										"hidden": true
 									}
 								],
 								"function": {
-									"functionIdentifier": "std::number::add"
+									"functionIdentifier": "remote::identity",
+									"definitionSource": "action.example"
 								}
 							}
 						}

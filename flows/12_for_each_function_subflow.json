@@ -111,7 +111,9 @@
 										"hidden": false
 									}
 								],
-								"functionIdentifier": "std::boolean::from_number"
+								"function": {
+									"functionIdentifier": "std::boolean::from_number"
+								}
 							}
 						}
 					}

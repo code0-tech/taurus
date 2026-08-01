@@ -1,3 +1,7 @@
+//! Streams execution lifecycle events (`starting`/`ongoing`/`finished`/`failed`)
+//! to `<topic_prefix>.<execution_id>` on NATS. See [`NATSRespondEmitter`] for
+//! why publishing happens on a background task rather than inline in `emit`.
+
 use async_nats::Client;
 use prost::Message;
 use std::collections::HashMap;
@@ -8,6 +12,11 @@ use tucana::shared::{Struct, Value};
 
 const DEFAULT_TOPIC_PREFIX: &str = "runtime.emitter";
 
+/// Keeps the synchronous `RespondEmitter::emit` API on the hot execution
+/// path non-blocking by handing events to a background task over an
+/// unbounded channel; that task does the actual NATS publish. Call
+/// [`NATSRespondEmitter::shutdown`] to drain queued events before dropping
+/// this, since an aborted owner leaves them unpublished.
 pub struct NATSRespondEmitter {
     tx: mpsc::UnboundedSender<NATSEmitMessage>,
     worker_task: tokio::task::JoinHandle<()>,

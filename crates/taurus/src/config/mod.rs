@@ -1,3 +1,7 @@
+//! Process-wide [`Config`], loaded once from environment variables (with an
+//! optional `.env` file) at startup and read by every other module that
+//! needs a URL, timeout, or mode flag.
+
 use code0_flow::flow_config::env_with_default;
 use code0_flow::flow_config::environment::Environment;
 use code0_flow::flow_config::mode::Mode;

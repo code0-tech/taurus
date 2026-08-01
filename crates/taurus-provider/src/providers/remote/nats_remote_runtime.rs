@@ -1,3 +1,8 @@
+//! Delegates remote node execution to another service over NATS request/reply:
+//! publishes an `ActionExecutionRequest` on `action.<target_service>.<execution_id>`
+//! with a fresh reply inbox, then waits (bounded by `execution_result_timeout`)
+//! for the matching `ActionExecutionResponse`.
+
 use std::time::Duration;
 
 use async_nats::Client;

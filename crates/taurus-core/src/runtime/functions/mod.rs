@@ -7,6 +7,8 @@ use crate::handler::registry::FunctionRegistration;
 mod array;
 mod boolean;
 mod control;
+mod date;
+mod file;
 mod http;
 mod number;
 mod object;
@@ -20,4 +22,6 @@ pub const ALL_FUNCTION_SETS: &[&[FunctionRegistration]] = &[
     object::FUNCTIONS,
     control::FUNCTIONS,
     http::FUNCTIONS,
+    date::FUNCTIONS,
+    file::FUNCTIONS,
 ];

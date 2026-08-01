@@ -200,13 +200,16 @@ async fn execute_flow(
     let flow_id = flow.flow_id;
     let project_id = flow.project_id;
     let input = flow.input_value.clone();
+    // Trace V2 collection is O(n^2) in executed nodes (see taurus-core's
+    // ValueStore::trace_snapshot) and nothing here consumes the trace_run
+    // engine.rs prints when with_trace is true; leave it off in production.
     let report = engine
         .execute_flow_with_execution_id_report_async(
             execution_id,
             flow,
             remote,
             respond_emitter,
-            true,
+            false,
         )
         .await;
     let finished_at = now_unix_micros();

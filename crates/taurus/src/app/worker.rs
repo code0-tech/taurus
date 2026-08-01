@@ -3,10 +3,21 @@
 //! `taurus_core::runtime::engine::ExecutionEngine`, and (in dynamic mode)
 //! reports the result back to Aquila via [`TaurusRuntimeExecutionService`].
 //!
-//! [`spawn_worker`] owns the `NATSRespondEmitter` for the lifetime of the
-//! task; it is only drained (via `NATSRespondEmitter::shutdown`) once the
-//! loop exits, so callers must signal shutdown cooperatively (see
-//! [`crate::app::wait_for_shutdown`]) rather than aborting this task.
+//! Flows execute concurrently: [`spawn_worker`]'s loop only decodes and
+//! dispatches messages, spawning one task per execution rather than
+//! awaiting each one inline, so a slow flow doesn't stall unrelated ones.
+//! Concurrency is bounded by a semaphore (`Config::max_concurrent_executions`)
+//! so a burst of NATS messages can't spawn unbounded in-flight executions.
+//! Once a message is dequeued from NATS we always run it to completion
+//! (waiting for a permit if needed) rather than dropping it on shutdown,
+//! since core NATS has no redelivery for an already-claimed message.
+//!
+//! [`spawn_worker`] owns the `NATSRespondEmitter` (shared with per-message
+//! tasks via `Arc`) for the lifetime of the task; it is only drained (via
+//! `NATSRespondEmitter::shutdown`) once every in-flight execution has
+//! finished and the loop exits, so callers must signal shutdown
+//! cooperatively (see [`crate::app::wait_for_shutdown`]) rather than
+//! aborting this task.
 
 use futures_lite::StreamExt;
 use prost::Message;
@@ -18,8 +29,8 @@ use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
-use tokio::sync::Notify;
-use tokio::task::JoinHandle;
+use tokio::sync::{Notify, Semaphore};
+use tokio::task::{JoinHandle, JoinSet};
 use tucana::shared::execution_result;
 use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, Value};
 
@@ -31,10 +42,15 @@ pub fn spawn_worker(
     engine: ExecutionEngine,
     nats_remote: NATSRemoteRuntime,
     runtime_emitter: NATSRespondEmitter,
-    mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
+    runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     flow_type: String,
     shutdown: Arc<Notify>,
+    max_concurrent_executions: usize,
 ) -> JoinHandle<()> {
+    let engine = Arc::new(engine);
+    let runtime_emitter = Arc::new(runtime_emitter);
+    let semaphore = Arc::new(Semaphore::new(max_concurrent_executions.max(1)));
+
     tokio::spawn(async move {
         let mut execution_subscription = match client
             .queue_subscribe(String::from("execution.*"), "taurus".into())
@@ -52,26 +68,39 @@ pub fn spawn_worker(
                     &err,
                     "subject=execution.* queue=taurus",
                 );
-                runtime_emitter.shutdown().await;
+                shutdown_emitter(runtime_emitter).await;
                 return;
             }
         };
 
         let mut execution_closed = false;
+        let mut in_flight = JoinSet::new();
 
         while !execution_closed {
             tokio::select! {
                 message = execution_subscription.next(), if !execution_closed => {
                     match message {
                         Some(message) => {
-                            process_execution_message(
-                                message,
-                                &engine,
-                                &nats_remote,
-                                &runtime_emitter,
-                                runtime_execution_service.as_mut(),
-                                flow_type.as_str(),
-                            ).await;
+                            let Ok(permit) = semaphore.clone().acquire_owned().await else {
+                                // Semaphore is never explicitly closed; unreachable in practice.
+                                continue;
+                            };
+                            let engine = engine.clone();
+                            let nats_remote = nats_remote.clone();
+                            let runtime_emitter = runtime_emitter.clone();
+                            let runtime_execution_service = runtime_execution_service.clone();
+                            let flow_type = flow_type.clone();
+                            in_flight.spawn(async move {
+                                let _permit = permit;
+                                process_execution_message(
+                                    message,
+                                    &engine,
+                                    &nats_remote,
+                                    &runtime_emitter,
+                                    runtime_execution_service,
+                                    flow_type.as_str(),
+                                ).await;
+                            });
                         }
                         None => {
                             execution_closed = true;
@@ -86,9 +115,27 @@ pub fn spawn_worker(
             }
         }
 
-        log::info!("NATS worker loop ended");
-        runtime_emitter.shutdown().await;
+        log::info!(
+            "NATS worker loop ended, draining {} in-flight execution(s)",
+            in_flight.len()
+        );
+        while in_flight.join_next().await.is_some() {}
+
+        shutdown_emitter(runtime_emitter).await;
     })
+}
+
+/// Drains the emitter's publish queue. Only ever called once every
+/// in-flight execution (each holding its own `Arc` clone) has finished, so
+/// this is always the sole remaining owner in practice; falls back to
+/// leaving queued events unpublished (logged) rather than panicking if not.
+async fn shutdown_emitter(runtime_emitter: Arc<NATSRespondEmitter>) {
+    match Arc::try_unwrap(runtime_emitter) {
+        Ok(emitter) => emitter.shutdown().await,
+        Err(_) => log::warn!(
+            "NATS emitter still has outstanding references at shutdown; skipping graceful drain"
+        ),
+    }
 }
 
 async fn process_execution_message(
@@ -96,7 +143,7 @@ async fn process_execution_message(
     engine: &ExecutionEngine,
     nats_remote: &NATSRemoteRuntime,
     runtime_emitter: &NATSRespondEmitter,
-    mut runtime_execution_service: Option<&mut TaurusRuntimeExecutionService>,
+    mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     flow_type: &str,
 ) {
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")

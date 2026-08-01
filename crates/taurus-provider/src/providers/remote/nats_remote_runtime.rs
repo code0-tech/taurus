@@ -14,6 +14,9 @@ use tonic::async_trait;
 use tucana::aquila::ActionExecutionResponse;
 use tucana::shared::NodeExecutionResult;
 
+// `Client` is a cheap Arc-backed handle, so this is cheap to clone per
+// concurrently-executing flow.
+#[derive(Clone)]
 pub struct NATSRemoteRuntime {
     client: Client,
     execution_result_timeout: Duration,

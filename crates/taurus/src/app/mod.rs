@@ -59,6 +59,7 @@ pub async fn run() {
         runtime_execution_service,
         mode_label(&config).to_string(),
         worker_shutdown.clone(),
+        config.max_concurrent_executions,
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task, &worker_shutdown).await;

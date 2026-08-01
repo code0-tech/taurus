@@ -17,6 +17,11 @@ use tucana::{
 
 use crate::telemetry::errors;
 
+// tonic clients over `Channel` are cheap to clone (the channel itself is a
+// multiplexed, Arc-backed HTTP/2 connection); cloning per concurrently
+// executing flow is the intended usage pattern rather than sharing one
+// client behind a lock.
+#[derive(Clone)]
 pub struct TaurusRuntimeExecutionService {
     client: ExecutionServiceClient<Channel>,
     aquila_token: String,

@@ -46,6 +46,15 @@ pub struct Config {
     /// Timeout in seconds for remote runtime NATS flush and response waits.
     pub remote_runtime_timeout_secs: u64,
 
+    /// Maximum number of flow executions the worker runs concurrently.
+    /// Bounds memory/connection use under a burst of NATS messages; the
+    /// worker keeps pulling from the subscription but stops spawning new
+    /// executions once this many are in flight. Defaults to 4x the
+    /// available CPU parallelism (flows spend much of their time waiting
+    /// on remote calls, not on CPU, so oversubscribing cores is reasonable
+    /// as a starting point -- tune via env for your actual workload).
+    pub max_concurrent_executions: usize,
+
     /// OpenTelemetry exporter configuration.
     pub opentelemetry: OpenTelemetry,
 }
@@ -79,6 +88,10 @@ impl Config {
                 10_u64,
             ),
             remote_runtime_timeout_secs: env_with_default("REMOTE_RUNTIME_TIMEOUT_SECS", 30_u64),
+            max_concurrent_executions: env_with_default(
+                "MAX_CONCURRENT_EXECUTIONS",
+                default_max_concurrent_executions(),
+            ),
             opentelemetry: OpenTelemetry {
                 enabled: env_with_default("OPENTELEMETRY_ENABLED", false),
                 service_name: env_with_default(
@@ -91,6 +104,13 @@ impl Config {
             },
         }
     }
+}
+
+fn default_max_concurrent_executions() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .saturating_mul(4)
 }
 
 fn optional_env(key: &str) -> Option<String> {

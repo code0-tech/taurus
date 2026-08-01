@@ -11,7 +11,6 @@ pub(crate) mod model;
 use futures_lite::future::block_on;
 use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
 
-pub use crate::handler::registry::FunctionRegistration;
 use crate::handler::registry::FunctionStore;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::runtime::remote::RemoteRuntime;
@@ -51,20 +50,6 @@ impl ExecutionEngine {
         Self {
             handlers: FunctionStore::default(),
         }
-    }
-
-    /// Build a new execution engine, replacing specific handler ids with
-    /// the given registrations after the default registry is populated.
-    ///
-    /// For callers that need a stock handler's *behavior* adapted to their
-    /// environment (e.g. a Tokio-aware host offloading a blocking handler
-    /// via `spawn_blocking`/`block_in_place`) without taurus-core itself
-    /// depending on that environment. Registrations not naming an existing
-    /// id add a new handler instead of replacing one.
-    pub fn with_overrides(overrides: &[FunctionRegistration]) -> Self {
-        let mut handlers = FunctionStore::default();
-        handlers.populate(overrides);
-        Self { handlers }
     }
 
     /// Execute an `ExecutionFlow` and return the final signal plus per-node execution results.

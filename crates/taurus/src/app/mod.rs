@@ -36,7 +36,7 @@ pub async fn run() {
     let config = Config::new();
     let telemetry = init_telemetry(&config);
     install_panic_logging();
-    let engine = ExecutionEngine::with_overrides(&crate::handler_overrides::all());
+    let engine = ExecutionEngine::new();
     let client = connect_nats(&config).await;
 
     let mut health_task = spawn_health_task(&config);

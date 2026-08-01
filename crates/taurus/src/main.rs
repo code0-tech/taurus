@@ -10,7 +10,6 @@
 mod app;
 mod client;
 mod config;
-mod handler_overrides;
 mod telemetry;
 
 fn main() {

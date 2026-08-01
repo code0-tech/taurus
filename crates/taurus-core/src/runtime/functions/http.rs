@@ -29,6 +29,19 @@ fn fail(category: &str, message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new("T-STD-00001", category, message))
 }
 
+/// Runs a blocking call via `block_in_place` when inside a Tokio
+/// multi-thread runtime, so it doesn't stall a shared async worker thread;
+/// calls it directly otherwise (`taurus-tests`/`taurus-manual --offline`
+/// run the engine with no Tokio runtime at all, where `block_in_place`
+/// would panic).
+fn run_blocking<R>(f: impl FnOnce() -> R) -> R {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::task::block_in_place(f)
+    } else {
+        f()
+    }
+}
+
 fn respond(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -141,16 +154,13 @@ fn headers_from_value(value: &Value) -> Result<Struct, Signal> {
     }
 }
 
-/// The `http::request::send` handler. Performs a fully synchronous,
-/// blocking request via `ureq` -- correct as-is for non-Tokio callers
-/// (`taurus-tests`, `taurus-manual --offline`), but a Tokio-hosted runtime
-/// should register a wrapper around this (e.g. via
-/// `tokio::task::block_in_place`) through
-/// `ExecutionEngine::with_overrides` instead of using it directly, so a
-/// blocking call doesn't stall a shared async worker thread. Exported so
-/// such a wrapper can call into the real implementation rather than
-/// duplicating it.
-pub fn send_request(
+/// The `http::request::send` handler. The actual request is a
+/// synchronous, blocking `ureq` call; when running inside a Tokio
+/// multi-thread runtime (true for the `taurus` service, false for
+/// `taurus-tests` and `taurus-manual --offline`, which call the engine
+/// with no runtime at all) it runs via `block_in_place` so it doesn't
+/// stall a shared async worker thread for its duration.
+fn send_request(
     args: &[Argument],
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -222,12 +232,14 @@ pub fn send_request(
                     );
                 }
             };
-            request
-                .with_default_agent()
-                .configure()
-                .http_status_as_error(false)
-                .allow_non_standard_methods(true)
-                .run()
+            run_blocking(|| {
+                request
+                    .with_default_agent()
+                    .configure()
+                    .http_status_as_error(false)
+                    .allow_non_standard_methods(true)
+                    .run()
+            })
         }
         None => {
             let request = match request_builder.body(()) {
@@ -239,12 +251,14 @@ pub fn send_request(
                     );
                 }
             };
-            request
-                .with_default_agent()
-                .configure()
-                .http_status_as_error(false)
-                .allow_non_standard_methods(true)
-                .run()
+            run_blocking(|| {
+                request
+                    .with_default_agent()
+                    .configure()
+                    .http_status_as_error(false)
+                    .allow_non_standard_methods(true)
+                    .run()
+            })
         }
     };
 

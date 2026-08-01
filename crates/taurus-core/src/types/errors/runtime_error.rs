@@ -16,6 +16,7 @@ use tucana::shared::{
 };
 
 use crate::time::now_unix_micros;
+use crate::version::runtime_version;
 
 /// Runtime execution failure representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -48,7 +49,7 @@ impl RuntimeError {
             category: category.into(),
             message: message.into(),
             timestamp_unix_micros: now_unix_micros() as u64,
-            version: env!("CARGO_PKG_VERSION").to_string(),
+            version: runtime_version().to_string(),
             dependencies: HashMap::new(),
             details: HashMap::new(),
         }

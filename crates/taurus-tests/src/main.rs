@@ -1,8 +1,10 @@
-use std::path::Path;
+//! Batch fixture runner: loads every `ValidationFlow` fixture under `./flows/`
+//! (see `taurus_core::fixtures`), runs each through `ExecutionEngine::execute_graph`
+//! directly (no NATS involved), and logs a pass/fail line per case. Not wired
+//! into `cargo test`; run explicitly via `cargo run --package taurus-tests`.
 
-use log::{error, info};
-use serde::Deserialize;
 use serde_json::json;
+use taurus_core::fixtures::{Case, Cases, Input, RemoteFixture, print_failure, print_success};
 use taurus_core::runtime::engine::ExecutionEngine;
 use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
@@ -10,33 +12,9 @@ use tucana::shared::node_execution_result::{
     Id as NodeExecutionResultId, Result as NodeExecutionOutcome,
 };
 use tucana::shared::{
-    NodeExecutionResult, ValidationFlow,
+    NodeExecutionResult,
     helper::value::{from_json_value, to_json_value},
 };
-
-#[derive(Clone, Deserialize)]
-pub struct Input {
-    pub input: Option<serde_json::Value>,
-    pub expected_result: serde_json::Value,
-}
-
-#[derive(Clone, Deserialize)]
-pub struct Case {
-    pub name: String,
-    pub description: String,
-    pub inputs: Vec<Input>,
-    pub flow: ValidationFlow,
-    #[serde(default)]
-    pub remote: Option<RemoteFixture>,
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoteFixture {
-    pub target_service: String,
-    pub function_identifier: String,
-    pub result_parameter: String,
-}
 
 struct FixtureRemoteRuntime {
     fixture: RemoteFixture,
@@ -105,85 +83,6 @@ pub enum CaseResult {
 
 pub trait Testable {
     fn run(&self) -> CaseResult;
-}
-
-#[derive(Clone, Deserialize)]
-pub struct Cases {
-    pub cases: Vec<Case>,
-}
-
-pub fn print_success(case: &Case) {
-    info!("test {} ... ok", case.name);
-}
-
-pub fn print_failure(case: &Case, input: &Input, result: serde_json::Value) {
-    error!("test {} ... FAILED", case.name);
-    error!("  input: {:?}", input.input);
-    error!("  expected: {:?}", input.expected_result);
-    error!("  real_value: {:?}", result);
-    error!("  message: {}", case.description);
-}
-
-fn get_test_case<P: AsRef<Path> + std::fmt::Debug>(path: P) -> Option<Case> {
-    let content = match std::fs::read_to_string(&path) {
-        Ok(it) => it,
-        Err(err) => {
-            log::error!("Cannot read file ({:?}): {:?}", path, err);
-            return None;
-        }
-    };
-
-    match serde_json::from_str(&content) {
-        Ok(it) => it,
-        Err(err) => {
-            log::error!("Cannot read json ({:?}): {:?}", path, err);
-            None
-        }
-    }
-}
-
-fn get_test_cases(path: &str) -> Cases {
-    let mut items = Vec::new();
-    let dir = match std::fs::read_dir(path) {
-        Ok(d) => d,
-        Err(err) => {
-            panic!("Cannot open path: {:?}", err)
-        }
-    };
-
-    for entry in dir {
-        let entry = match entry {
-            Ok(it) => it,
-            Err(err) => {
-                log::error!("Cannot read entry: {:?}", err);
-                continue;
-            }
-        };
-        let file_path = entry.path();
-        items.push(match get_test_case(&file_path) {
-            Some(it) => it,
-            None => {
-                continue;
-            }
-        });
-    }
-
-    Cases { cases: items }
-}
-
-impl Case {
-    pub fn from_path(path: &str) -> Self {
-        match get_test_case(path) {
-            Some(s) => s,
-            None => panic!("flow was not found"),
-        }
-    }
-}
-
-impl Cases {
-    pub fn from_path(path: &str) -> Self {
-        get_test_cases(path)
-    }
 }
 
 fn run_tests(cases: Cases) {

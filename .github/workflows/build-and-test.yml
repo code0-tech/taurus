@@ -21,10 +21,10 @@ jobs:
         env:
           RUST_BACKTRACE: 'full'
       - name: Run workspace tests
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --exclude taurus-bench
       - name: Run NATS test execution request tests
         run: cargo test -p taurus test_execution_request -- --ignored --nocapture
         env:
           NATS_URL: nats://127.0.0.1:4222
       - name: Run tests package flow suite
-        run: cargo run --package tests
+        run: cargo run --package taurus-tests

@@ -1,3 +1,7 @@
+//! gRPC client that reports Taurus's own running/stopped status (and periodic
+//! heartbeats) to Aquila. Aquila uses this to know which registered modules
+//! currently have a live runtime backing them.
+
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use code0_flow::flow_service::{

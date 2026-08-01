@@ -1,3 +1,8 @@
+//! Delegates remote node execution to another service over NATS request/reply:
+//! publishes an `ActionExecutionRequest` on `action.<target_service>.<execution_id>`
+//! with a fresh reply inbox, then waits (bounded by `execution_result_timeout`)
+//! for the matching `ActionExecutionResponse`.
+
 use std::time::Duration;
 
 use async_nats::Client;
@@ -9,6 +14,9 @@ use tonic::async_trait;
 use tucana::aquila::ActionExecutionResponse;
 use tucana::shared::NodeExecutionResult;
 
+// `Client` is a cheap Arc-backed handle, so this is cheap to clone per
+// concurrently-executing flow.
+#[derive(Clone)]
 pub struct NATSRemoteRuntime {
     client: Client,
     execution_result_timeout: Duration,

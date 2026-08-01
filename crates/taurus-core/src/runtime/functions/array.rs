@@ -107,7 +107,7 @@ fn run_with_unary_input(
     thunk_node: &crate::handler::argument::Thunk,
 ) -> Signal {
     ctx.insert_input_type(input_type, item.clone());
-    ctx.push_runtime_trace_label(format!("iter={} value={}", iter_index, preview_value(item)));
+    ctx.push_runtime_trace_label(|| format!("iter={} value={}", iter_index, preview_value(item)));
     let signal = run(thunk_node, ctx);
     ctx.clear_input_type(input_type);
     signal
@@ -125,12 +125,14 @@ fn run_with_binary_inputs(
 ) -> Signal {
     ctx.insert_input_type(left_input, left.clone());
     ctx.insert_input_type(right_input, right.clone());
-    ctx.push_runtime_trace_label(format!(
-        "cmp#{} a={} b={}",
-        cmp_index,
-        preview_value(left),
-        preview_value(right)
-    ));
+    ctx.push_runtime_trace_label(|| {
+        format!(
+            "cmp#{} a={} b={}",
+            cmp_index,
+            preview_value(left),
+            preview_value(right)
+        )
+    });
     let signal = run(thunk_node, ctx);
     ctx.clear_input_type(left_input);
     ctx.clear_input_type(right_input);

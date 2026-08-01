@@ -1,18 +1,27 @@
+//! gRPC client that reports flow execution results back to Aquila.
+//!
+//! Results are normalized (via `taurus_core::normalize`) before being sent so
+//! every optional proto field Aquila reads is explicitly populated rather
+//! than left `None`.
+
 use code0_flow::flow_service::{
     auth::get_authorization_metadata, retry::create_channel_with_retry,
 };
 use std::time::Duration;
+use taurus_core::normalize::{normalize_node_execution_result, normalize_value, null_value};
 use tonic::{Extensions, Request, transport::Channel};
 use tucana::{
     aquila::{ExecutionRequest, execution_service_client::ExecutionServiceClient},
-    shared::{
-        ExecutionResult, NodeExecutionResult, Value, execution_result, node_execution_result,
-        value::Kind,
-    },
+    shared::{ExecutionResult, execution_result},
 };
 
 use crate::telemetry::errors;
 
+// tonic clients over `Channel` are cheap to clone (the channel itself is a
+// multiplexed, Arc-backed HTTP/2 connection); cloning per concurrently
+// executing flow is the intended usage pattern rather than sharing one
+// client behind a lock.
+#[derive(Clone)]
 pub struct TaurusRuntimeExecutionService {
     client: ExecutionServiceClient<Channel>,
     aquila_token: String,
@@ -100,65 +109,12 @@ fn normalize_execution_result(result: &mut ExecutionResult) {
     }
 }
 
-fn normalize_node_execution_result(result: &mut NodeExecutionResult) {
-    for parameter_result in &mut result.parameter_results {
-        match &mut parameter_result.value {
-            Some(value) => normalize_value(value),
-            None => {
-                parameter_result.value = Some(null_value());
-            }
-        }
-    }
-
-    match &mut result.result {
-        Some(node_execution_result::Result::Success(value)) => normalize_value(value),
-        Some(node_execution_result::Result::Error(error)) => {
-            if let Some(details) = &mut error.details {
-                for value in details.fields.values_mut() {
-                    normalize_value(value);
-                }
-            }
-        }
-        None => {
-            result.result = Some(node_execution_result::Result::Success(null_value()));
-        }
-    }
-}
-
-fn normalize_value(value: &mut Value) {
-    match &mut value.kind {
-        Some(Kind::StructValue(struct_value)) => {
-            for field in struct_value.fields.values_mut() {
-                normalize_value(field);
-            }
-        }
-        Some(Kind::ListValue(list_value)) => {
-            for item in &mut list_value.values {
-                normalize_value(item);
-            }
-        }
-        Some(Kind::NumberValue(number)) if number.number.is_none() => {
-            value.kind = Some(Kind::NullValue(0));
-        }
-        Some(_) => {}
-        None => {
-            value.kind = Some(Kind::NullValue(0));
-        }
-    }
-}
-
-fn null_value() -> Value {
-    Value {
-        kind: Some(Kind::NullValue(0)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tucana::shared::{
-        Error, ListValue, NodeParameterNodeExecutionResult, NumberValue, Struct,
-        node_execution_result,
+        Error, ListValue, NodeExecutionResult, NodeParameterNodeExecutionResult, NumberValue,
+        Struct, Value, node_execution_result, value::Kind,
     };
 
     #[test]

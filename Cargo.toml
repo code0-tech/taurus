@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/taurus-core", "crates/taurus-manual", "crates/taurus", "crates/taurus-tests", "crates/taurus-provider"]
+members = [ "crates/taurus-core", "crates/taurus-manual", "crates/taurus", "crates/taurus-tests", "crates/taurus-provider", "crates/taurus-bench"]
 resolver = "3"
 
 [workspace.package]
@@ -32,3 +32,11 @@ path = "./crates/taurus-core"
 
 [workspace.dependencies.taurus-provider]
 path = "./crates/taurus-provider"
+
+
+# `cargo build --profile profiling` — a release build with debug symbols,
+# for flamegraph/sampling work. Kept separate from [profile.release] so
+# ordinary release builds stay free of the extra symbol/binary-size cost.
+[profile.profiling]
+inherits = "release"
+debug = true

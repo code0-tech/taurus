@@ -1,3 +1,8 @@
+//! Flow and function execution metrics, recorded once per processed message
+//! by [`crate::app::worker`]. `METRICS` is populated once at startup by
+//! [`initialize`] (wired through `TelemetrySettings::initialize_metrics`) and
+//! read thereafter without locking.
+
 use std::sync::OnceLock;
 
 use opentelemetry::{

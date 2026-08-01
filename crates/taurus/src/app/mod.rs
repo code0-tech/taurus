@@ -1,7 +1,16 @@
+//! Startup, shutdown, and (in dynamic mode) Aquila registration for the
+//! Taurus service. [`worker`] is the actual NATS-driven flow execution loop
+//! this module spawns and supervises; everything else here is one-time setup
+//! or the shutdown sequence that tears it back down.
+//!
+//! Shutdown is cooperative rather than an abort: [`wait_for_shutdown`] signals
+//! the worker task to stop via a `Notify` and waits for it to exit on its own,
+//! so the worker gets a chance to drain its emitter (publish any queued
+//! lifecycle events) before the process exits.
+
 mod worker;
 
 use code0_flow::flow_config::environment::Environment;
-use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::{DYNAMIC, STATIC};
 use code0_flow::flow_definition::Reader;
 use code0_flow::flow_service::FlowUpdateService;
@@ -11,6 +20,7 @@ use taurus_core::runtime::engine::ExecutionEngine;
 use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::signal;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
@@ -22,8 +32,7 @@ use crate::config::Config;
 use crate::telemetry::{self, TelemetrySettings, errors};
 
 pub async fn run() {
-    load_env_file();
-
+    // .env is loaded in main(), before the Tokio runtime is built.
     let config = Config::new();
     let telemetry = init_telemetry(&config);
     install_panic_logging();
@@ -38,7 +47,8 @@ pub async fn run() {
         client.clone(),
         Duration::from_secs(config.remote_runtime_timeout_secs),
     );
-    let runtime_emitter = NATSRespondEmitter::new(client.clone());
+    let runtime_emitter = NATSRespondEmitter::new(client.clone(), config.emitter_channel_capacity);
+    let worker_shutdown = Arc::new(Notify::new());
     let mut worker_task = worker::spawn_worker(
         client,
         engine,
@@ -46,9 +56,11 @@ pub async fn run() {
         runtime_emitter,
         runtime_execution_service,
         mode_label(&config).to_string(),
+        worker_shutdown.clone(),
+        config.max_concurrent_executions,
     );
 
-    wait_for_shutdown(&mut worker_task, &mut health_task).await;
+    wait_for_shutdown(&mut worker_task, &mut health_task, &worker_shutdown).await;
     if let Some(handle) = runtime_status_heartbeat_task.take() {
         handle.abort();
         if let Err(err) = handle.await
@@ -311,6 +323,7 @@ async fn update_stopped_status(runtime_status_service: Option<&Arc<TaurusRuntime
 async fn wait_for_shutdown(
     worker_task: &mut JoinHandle<()>,
     health_task: &mut Option<JoinHandle<()>>,
+    worker_shutdown: &Arc<Notify>,
 ) {
     #[cfg(unix)]
     let sigterm = async {
@@ -323,24 +336,27 @@ async fn wait_for_shutdown(
     #[cfg(not(unix))]
     let sigterm = std::future::pending::<()>();
 
+    let mut worker_already_finished = false;
+
     if let Some(health_task) = health_task.as_mut() {
         tokio::select! {
             _ = &mut *worker_task => {
                 log::warn!("NATS worker task finished, shutting down");
+                worker_already_finished = true;
                 health_task.abort();
             }
             _ = &mut *health_task => {
                 log::warn!("Health server task finished, shutting down");
-                worker_task.abort();
+                worker_shutdown.notify_one();
             }
             _ = signal::ctrl_c() => {
                 log::info!("Ctrl+C/Exit signal received, shutting down");
-                worker_task.abort();
+                worker_shutdown.notify_one();
                 health_task.abort();
             }
             _ = sigterm => {
                 log::info!("SIGTERM received, shutting down");
-                worker_task.abort();
+                worker_shutdown.notify_one();
                 health_task.abort();
             }
         }
@@ -348,16 +364,26 @@ async fn wait_for_shutdown(
         tokio::select! {
             _ = &mut *worker_task => {
                 log::warn!("NATS worker task finished, shutting down");
+                worker_already_finished = true;
             }
             _ = signal::ctrl_c() => {
                 log::info!("Ctrl+C/Exit signal received, shutting down");
-                worker_task.abort();
+                worker_shutdown.notify_one();
             }
             _ = sigterm => {
                 log::info!("SIGTERM received, shutting down");
-                worker_task.abort();
+                worker_shutdown.notify_one();
             }
         }
+    }
+
+    // Let the worker task drain its emitter (publish queued lifecycle events)
+    // instead of aborting it, so in-flight results aren't silently dropped.
+    if !worker_already_finished && let Err(err) = worker_task.await {
+        log::warn!(
+            "NATS worker task ended unexpectedly during shutdown: {}",
+            err
+        );
     }
 }
 

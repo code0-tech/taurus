@@ -1,0 +1,17 @@
+[package]
+name = "taurus-bench"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+taurus-core = { workspace = true }
+tucana = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.8"
+prost = { workspace = true }
+
+[[bench]]
+name = "engine_execution"
+harness = false

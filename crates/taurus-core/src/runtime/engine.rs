@@ -52,84 +52,6 @@ impl ExecutionEngine {
         }
     }
 
-    /// Execute an `ExecutionFlow`.
-    pub fn execute_flow(
-        &self,
-        flow: ExecutionFlow,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = block_on(self.execute_flow_with_execution_id_report_async(
-            ExecutionId::new_v4(),
-            flow,
-            remote,
-            respond_emitter,
-            with_trace,
-        ));
-        (report.signal, report.exit_reason)
-    }
-
-    /// Execute an `ExecutionFlow` asynchronously.
-    pub async fn execute_flow_async(
-        &self,
-        flow: ExecutionFlow,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = self
-            .execute_flow_with_execution_id_report_async(
-                ExecutionId::new_v4(),
-                flow,
-                remote,
-                respond_emitter,
-                with_trace,
-            )
-            .await;
-        (report.signal, report.exit_reason)
-    }
-
-    /// Execute an `ExecutionFlow` with a caller-provided execution id.
-    pub fn execute_flow_with_execution_id(
-        &self,
-        execution_id: ExecutionId,
-        flow: ExecutionFlow,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = block_on(self.execute_flow_with_execution_id_report_async(
-            execution_id,
-            flow,
-            remote,
-            respond_emitter,
-            with_trace,
-        ));
-        (report.signal, report.exit_reason)
-    }
-
-    /// Execute an `ExecutionFlow` asynchronously with a caller-provided execution id.
-    pub async fn execute_flow_with_execution_id_async(
-        &self,
-        execution_id: ExecutionId,
-        flow: ExecutionFlow,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = self
-            .execute_flow_with_execution_id_report_async(
-                execution_id,
-                flow,
-                remote,
-                respond_emitter,
-                with_trace,
-            )
-            .await;
-        (report.signal, report.exit_reason)
-    }
-
     /// Execute an `ExecutionFlow` and return the final signal plus per-node execution results.
     pub fn execute_flow_report(
         &self,
@@ -140,42 +62,6 @@ impl ExecutionEngine {
     ) -> EngineExecutionReport {
         block_on(self.execute_flow_with_execution_id_report_async(
             ExecutionId::new_v4(),
-            flow,
-            remote,
-            respond_emitter,
-            with_trace,
-        ))
-    }
-
-    /// Execute an `ExecutionFlow` asynchronously and return per-node execution results.
-    pub async fn execute_flow_report_async(
-        &self,
-        flow: ExecutionFlow,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> EngineExecutionReport {
-        self.execute_flow_with_execution_id_report_async(
-            ExecutionId::new_v4(),
-            flow,
-            remote,
-            respond_emitter,
-            with_trace,
-        )
-        .await
-    }
-
-    /// Execute an `ExecutionFlow` with a caller-provided execution id and return per-node results.
-    pub fn execute_flow_with_execution_id_report(
-        &self,
-        execution_id: ExecutionId,
-        flow: ExecutionFlow,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> EngineExecutionReport {
-        block_on(self.execute_flow_with_execution_id_report_async(
-            execution_id,
             flow,
             remote,
             respond_emitter,
@@ -215,8 +101,9 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
-        let report = block_on(self.execute_graph_with_execution_id_report_async(
+        let report = block_on(self.execute_graph_with_project_id_report_async(
             ExecutionId::new_v4(),
+            0,
             start_node_id,
             node_functions,
             flow_input,
@@ -224,78 +111,6 @@ impl ExecutionEngine {
             respond_emitter,
             with_trace,
         ));
-        (report.signal, report.exit_reason)
-    }
-
-    /// Execute a graph asynchronously.
-    pub async fn execute_graph_async(
-        &self,
-        start_node_id: i64,
-        node_functions: Vec<NodeFunction>,
-        flow_input: Option<Value>,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = self
-            .execute_graph_with_execution_id_report_async(
-                ExecutionId::new_v4(),
-                start_node_id,
-                node_functions,
-                flow_input,
-                remote,
-                respond_emitter,
-                with_trace,
-            )
-            .await;
-        (report.signal, report.exit_reason)
-    }
-
-    /// Execute a graph described by node list and start node with a caller-provided execution id.
-    pub fn execute_graph_with_execution_id(
-        &self,
-        execution_id: ExecutionId,
-        start_node_id: i64,
-        node_functions: Vec<NodeFunction>,
-        flow_input: Option<Value>,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = block_on(self.execute_graph_with_execution_id_report_async(
-            execution_id,
-            start_node_id,
-            node_functions,
-            flow_input,
-            remote,
-            respond_emitter,
-            with_trace,
-        ));
-        (report.signal, report.exit_reason)
-    }
-
-    /// Execute a graph asynchronously with a caller-provided execution id.
-    pub async fn execute_graph_with_execution_id_async(
-        &self,
-        execution_id: ExecutionId,
-        start_node_id: i64,
-        node_functions: Vec<NodeFunction>,
-        flow_input: Option<Value>,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> (Signal, ExitReason) {
-        let report = self
-            .execute_graph_with_execution_id_report_async(
-                execution_id,
-                start_node_id,
-                node_functions,
-                flow_input,
-                remote,
-                respond_emitter,
-                with_trace,
-            )
-            .await;
         (report.signal, report.exit_reason)
     }
 
@@ -309,74 +124,8 @@ impl ExecutionEngine {
         respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        block_on(self.execute_graph_with_execution_id_report_async(
+        block_on(self.execute_graph_with_project_id_report_async(
             ExecutionId::new_v4(),
-            start_node_id,
-            node_functions,
-            flow_input,
-            remote,
-            respond_emitter,
-            with_trace,
-        ))
-    }
-
-    /// Execute a graph asynchronously and return per-node execution results.
-    pub async fn execute_graph_report_async(
-        &self,
-        start_node_id: i64,
-        node_functions: Vec<NodeFunction>,
-        flow_input: Option<Value>,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> EngineExecutionReport {
-        self.execute_graph_with_execution_id_report_async(
-            ExecutionId::new_v4(),
-            start_node_id,
-            node_functions,
-            flow_input,
-            remote,
-            respond_emitter,
-            with_trace,
-        )
-        .await
-    }
-
-    /// Execute a graph with a caller-provided execution id and return per-node results.
-    pub fn execute_graph_with_execution_id_report(
-        &self,
-        execution_id: ExecutionId,
-        start_node_id: i64,
-        node_functions: Vec<NodeFunction>,
-        flow_input: Option<Value>,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> EngineExecutionReport {
-        block_on(self.execute_graph_with_execution_id_report_async(
-            execution_id,
-            start_node_id,
-            node_functions,
-            flow_input,
-            remote,
-            respond_emitter,
-            with_trace,
-        ))
-    }
-
-    /// Execute a graph asynchronously with a caller-provided execution id and return per-node results.
-    pub async fn execute_graph_with_execution_id_report_async(
-        &self,
-        execution_id: ExecutionId,
-        start_node_id: i64,
-        node_functions: Vec<NodeFunction>,
-        flow_input: Option<Value>,
-        remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
-        with_trace: bool,
-    ) -> EngineExecutionReport {
-        self.execute_graph_with_project_id_report_async(
-            execution_id,
             0,
             start_node_id,
             node_functions,
@@ -384,8 +133,7 @@ impl ExecutionEngine {
             remote,
             respond_emitter,
             with_trace,
-        )
-        .await
+        ))
     }
 
     async fn execute_graph_with_project_id_report_async(
@@ -403,10 +151,7 @@ impl ExecutionEngine {
             emitter.emit(execution_id, EmitType::StartingExec, null_value());
         }
 
-        let mut value_store = match flow_input {
-            Some(v) => ValueStore::new(v),
-            None => ValueStore::default(),
-        };
+        let mut value_store = ValueStore::new(flow_input.unwrap_or_default(), with_trace);
 
         let compiled = match compile_flow(project_id, start_node_id, node_functions) {
             Ok(plan) => plan,

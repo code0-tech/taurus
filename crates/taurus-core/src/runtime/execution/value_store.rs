@@ -1,6 +1,7 @@
 //! Mutable value store used by runtime execution to resolve references.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use tucana::shared::node_execution_result::{Id as TucanaNodeResultId, Result as TucanaNodeResult};
 use tucana::shared::{
@@ -20,16 +21,22 @@ pub enum ValueStoreResult {
 
 #[derive(Default)]
 pub struct ValueStore {
-    latest_results: HashMap<i64, NodeExecutionResult>,
-    result_history: Vec<NodeExecutionResult>,
+    // Arc-wrapped so `insert_node_result` records the same result into both
+    // maps via a cheap refcount bump instead of a deep clone (each node
+    // result carries its own parameter_results and value trees).
+    latest_results: HashMap<i64, Arc<NodeExecutionResult>>,
+    result_history: Vec<Arc<NodeExecutionResult>>,
     input_types: HashMap<InputType, Value>,
     flow_input: Value,
     current_node_id: i64,
     runtime_trace_labels: Vec<String>,
+    // Lets push_runtime_trace_label skip building a label when nothing
+    // will read it back (see that method for why this matters).
+    trace_enabled: bool,
 }
 
 impl ValueStore {
-    pub fn new(flow_input: Value) -> Self {
+    pub fn new(flow_input: Value, trace_enabled: bool) -> Self {
         Self {
             latest_results: HashMap::new(),
             result_history: Vec::new(),
@@ -37,6 +44,7 @@ impl ValueStore {
             flow_input,
             current_node_id: 0,
             runtime_trace_labels: Vec::new(),
+            trace_enabled,
         }
     }
 
@@ -48,13 +56,13 @@ impl ValueStore {
         self.current_node_id = node_id;
     }
 
-    pub fn get(&mut self, reference: ReferenceValue) -> ValueStoreResult {
-        let target = match reference.target {
+    pub fn get(&mut self, reference: &ReferenceValue) -> ValueStoreResult {
+        let target = match &reference.target {
             Some(target) => target,
             None => return ValueStoreResult::NotFound,
         };
 
-        let result = match target {
+        let result = match *target {
             tucana::shared::reference_value::Target::FlowInput(_) => self.get_flow_input(),
             tucana::shared::reference_value::Target::NodeId(id) => self.get_result(id),
             tucana::shared::reference_value::Target::InputType(input_type) => {
@@ -68,7 +76,7 @@ impl ValueStore {
 
         if let ValueStoreResult::Success(value) = result {
             let mut current = value;
-            for path in reference.paths {
+            for path in &reference.paths {
                 if let Some(index) = path.array_index {
                     match current.kind {
                         Some(ref kind) => match kind {
@@ -82,11 +90,11 @@ impl ValueStore {
                     }
                 }
 
-                if let Some(field_name) = path.path {
+                if let Some(field_name) = &path.path {
                     match current.kind {
                         Some(ref kind) => {
                             if let Kind::StructValue(struct_value) = kind {
-                                match struct_value.fields.get(&field_name) {
+                                match struct_value.fields.get(field_name) {
                                     Some(item) => current = item.clone(),
                                     None => return ValueStoreResult::NotFound,
                                 }
@@ -188,6 +196,7 @@ impl ValueStore {
 
     pub fn insert_node_result(&mut self, id: i64, mut result: NodeExecutionResult) {
         result.id = Some(TucanaNodeResultId::NodeId(id));
+        let result = Arc::new(result);
         self.latest_results.insert(id, result.clone());
         self.result_history.push(result);
     }
@@ -200,13 +209,13 @@ impl ValueStore {
         started_at: i64,
         finished_at: i64,
     ) {
-        self.result_history.push(NodeExecutionResult {
+        self.result_history.push(Arc::new(NodeExecutionResult {
             started_at,
             finished_at,
             parameter_results,
             id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
             result: Some(TucanaNodeResult::Success(value)),
-        });
+        }));
     }
 
     pub fn insert_function_error_with_timing(
@@ -217,21 +226,35 @@ impl ValueStore {
         started_at: i64,
         finished_at: i64,
     ) {
-        self.result_history.push(NodeExecutionResult {
+        self.result_history.push(Arc::new(NodeExecutionResult {
             started_at,
             finished_at,
             parameter_results,
             id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
             result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
-        });
+        }));
     }
 
-    pub fn node_execution_results(&self) -> Vec<NodeExecutionResult> {
-        self.result_history.clone()
+    /// Takes ownership of the accumulated result history, leaving it empty.
+    /// Callers use this once, at report time, after which the store is
+    /// discarded. Each entry unwraps its `Arc` for free (no clone) once
+    /// `latest_results` (the only other owner) is cleared first.
+    pub fn node_execution_results(&mut self) -> Vec<NodeExecutionResult> {
+        self.latest_results.clear();
+        std::mem::take(&mut self.result_history)
+            .into_iter()
+            .map(|entry| Arc::try_unwrap(entry).unwrap_or_else(|arc| (*arc).clone()))
+            .collect()
     }
 
-    pub fn push_runtime_trace_label(&mut self, label: String) {
-        self.runtime_trace_labels.push(label);
+    /// Builds and records a trace label only when tracing is active; the
+    /// label is otherwise discarded by `trace_link_child` unread, so callers
+    /// (array/comparator callbacks, in a hot per-iteration loop) pass the
+    /// formatting as a closure instead of paying for it unconditionally.
+    pub fn push_runtime_trace_label(&mut self, label: impl FnOnce() -> String) {
+        if self.trace_enabled {
+            self.runtime_trace_labels.push(label());
+        }
     }
 
     pub fn pop_runtime_trace_label(&mut self) -> Option<String> {
@@ -250,7 +273,7 @@ impl ValueStore {
             };
             results.push(StoreResultEntry {
                 node_id: *node_id,
-                result: result.clone(),
+                result: (**result).clone(),
                 preview,
             });
         }

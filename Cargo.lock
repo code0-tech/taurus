@@ -2831,16 +2831,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "taurus-bench"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "prost",
+ "taurus-core",
+ "tucana 0.0.76",
+]
+
+[[package]]
 name = "taurus-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.23.0",
- "criterion",
  "futures-lite",
  "log",
  "lupus",
- "prost",
  "rand 0.10.2",
  "serde",
  "serde_json",

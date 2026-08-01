@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/taurus-core", "crates/taurus-manual", "crates/taurus", "crates/taurus-tests", "crates/taurus-provider"]
+members = [ "crates/taurus-core", "crates/taurus-manual", "crates/taurus", "crates/taurus-tests", "crates/taurus-provider", "crates/taurus-bench"]
 resolver = "3"
 
 [workspace.package]

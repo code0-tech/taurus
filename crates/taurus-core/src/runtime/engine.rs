@@ -151,10 +151,7 @@ impl ExecutionEngine {
             emitter.emit(execution_id, EmitType::StartingExec, null_value());
         }
 
-        let mut value_store = match flow_input {
-            Some(v) => ValueStore::new(v),
-            None => ValueStore::default(),
-        };
+        let mut value_store = ValueStore::new(flow_input.unwrap_or_default(), with_trace);
 
         let compiled = match compile_flow(project_id, start_node_id, node_functions) {
             Ok(plan) => plan,

@@ -196,7 +196,7 @@ fn bench_value_store_get(c: &mut Criterion) {
     let flow_input = Value {
         kind: Some(Kind::StructValue(Struct { fields })),
     };
-    let mut store = ValueStore::new(flow_input);
+    let mut store = ValueStore::new(flow_input, false);
     store.insert_success_with_timing(1, int_value(42), Vec::new(), 0, 0);
 
     c.bench_function("value_store_get_by_node_id", |b| {

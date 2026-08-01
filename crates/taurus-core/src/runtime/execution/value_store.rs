@@ -30,10 +30,13 @@ pub struct ValueStore {
     flow_input: Value,
     current_node_id: i64,
     runtime_trace_labels: Vec<String>,
+    // Lets push_runtime_trace_label skip building a label when nothing
+    // will read it back (see that method for why this matters).
+    trace_enabled: bool,
 }
 
 impl ValueStore {
-    pub fn new(flow_input: Value) -> Self {
+    pub fn new(flow_input: Value, trace_enabled: bool) -> Self {
         Self {
             latest_results: HashMap::new(),
             result_history: Vec::new(),
@@ -41,6 +44,7 @@ impl ValueStore {
             flow_input,
             current_node_id: 0,
             runtime_trace_labels: Vec::new(),
+            trace_enabled,
         }
     }
 
@@ -243,8 +247,14 @@ impl ValueStore {
             .collect()
     }
 
-    pub fn push_runtime_trace_label(&mut self, label: String) {
-        self.runtime_trace_labels.push(label);
+    /// Builds and records a trace label only when tracing is active; the
+    /// label is otherwise discarded by `trace_link_child` unread, so callers
+    /// (array/comparator callbacks, in a hot per-iteration loop) pass the
+    /// formatting as a closure instead of paying for it unconditionally.
+    pub fn push_runtime_trace_label(&mut self, label: impl FnOnce() -> String) {
+        if self.trace_enabled {
+            self.runtime_trace_labels.push(label());
+        }
     }
 
     pub fn pop_runtime_trace_label(&mut self) -> Option<String> {

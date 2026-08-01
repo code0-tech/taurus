@@ -108,7 +108,8 @@ async fn main() {
 
     let remote =
         NATSRemoteRuntime::with_execution_result_timeout(client.clone(), Duration::from_secs(30));
-    let emitter = NATSRespondEmitter::new(client);
+    // A single-flow CLI tool never needs real backpressure headroom here.
+    let emitter = NATSRespondEmitter::new(client, 64);
     let engine = ExecutionEngine::new();
 
     let started_at = now_unix_micros();

@@ -13,12 +13,18 @@ use tucana::shared::{Struct, Value};
 const DEFAULT_TOPIC_PREFIX: &str = "runtime.emitter";
 
 /// Keeps the synchronous `RespondEmitter::emit` API on the hot execution
-/// path non-blocking by handing events to a background task over an
-/// unbounded channel; that task does the actual NATS publish. Call
-/// [`NATSRespondEmitter::shutdown`] to drain queued events before dropping
-/// this, since an aborted owner leaves them unpublished.
+/// path non-blocking by handing events to a background task over a bounded
+/// channel; that task does the actual NATS publish. The channel is bounded
+/// (rather than unbounded) because with concurrent flow execution, many
+/// tasks can call `emit` in a burst while NATS publishing is comparatively
+/// slow -- an unbounded queue would grow without limit if publishing ever
+/// lags. Once full, `emit` drops the event rather than blocking the
+/// caller; these are best-effort lifecycle notifications, not the
+/// authoritative execution result (that goes back via gRPC separately).
+/// Call [`NATSRespondEmitter::shutdown`] to drain queued events before
+/// dropping this, since an aborted owner leaves them unpublished.
 pub struct NATSRespondEmitter {
-    tx: mpsc::UnboundedSender<NATSEmitMessage>,
+    tx: mpsc::Sender<NATSEmitMessage>,
     worker_task: tokio::task::JoinHandle<()>,
 }
 
@@ -29,13 +35,17 @@ struct NATSEmitMessage {
 }
 
 impl NATSRespondEmitter {
-    pub fn new(client: Client) -> Self {
-        Self::with_topic_prefix(client, DEFAULT_TOPIC_PREFIX)
+    pub fn new(client: Client, channel_capacity: usize) -> Self {
+        Self::with_topic_prefix(client, DEFAULT_TOPIC_PREFIX, channel_capacity)
     }
 
-    pub fn with_topic_prefix(client: Client, topic_prefix: impl Into<String>) -> Self {
+    pub fn with_topic_prefix(
+        client: Client,
+        topic_prefix: impl Into<String>,
+        channel_capacity: usize,
+    ) -> Self {
         let topic_prefix = topic_prefix.into();
-        let (tx, mut rx) = mpsc::unbounded_channel::<NATSEmitMessage>();
+        let (tx, mut rx) = mpsc::channel::<NATSEmitMessage>(channel_capacity.max(1));
 
         // Keep the public emitter API synchronous while publishing asynchronously.
         // This worker serializes outbound lifecycle events to one NATS topic per execution:
@@ -83,15 +93,25 @@ impl NATSRespondEmitter {
 
 impl RespondEmitter for NATSRespondEmitter {
     fn emit(&self, execution_id: ExecutionId, emit_type: EmitType, value: Value) {
-        if let Err(err) = self.tx.send(NATSEmitMessage {
+        match self.tx.try_send(NATSEmitMessage {
             execution_id,
             emit_type,
             value,
         }) {
-            log::debug!(
-                "Dropped runtime emit message because NATS emitter worker is unavailable: {:?}",
-                err
-            );
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                log::warn!(
+                    "Dropped runtime emit message for execution {}: emitter channel full \
+                     (publishing is lagging behind emit rate)",
+                    execution_id
+                );
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                log::debug!(
+                    "Dropped runtime emit message for execution {}: emitter worker is unavailable",
+                    execution_id
+                );
+            }
         }
     }
 }

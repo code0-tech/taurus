@@ -49,7 +49,7 @@ pub async fn run() {
         client.clone(),
         Duration::from_secs(config.remote_runtime_timeout_secs),
     );
-    let runtime_emitter = NATSRespondEmitter::new(client.clone());
+    let runtime_emitter = NATSRespondEmitter::new(client.clone(), config.emitter_channel_capacity);
     let worker_shutdown = Arc::new(Notify::new());
     let mut worker_task = worker::spawn_worker(
         client,

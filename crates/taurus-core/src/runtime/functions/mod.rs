@@ -7,7 +7,7 @@ use crate::handler::registry::FunctionRegistration;
 mod array;
 mod boolean;
 mod control;
-mod http;
+pub mod http;
 mod number;
 mod object;
 mod text;

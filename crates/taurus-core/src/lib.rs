@@ -9,7 +9,7 @@
 //! binaries.
 
 pub mod fixtures;
-mod handler;
+pub mod handler;
 pub mod normalize;
 pub mod runtime;
 pub mod time;

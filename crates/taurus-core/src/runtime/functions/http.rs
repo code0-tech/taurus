@@ -141,7 +141,16 @@ fn headers_from_value(value: &Value) -> Result<Struct, Signal> {
     }
 }
 
-fn send_request(
+/// The `http::request::send` handler. Performs a fully synchronous,
+/// blocking request via `ureq` -- correct as-is for non-Tokio callers
+/// (`taurus-tests`, `taurus-manual --offline`), but a Tokio-hosted runtime
+/// should register a wrapper around this (e.g. via
+/// `tokio::task::block_in_place`) through
+/// `ExecutionEngine::with_overrides` instead of using it directly, so a
+/// blocking call doesn't stall a shared async worker thread. Exported so
+/// such a wrapper can call into the real implementation rather than
+/// duplicating it.
+pub fn send_request(
     args: &[Argument],
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,

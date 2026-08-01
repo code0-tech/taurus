@@ -164,7 +164,8 @@ cargo test
 
 ### Remote execution routing rule
 
-In the compiler, a node is treated as local when `definition_source` is:
+In the compiler, a node or function-backed sub-flow is treated as local when
+`definition_source` is:
 
 - empty
 - `taurus`

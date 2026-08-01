@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use futures_lite::future::block_on;
 use tucana::aquila::ActionExecutionRequest;
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
@@ -251,6 +252,19 @@ impl<'a> EngineExecutor<'a> {
         function: &FunctionThunk,
         value_store: &mut ValueStore,
     ) -> ExecutionResult {
+        match &function.execution_target {
+            NodeExecutionTarget::Local => self.execute_local_function_thunk(function, value_store),
+            NodeExecutionTarget::Remote { service } => {
+                self.execute_remote_function_thunk(function, service.as_str(), value_store)
+            }
+        }
+    }
+
+    fn execute_local_function_thunk(
+        &self,
+        function: &FunctionThunk,
+        value_store: &mut ValueStore,
+    ) -> ExecutionResult {
         let started_at = now_unix_micros();
         let entry = match self.handlers.get(function.identifier.as_str()).copied() {
             Some(entry) => entry,
@@ -329,6 +343,78 @@ impl<'a> EngineExecutor<'a> {
             value_store,
         );
 
+        ExecutionResult {
+            signal,
+            root_frame: frame_id,
+        }
+    }
+
+    fn execute_remote_function_thunk(
+        &self,
+        function: &FunctionThunk,
+        service: &str,
+        value_store: &mut ValueStore,
+    ) -> ExecutionResult {
+        let started_at = now_unix_micros();
+        let frame_id = self.trace_enter_function(
+            value_store.get_current_node_id(),
+            function.identifier.as_str(),
+            value_store,
+        );
+
+        let args = match self.build_function_thunk_args(function, value_store, frame_id) {
+            Ok(args) => args,
+            Err(err) => {
+                let signal = Signal::Failure(err);
+                self.trace_exit(frame_id, &signal, value_store);
+                self.commit_function_result(
+                    function.identifier.as_str(),
+                    signal.clone(),
+                    Vec::new(),
+                    started_at,
+                    now_unix_micros(),
+                    value_store,
+                );
+                return ExecutionResult {
+                    signal,
+                    root_frame: frame_id,
+                };
+            }
+        };
+        let parameter_results = parameter_results_from_args(&args);
+
+        let signal = match self.remote {
+            None => Signal::Failure(RuntimeError::new(
+                "T-CORE-000003",
+                "RemoteRuntimeNotConfigured",
+                "Remote runtime not configured",
+            )),
+            Some(remote_runtime) => {
+                let request = self.build_remote_function_request(function, &args);
+                match request {
+                    Err(err) => Signal::Failure(err),
+                    // Handler callbacks are synchronous today. Block only this flow invocation
+                    // while the configured remote transport completes its async request.
+                    Ok(request) => match block_on(remote_runtime.execute_remote(RemoteExecution {
+                        target_service: service.to_string(),
+                        request,
+                    })) {
+                        Ok(result) => remote_result_to_signal(result),
+                        Err(err) => Signal::Failure(err),
+                    },
+                }
+            }
+        };
+
+        self.trace_exit(frame_id, &signal, value_store);
+        self.commit_function_result(
+            function.identifier.as_str(),
+            signal.clone(),
+            parameter_results,
+            started_at,
+            now_unix_micros(),
+            value_store,
+        );
         ExecutionResult {
             signal,
             root_frame: frame_id,
@@ -875,6 +961,39 @@ impl<'a> EngineExecutor<'a> {
         })
     }
 
+    fn build_remote_function_request(
+        &self,
+        function: &FunctionThunk,
+        args: &[Argument],
+    ) -> Result<ActionExecutionRequest, RuntimeError> {
+        if function.settings.len() != args.len() {
+            return Err(RuntimeError::new(
+                "T-CORE-000005",
+                "RemoteParameterMismatch",
+                "Remote function parameter count mismatch",
+            ));
+        }
+
+        let mut fields = HashMap::new();
+        for (setting, argument) in function.settings.iter().zip(args) {
+            let Argument::Eval(value) = argument else {
+                return Err(RuntimeError::new(
+                    "T-CORE-000005",
+                    "RemoteParameterMismatch",
+                    "Remote function parameters must be evaluated values",
+                ));
+            };
+            fields.insert(setting.identifier.clone(), value.clone());
+        }
+
+        Ok(ActionExecutionRequest {
+            execution_identifier: Uuid::new_v4().to_string(),
+            function_identifier: function.identifier.clone(),
+            parameters: Some(Struct { fields }),
+            project_id: self.flow.project_id,
+        })
+    }
+
     fn commit_result(
         &self,
         node_id: i64,
@@ -1098,13 +1217,29 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
         CompiledThunk::Node(node_id) => Thunk::Node(*node_id),
         CompiledThunk::Function {
             identifier,
+            execution_target,
             parameter_index,
             settings,
         } => Thunk::Function(FunctionThunk {
             identifier: identifier.clone(),
+            execution_target: execution_target.clone(),
             parameter_index: *parameter_index,
             settings: settings.clone(),
         }),
+    }
+}
+
+fn remote_result_to_signal(result: TucanaNodeExecutionResult) -> Signal {
+    match result.result {
+        Some(TucanaNodeResult::Success(value)) => Signal::Success(value),
+        Some(TucanaNodeResult::Error(error)) => {
+            Signal::Failure(RuntimeError::from_tucana_error(&error))
+        }
+        None => Signal::Failure(RuntimeError::new(
+            "T-CORE-000006",
+            "NodeExecutionResultMissingOutcome",
+            "Remote function execution result is missing success/error outcome",
+        )),
     }
 }
 

@@ -6,7 +6,7 @@
 mod compiler;
 mod emitter;
 mod executor;
-mod model;
+pub(crate) mod model;
 
 use futures_lite::future::block_on;
 use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
@@ -471,10 +471,12 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+    use tucana::aquila::ActionExecutionRequest;
     use tucana::shared::{
         InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
         Struct, SubFlow, SubFlowSetting, Value, node_execution_result, node_value, reference_value,
-        sub_flow::ExecutionReference, value::Kind,
+        sub_flow::{ExecutionReference, SubFlowFunction},
+        value::Kind,
     };
 
     fn literal_param(database_id: i64, runtime_parameter_id: &str, value: Value) -> NodeParameter {
@@ -494,6 +496,8 @@ mod tests {
             runtime_parameter_id: runtime_parameter_id.to_string(),
             value: Some(NodeValue {
                 value: Some(node_value::Value::SubFlow(SubFlow {
+                    input_schema: None,
+                    output_schema: None,
                     signature: String::new(),
                     settings: Vec::new(),
                     execution_reference: Some(ExecutionReference::StartingNodeId(node_id)),
@@ -509,16 +513,35 @@ mod tests {
         function_identifier: &str,
         settings: Vec<SubFlowSetting>,
     ) -> NodeParameter {
+        function_thunk_param_with_source(
+            database_id,
+            runtime_parameter_id,
+            function_identifier,
+            None,
+            settings,
+        )
+    }
+
+    fn function_thunk_param_with_source(
+        database_id: i64,
+        runtime_parameter_id: &str,
+        function_identifier: &str,
+        definition_source: Option<&str>,
+        settings: Vec<SubFlowSetting>,
+    ) -> NodeParameter {
         NodeParameter {
             database_id,
             runtime_parameter_id: runtime_parameter_id.to_string(),
             value: Some(NodeValue {
                 value: Some(node_value::Value::SubFlow(SubFlow {
+                    input_schema: None,
+                    output_schema: None,
                     signature: String::new(),
                     settings,
-                    execution_reference: Some(ExecutionReference::FunctionIdentifier(
-                        function_identifier.to_string(),
-                    )),
+                    execution_reference: Some(ExecutionReference::Function(SubFlowFunction {
+                        function_identifier: function_identifier.to_string(),
+                        definition_source: definition_source.map(str::to_string),
+                    })),
                 })),
             }),
             cast: None,
@@ -654,6 +677,7 @@ mod tests {
         result: NodeExecutionResult,
         target_services: Option<Arc<Mutex<Vec<String>>>>,
         project_ids: Option<Arc<Mutex<Vec<i64>>>>,
+        requests: Option<Arc<Mutex<Vec<ActionExecutionRequest>>>>,
     }
 
     #[async_trait]
@@ -674,6 +698,12 @@ mod tests {
                     .lock()
                     .expect("project id recorder should not be poisoned")
                     .push(execution.request.project_id);
+            }
+            if let Some(requests) = &self.requests {
+                requests
+                    .lock()
+                    .expect("request recorder should not be poisoned")
+                    .push(execution.request.clone());
             }
 
             Ok(self.result.clone())
@@ -880,6 +910,154 @@ mod tests {
             expect_success(signal),
             list_value(vec![int_value(3), int_value(4)])
         );
+    }
+
+    #[test]
+    fn function_subflow_map_routes_non_local_function_to_remote_runtime() {
+        let engine = ExecutionEngine::new();
+        let target_services = Arc::new(Mutex::new(Vec::new()));
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let remote = StubRemoteRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::FunctionIdentifier(
+                    "remote::add".to_string(),
+                )),
+                result: Some(node_execution_result::Result::Success(int_value(99))),
+            },
+            target_services: Some(Arc::clone(&target_services)),
+            project_ids: None,
+            requests: Some(Arc::clone(&requests)),
+        };
+        let map_node = node(
+            1,
+            "std::list::map",
+            vec![
+                literal_param(100, "list", list_value(vec![int_value(1), int_value(2)])),
+                function_thunk_param_with_source(
+                    101,
+                    "transform",
+                    "remote::add",
+                    Some("action.example"),
+                    vec![
+                        subflow_setting("lhs", None, false, false),
+                        subflow_setting("rhs", Some(int_value(2)), false, true),
+                    ],
+                ),
+            ],
+            None,
+        );
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![map_node],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report(flow, Some(&remote), None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(
+            expect_success(report.signal),
+            list_value(vec![int_value(99), int_value(99)])
+        );
+        assert_eq!(
+            *target_services
+                .lock()
+                .expect("target service recorder should not be poisoned"),
+            vec!["example".to_string(), "example".to_string()]
+        );
+
+        let requests = requests
+            .lock()
+            .expect("request recorder should not be poisoned");
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].function_identifier, "remote::add");
+        assert_eq!(requests[0].project_id, 42);
+        let first_parameters = requests[0]
+            .parameters
+            .as_ref()
+            .expect("remote function request should contain parameters");
+        assert_eq!(first_parameters.fields.get("lhs"), Some(&int_value(1)));
+        assert_eq!(first_parameters.fields.get("rhs"), Some(&int_value(2)));
+
+        let function_results: Vec<_> = report
+            .node_execution_results
+            .iter()
+            .filter(|result| {
+                matches!(
+                    result.id,
+                    Some(node_execution_result::Id::FunctionIdentifier(_))
+                )
+            })
+            .collect();
+        assert_eq!(function_results.len(), 2);
+        for result in function_results {
+            assert_function_result_id(result, "remote::add");
+        }
+    }
+
+    #[test]
+    fn remote_function_subflow_fails_without_remote_runtime() {
+        let engine = ExecutionEngine::new();
+        let map_node = node(
+            1,
+            "std::list::map",
+            vec![
+                literal_param(100, "list", list_value(vec![int_value(1)])),
+                function_thunk_param_with_source(
+                    101,
+                    "transform",
+                    "remote::identity",
+                    Some("remote-service"),
+                    vec![subflow_setting("value", None, false, false)],
+                ),
+            ],
+            None,
+        );
+
+        let report = engine.execute_graph_report(1, vec![map_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Failure);
+        match report.signal {
+            Signal::Failure(err) => assert_eq!(err.code, "T-CORE-000003"),
+            other => panic!("expected missing remote runtime failure, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn remote_function_subflow_rejects_empty_action_service() {
+        let engine = ExecutionEngine::new();
+        let map_node = node(
+            1,
+            "std::list::map",
+            vec![
+                literal_param(100, "list", list_value(vec![int_value(1)])),
+                function_thunk_param_with_source(
+                    101,
+                    "transform",
+                    "remote::identity",
+                    Some("action."),
+                    vec![subflow_setting("value", None, false, false)],
+                ),
+            ],
+            None,
+        );
+
+        let report = engine.execute_graph_report(1, vec![map_node], None, None, None, false);
+
+        assert_eq!(report.exit_reason, ExitReason::Failure);
+        assert!(report.node_execution_results.is_empty());
+        match report.signal {
+            Signal::Failure(err) => assert_eq!(err.code, "T-CORE-000106"),
+            other => panic!(
+                "expected invalid definition source failure, got {:?}",
+                other
+            ),
+        }
     }
 
     #[test]
@@ -1273,6 +1451,7 @@ mod tests {
             },
             target_services: None,
             project_ids: None,
+            requests: None,
         };
         let mut remote_node = node(
             1,
@@ -1319,6 +1498,7 @@ mod tests {
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
+            requests: None,
         };
         let mut remote_node = node(
             1,
@@ -1354,6 +1534,7 @@ mod tests {
             },
             target_services: None,
             project_ids: Some(Arc::clone(&project_ids)),
+            requests: None,
         };
         let mut remote_node = node(
             1,

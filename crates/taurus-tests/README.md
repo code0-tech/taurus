@@ -105,3 +105,20 @@ An example
 	}
 }
 ```
+
+## Testing remote function sub-flows
+
+Add a `remote` fixture to the case when the flow should dispatch a
+function-backed sub-flow without connecting to NATS:
+
+```json
+"remote": {
+  "targetService": "example",
+  "functionIdentifier": "remote::identity",
+  "resultParameter": "value"
+}
+```
+
+The fixture validates the target service and function identifier, then returns
+the named request parameter as the remote result. This lets a flow verify both
+remote routing and sub-flow setting materialization.

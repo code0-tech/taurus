@@ -175,9 +175,13 @@ pub fn compile_flow(
                         Some(sub_flow::ExecutionReference::StartingNodeId(node_id)) => {
                             CompiledArg::Deferred(CompiledThunk::Node(*node_id))
                         }
-                        Some(sub_flow::ExecutionReference::FunctionIdentifier(identifier)) => {
+                        Some(sub_flow::ExecutionReference::Function(function)) => {
                             CompiledArg::Deferred(CompiledThunk::Function {
-                                identifier: identifier.clone(),
+                                identifier: function.function_identifier.clone(),
+                                execution_target: execution_target_for_source(
+                                    node_id,
+                                    function.definition_source.as_deref(),
+                                )?,
                                 parameter_index: parameter_index as i64,
                                 settings: sub_flow.settings.clone(),
                             })
@@ -219,7 +223,14 @@ fn execution_target_for(
     node_id: i64,
     node: &NodeFunction,
 ) -> Result<NodeExecutionTarget, CompileError> {
-    match node.definition_source.as_deref() {
+    execution_target_for_source(node_id, node.definition_source.as_deref())
+}
+
+fn execution_target_for_source(
+    node_id: i64,
+    definition_source: Option<&str>,
+) -> Result<NodeExecutionTarget, CompileError> {
+    match definition_source {
         None | Some("") | Some("taurus") => Ok(NodeExecutionTarget::Local),
         Some(source) if source.starts_with("draco") => Ok(NodeExecutionTarget::Local),
         Some(service) => match service.strip_prefix("action.").unwrap_or(service) {

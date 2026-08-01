@@ -4,8 +4,13 @@ use log::{error, info};
 use serde::Deserialize;
 use serde_json::json;
 use taurus_core::runtime::engine::ExecutionEngine;
+use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
+use taurus_core::types::errors::runtime_error::RuntimeError;
+use tucana::shared::node_execution_result::{
+    Id as NodeExecutionResultId, Result as NodeExecutionOutcome,
+};
 use tucana::shared::{
-    ValidationFlow,
+    NodeExecutionResult, ValidationFlow,
     helper::value::{from_json_value, to_json_value},
 };
 
@@ -21,6 +26,76 @@ pub struct Case {
     pub description: String,
     pub inputs: Vec<Input>,
     pub flow: ValidationFlow,
+    #[serde(default)]
+    pub remote: Option<RemoteFixture>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteFixture {
+    pub target_service: String,
+    pub function_identifier: String,
+    pub result_parameter: String,
+}
+
+struct FixtureRemoteRuntime {
+    fixture: RemoteFixture,
+}
+
+#[async_trait::async_trait]
+impl RemoteRuntime for FixtureRemoteRuntime {
+    async fn execute_remote(
+        &self,
+        execution: RemoteExecution,
+    ) -> Result<NodeExecutionResult, RuntimeError> {
+        if execution.target_service != self.fixture.target_service {
+            return Err(RuntimeError::new(
+                "T-TEST-000001",
+                "UnexpectedRemoteService",
+                format!(
+                    "Expected remote service {}, received {}",
+                    self.fixture.target_service, execution.target_service
+                ),
+            ));
+        }
+        if execution.request.function_identifier != self.fixture.function_identifier {
+            return Err(RuntimeError::new(
+                "T-TEST-000002",
+                "UnexpectedRemoteFunction",
+                format!(
+                    "Expected remote function {}, received {}",
+                    self.fixture.function_identifier, execution.request.function_identifier
+                ),
+            ));
+        }
+
+        let value = execution
+            .request
+            .parameters
+            .as_ref()
+            .and_then(|parameters| parameters.fields.get(&self.fixture.result_parameter))
+            .cloned()
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "T-TEST-000003",
+                    "RemoteParameterMissing",
+                    format!(
+                        "Remote parameter {} was not provided",
+                        self.fixture.result_parameter
+                    ),
+                )
+            })?;
+
+        Ok(NodeExecutionResult {
+            started_at: 0,
+            finished_at: 0,
+            parameter_results: Vec::new(),
+            id: Some(NodeExecutionResultId::FunctionIdentifier(
+                execution.request.function_identifier,
+            )),
+            result: Some(NodeExecutionOutcome::Success(value)),
+        })
+    }
 }
 
 pub enum CaseResult {
@@ -123,6 +198,10 @@ fn run_tests(cases: Cases) {
 impl Testable for Case {
     fn run(&self) -> CaseResult {
         let engine = ExecutionEngine::new();
+        let remote = self
+            .remote
+            .clone()
+            .map(|fixture| FixtureRemoteRuntime { fixture });
 
         for input in self.inputs.clone() {
             let flow_input = input.clone().input.map(from_json_value);
@@ -130,7 +209,7 @@ impl Testable for Case {
                 self.flow.starting_node_id,
                 self.flow.node_functions.clone(),
                 flow_input,
-                None,
+                remote.as_ref().map(|runtime| runtime as &dyn RemoteRuntime),
                 None,
                 false,
             );

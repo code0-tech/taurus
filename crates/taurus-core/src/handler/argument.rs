@@ -6,6 +6,7 @@ use std::convert::Infallible;
 use tucana::shared::value::Kind;
 use tucana::shared::{ListValue, NumberValue, Struct, Value};
 
+use crate::runtime::engine::model::NodeExecutionTarget;
 use crate::value::{number_to_f64, number_to_i64_lossy};
 use std::fmt;
 use tucana::shared::SubFlowSetting;
@@ -13,6 +14,7 @@ use tucana::shared::SubFlowSetting;
 #[derive(Clone)]
 pub struct FunctionThunk {
     pub identifier: String,
+    pub execution_target: NodeExecutionTarget,
     pub parameter_index: i64,
     pub settings: Vec<SubFlowSetting>,
 }
@@ -21,6 +23,7 @@ impl fmt::Debug for FunctionThunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FunctionThunk")
             .field("identifier", &self.identifier)
+            .field("execution_target", &self.execution_target)
             .field("parameter_index", &self.parameter_index)
             .field("settings_len", &self.settings.len())
             .finish()

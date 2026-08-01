@@ -87,7 +87,7 @@ fn init_telemetry(config: &Config) -> telemetry::Telemetry {
         TelemetrySettings {
             environment: environment_label(&config.environment),
             default_log_level: "debug",
-            service_version: env!("CARGO_PKG_VERSION"),
+            service_version: taurus_core::version::runtime_version(),
             instrumentation_name: env!("CARGO_PKG_NAME"),
             initialize_metrics: Some(telemetry::metrics::initialize),
         },

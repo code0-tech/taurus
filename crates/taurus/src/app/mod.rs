@@ -11,7 +11,6 @@
 mod worker;
 
 use code0_flow::flow_config::environment::Environment;
-use code0_flow::flow_config::load_env_file;
 use code0_flow::flow_config::mode::Mode::{DYNAMIC, STATIC};
 use code0_flow::flow_definition::Reader;
 use code0_flow::flow_service::FlowUpdateService;
@@ -33,8 +32,7 @@ use crate::config::Config;
 use crate::telemetry::{self, TelemetrySettings, errors};
 
 pub async fn run() {
-    load_env_file();
-
+    // .env is loaded in main(), before the Tokio runtime is built.
     let config = Config::new();
     let telemetry = init_telemetry(&config);
     install_panic_logging();

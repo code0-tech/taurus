@@ -704,7 +704,7 @@ impl<'a> EngineExecutor<'a> {
                     );
                     args.push(Argument::Eval(value.clone()));
                 }
-                CompiledArg::Reference(reference) => match value_store.get(reference.clone()) {
+                CompiledArg::Reference(reference) => match value_store.get(reference) {
                     ValueStoreResult::Success(value) => {
                         self.trace_record_arg(
                             frame_id,
@@ -1258,7 +1258,7 @@ fn resolve_function_setting(
         paths: Vec::new(),
     };
 
-    match value_store.get(reference) {
+    match value_store.get(&reference) {
         ValueStoreResult::Success(value) => {
             if is_null_value(&value)
                 && let Some(default_value) = setting.default_value.clone()

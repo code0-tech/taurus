@@ -14,14 +14,8 @@ mod number;
 mod object;
 mod text;
 
-pub const ALL_FUNCTION_SETS: &[&[FunctionRegistration]] = &[
-    array::FUNCTIONS,
-    number::FUNCTIONS,
-    boolean::FUNCTIONS,
-    text::FUNCTIONS,
-    object::FUNCTIONS,
-    control::FUNCTIONS,
-    http::FUNCTIONS,
-    date::FUNCTIONS,
-    file::FUNCTIONS,
-];
+// Every function file has now migrated to `#[taurus_macros::runtime_function]`
+// self-registration (see `FunctionStore::default`'s `inventory::iter` pass).
+// This array is kept (now empty) until the cutover slice removes it, `Self::populate`,
+// and `ALL_FUNCTION_SETS` entirely.
+pub const ALL_FUNCTION_SETS: &[&[FunctionRegistration]] = &[];

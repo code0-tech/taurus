@@ -15,7 +15,9 @@
 
 pub mod fixtures;
 mod handler;
+pub mod meta;
 pub mod normalize;
+pub mod registry;
 pub mod runtime;
 pub mod time;
 pub mod types;

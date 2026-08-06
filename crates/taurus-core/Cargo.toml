@@ -17,3 +17,5 @@ serde_json = { workspace = true }
 ureq = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
+inventory = { workspace = true }
+taurus-macros = { workspace = true }

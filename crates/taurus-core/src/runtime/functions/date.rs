@@ -7,7 +7,6 @@
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::{args, no_args};
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
@@ -16,13 +15,38 @@ use crate::value::value_from_i64;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use tucana::shared::{Value, value::Kind};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("std::date::now", now, 0),
-    FunctionRegistration::eager("std::date::from", from, 6),
-    FunctionRegistration::eager("std::date::from_text", from_text, 1),
-    FunctionRegistration::eager("std::date::from_unix", from_unix, 1),
-    FunctionRegistration::eager("std::date::format", format, 2),
-];
+// This module has no `definitions/taurus-date/*.json` counterpart to port
+// from (it was implemented after the JSON tree stopped being kept in sync --
+// exactly the drift this self-registration replaces). The metadata below is
+// authored fresh, following the same conventions as the migrated modules.
+taurus_macros::module! {
+    identifier = "taurus-date",
+    name(en_US = "Date"),
+    description(en_US = "Work with Dates."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:calendar",
+    version = "0.0.33",
+}
+
+taurus_macros::data_type! {
+    identifier = "DATE",
+    module = "taurus-date",
+    name(en_US = "Date"),
+    display_message(en_US = "Date"),
+    alias(en_US = "date;time;timestamp;datetime"),
+    type_string = "NUMBER",
+    linked_data_type_identifiers = ["NUMBER"],
+}
+
+taurus_macros::data_type! {
+    identifier = "MONTH",
+    module = "taurus-date",
+    name(en_US = "Month"),
+    display_message(en_US = "Month"),
+    alias(en_US = "month"),
+    type_string = "'JAN' | 'FEB' | 'MAR' | 'APR' | 'MAY' | 'JUN' | 'JUL' | 'AUG' | 'SEP' | 'OCT' | 'NOV' | 'DEC'",
+}
 
 fn fail(message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new(
@@ -52,6 +76,17 @@ fn month_from_code(code: &str) -> Option<u32> {
     Some(month)
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::now",
+    module = "taurus-date",
+    signature = "(): DATE",
+    name(en_US = "Now"),
+    description(en_US = "Returns the current date and time."),
+    display_message(en_US = "Now"),
+    alias(en_US = "now;current;today;date;time;std"),
+    display_icon = "tabler:calendar",
+    linked_data_type_identifiers = ["DATE"],
+)]
 fn now(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -61,6 +96,48 @@ fn now(
     Signal::Success(value_from_i64(now_unix_micros()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::from",
+    module = "taurus-date",
+    signature = "(year: NUMBER, month: MONTH, day: NUMBER, hour: NUMBER, minute: NUMBER, second: NUMBER): DATE",
+    name(en_US = "Date from Parts"),
+    description(en_US = "Builds a date from its year, month, day, hour, minute and second components."),
+    display_message(en_US = "Date from ${year}-${month}-${day} ${hour}:${minute}:${second}"),
+    alias(en_US = "from;build;construct;date;time;std"),
+    display_icon = "tabler:calendar",
+    linked_data_type_identifiers = ["DATE", "MONTH", "NUMBER"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "year",
+    name(en_US = "Year"),
+    description(en_US = "The year component of the date.")
+)]
+#[parameter(
+    runtime_name = "month",
+    name(en_US = "Month"),
+    description(en_US = "The month component of the date, as a three-letter code (JAN..DEC).")
+)]
+#[parameter(
+    runtime_name = "day",
+    name(en_US = "Day"),
+    description(en_US = "The day-of-month component of the date.")
+)]
+#[parameter(
+    runtime_name = "hour",
+    name(en_US = "Hour"),
+    description(en_US = "The hour component of the time.")
+)]
+#[parameter(
+    runtime_name = "minute",
+    name(en_US = "Minute"),
+    description(en_US = "The minute component of the time.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second"),
+    description(en_US = "The second component of the time.")
+)]
 fn from(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -104,6 +181,23 @@ fn from(
     ))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::from_text",
+    module = "taurus-date",
+    signature = "(value: TEXT): DATE",
+    name(en_US = "Date from Text"),
+    description(en_US = "Parses an RFC 3339 formatted text into a date."),
+    display_message(en_US = "Date from ${value}"),
+    alias(en_US = "from text;parse;rfc3339;date;time;std"),
+    display_icon = "tabler:calendar",
+    linked_data_type_identifiers = ["DATE", "TEXT"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The RFC 3339 formatted text to parse.")
+)]
 fn from_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -122,6 +216,22 @@ fn from_text(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::from_unix",
+    module = "taurus-date",
+    signature = "(value: NUMBER): DATE",
+    name(en_US = "Date from Unix Time"),
+    description(en_US = "Converts a Unix timestamp, in seconds, to a date."),
+    display_message(en_US = "Date from ${value}"),
+    alias(en_US = "from unix;unix time;epoch;date;time;std"),
+    display_icon = "tabler:calendar",
+    linked_data_type_identifiers = ["DATE", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The Unix timestamp, in seconds, to convert.")
+)]
 fn from_unix(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -173,6 +283,28 @@ fn translate_pattern(pattern: &str) -> Result<String, String> {
     Ok(out)
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::format",
+    module = "taurus-date",
+    signature = "(date: DATE, pattern: TEXT): TEXT",
+    name(en_US = "Format Date"),
+    description(en_US = "Formats a date as text using a YYYY/MM/DD/HH/mm/ss pattern."),
+    display_message(en_US = "Format ${date} as ${pattern}"),
+    alias(en_US = "format;pattern;strftime;date;time;std"),
+    display_icon = "tabler:calendar",
+    linked_data_type_identifiers = ["DATE", "TEXT"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "date",
+    name(en_US = "Date"),
+    description(en_US = "The date to format.")
+)]
+#[parameter(
+    runtime_name = "pattern",
+    name(en_US = "Pattern"),
+    description(en_US = "The pattern to format the date with, e.g. \"YYYY-MM-DD HH:mm:ss\".")
+)]
 fn format(
     args: &[Argument],
     _ctx: &mut ValueStore,

@@ -4,7 +4,6 @@
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
@@ -20,11 +19,118 @@ use tucana::shared::{Struct, Value};
 use ureq::http;
 use ureq::{Body, RequestExt};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[FunctionRegistration::eager(
-    "http::request::send",
-    send_request,
-    8,
-)];
+taurus_macros::module! {
+    identifier = "taurus-http",
+    name(en_US = "HTTP"),
+    description(en_US = "Work with HTTP."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:world-www",
+    version = "0.0.33",
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_AUTH_PLACE",
+    module = "taurus-http",
+    name(en_US = "HTTP credential placement"),
+    display_message(en_US = "HTTP credential placement"),
+    alias(en_US = "http;auth;credential;place;placement;location;header;url"),
+    generic_keys = ["T"],
+    type_string = "T extends 'Bearer' ? 'Header' : T extends 'Basic' ? 'Header' : T extends undefined ? undefined : T extends null ? null : 'Header' | 'Url'",
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_AUTH_TYPE",
+    module = "taurus-http",
+    name(en_US = "HTTP credential variant"),
+    display_message(en_US = "HTTP credential variant"),
+    alias(en_US = "http;auth;credential;type;variant;bearer;basic;api-key"),
+    type_string = "'Bearer' | 'Basic' | 'X-API-Key' | string | undefined | null",
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_AUTH_VALUE",
+    module = "taurus-http",
+    name(en_US = "HTTP credential value"),
+    display_message(en_US = "HTTP credential value"),
+    alias(en_US = "http;auth;credential;value;bearer;basic;username;password;token"),
+    generic_keys = ["T"],
+    type_string = "T extends 'Basic' ? { username: string, password: string } : T extends undefined ? undefined : T extends null ? null : string",
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_METHOD",
+    module = "taurus-http",
+    name(en_US = "HTTP Method"),
+    display_message(en_US = "HTTP Method"),
+    alias(en_US = "http;method;get;post;put;delete;path;head"),
+    type_string = "'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD'",
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_PAYLOAD",
+    module = "taurus-http",
+    name(en_US = "HTTP payload"),
+    display_message(en_US = "HTTP payload"),
+    alias(en_US = "http;payload;body;content;data;json"),
+    generic_keys = ["T"],
+    type_string = "T extends 'application/json' ? OBJECT<{}> : T extends undefined ? undefined : T extends null ? null : string",
+    linked_data_type_identifiers = ["OBJECT"],
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_REQUEST",
+    module = "taurus-http",
+    name(en_US = "HTTP Request"),
+    display_message(en_US = "HTTP Request"),
+    alias(en_US = "http;request"),
+    generic_keys = ["T"],
+    type_string = "{ http_method: HTTP_METHOD, url: HTTP_URL, payload: T, headers: OBJECT<{}> }",
+    linked_data_type_identifiers = ["HTTP_METHOD", "HTTP_URL", "OBJECT"],
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_RESPONSE",
+    module = "taurus-http",
+    name(en_US = "HTTP Response"),
+    display_message(en_US = "HTTP Response"),
+    alias(en_US = "http;response;object"),
+    generic_keys = ["T"],
+    type_string = "{ payload: T, headers: OBJECT<{}>, http_status_code: HTTP_STATUS_CODE }",
+    linked_data_type_identifiers = ["HTTP_STATUS_CODE", "OBJECT"],
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_SCHEMA",
+    module = "taurus-http",
+    name(en_US = "HTTP schema"),
+    display_message(en_US = "HTTP schema"),
+    alias(en_US = "http;schema;content-type;mime;media-type;json;xml;text;csv"),
+    type_string = "'application/json' | 'application/xml' | 'text/plain' | 'text/csv' | string | undefined | null",
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_STATUS_CODE",
+    module = "taurus-http",
+    name(en_US = "HTTP Status Code"),
+    display_message(en_US = "HTTP Status Code"),
+    alias(en_US = "http;status;code"),
+    type_string = "NUMBER",
+    linked_data_type_identifiers = ["NUMBER"],
+    number_range_from = 100,
+    number_range_to = 599,
+}
+
+taurus_macros::data_type! {
+    identifier = "HTTP_URL",
+    module = "taurus-http",
+    name(en_US = "HTTP Route"),
+    display_message(en_US = "HTTP Route"),
+    alias(en_US = "http;route;url"),
+    type_string = "TEXT",
+    linked_data_type_identifiers = ["TEXT"],
+    regex = "^/\\w+(?:[.:~-]\\w+)*(?:/\\w+(?:[.:~-]\\w+)*)*$",
+}
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new("T-STD-00001", category, message))
@@ -131,6 +237,77 @@ fn headers_from_value(value: &Value) -> Result<Struct, Signal> {
 /// `taurus-tests` and `taurus-manual --offline`, which call the engine
 /// with no runtime at all) it runs via `block_in_place` so it doesn't
 /// stall a shared async worker thread for its duration.
+#[taurus_macros::runtime_function(
+    identifier = "http::request::send",
+    module = "taurus-http",
+    signature = "<A extends HTTP_AUTH_TYPE, S extends HTTP_SCHEMA>(http_method: HTTP_METHOD, url: HTTP_URL, http_auth: A, http_auth_value: HTTP_AUTH_VALUE<A>, http_auth_place: HTTP_AUTH_PLACE<A>, http_schema: S, payload: HTTP_PAYLOAD<S>, headers?: OBJECT<{}>): HTTP_RESPONSE<any>",
+    name(en_US = "Send HTTP request"),
+    description(
+        en_US = "Sends a request to the specified url with the given method, headers and payload, and returns the response as an HTTP_RESPONSE object. This function initiates an HTTP request to a specified endpoint, allowing you to interact with web services or APIs by sending data and receiving responses."
+    ),
+    display_message(en_US = "Send request to ${url} with ${payload}"),
+    alias(en_US = "send;sends;execute;request;http"),
+    display_icon = "tabler:world-www",
+    linked_data_type_identifiers = [
+        "HTTP_METHOD", "HTTP_URL", "HTTP_AUTH_TYPE", "HTTP_AUTH_VALUE", "HTTP_AUTH_PLACE",
+        "HTTP_SCHEMA", "HTTP_PAYLOAD", "OBJECT", "HTTP_RESPONSE",
+    ],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "http_method",
+    name(en_US = "HTTP Method"),
+    description(en_US = "Defines the HTTP method to be used, such as GET, POST, PUT, or DELETE.")
+)]
+#[parameter(
+    runtime_name = "url",
+    name(en_US = "Request URL"),
+    description(
+        en_US = "Specifies the endpoint address, including protocol, host, path, and query parameters, where the request is directed."
+    )
+)]
+#[parameter(
+    runtime_name = "http_auth",
+    name(en_US = "Auth Type"),
+    description(
+        en_US = "Specifies the authentication variant to use, such as Bearer, Basic, X-API-Key, or a custom scheme. Use undefined to send the request without authentication."
+    )
+)]
+#[parameter(
+    runtime_name = "http_auth_value",
+    name(en_US = "Auth Value"),
+    description(
+        en_US = "Provides the credentials for the selected authentication type. For Basic auth, supply an object with username and password; for all other types, provide a token or key string."
+    )
+)]
+#[parameter(
+    runtime_name = "http_auth_place",
+    name(en_US = "Auth Placement"),
+    description(
+        en_US = "Defines where the authentication credentials are attached to the request. Bearer and Basic auth always use Header; custom schemes can be placed in the Header or as a URL query parameter."
+    )
+)]
+#[parameter(
+    runtime_name = "http_schema",
+    name(en_US = "Content Type"),
+    description(
+        en_US = "Specifies the MIME type of the request payload, such as application/json, application/xml, or text/plain. This determines the expected format of the payload parameter."
+    )
+)]
+#[parameter(
+    runtime_name = "payload",
+    name(en_US = "Request Payload"),
+    description(
+        en_US = "Contains the request payload. For application/json the value must be an OBJECT, for all other content types a plain string is expected."
+    )
+)]
+#[parameter(
+    runtime_name = "headers",
+    name(en_US = "HTTP Headers"),
+    description(
+        en_US = "An optional collection of key-value pairs containing additional request metadata such as custom headers."
+    )
+)]
 fn send_request(
     args: &[Argument],
     _ctx: &mut ValueStore,

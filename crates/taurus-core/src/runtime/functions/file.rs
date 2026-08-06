@@ -6,16 +6,51 @@
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::signal::Signal;
 use crate::value::value_from_i64;
 use base64::Engine;
 use tucana::shared::{Struct, value::Kind};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] =
-    &[FunctionRegistration::eager("std::file::size", size, 1)];
+// No `definitions/taurus-file/*.json` counterpart exists to port from -- see
+// the note in `date.rs`, which is in the same situation.
+taurus_macros::module! {
+    identifier = "taurus-file",
+    name(en_US = "File"),
+    description(en_US = "Work with Files."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:file",
+    version = "0.0.33",
+}
 
+taurus_macros::data_type! {
+    identifier = "FILE",
+    module = "taurus-file",
+    name(en_US = "File"),
+    display_message(en_US = "File"),
+    alias(en_US = "file;attachment;blob"),
+    generic_keys = ["M"],
+    type_string = "{ contentType: M, valueType: 'base64', value: TEXT }",
+    linked_data_type_identifiers = ["TEXT"],
+}
+
+#[taurus_macros::runtime_function(
+    identifier = "std::file::size",
+    module = "taurus-file",
+    signature = "<M>(file: FILE<M>): NUMBER",
+    name(en_US = "File Size"),
+    description(en_US = "Returns the decoded byte size of a file's base64 payload."),
+    display_message(en_US = "Size of ${file}"),
+    alias(en_US = "size;file;bytes;length;std"),
+    display_icon = "tabler:file",
+    linked_data_type_identifiers = ["FILE", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "file",
+    name(en_US = "File"),
+    description(en_US = "The file whose decoded byte size to compute.")
+)]
 fn size(
     args: &[Argument],
     _ctx: &mut ValueStore,

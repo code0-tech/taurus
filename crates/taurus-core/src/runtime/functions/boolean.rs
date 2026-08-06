@@ -5,22 +5,47 @@
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::value_from_i64;
 use tucana::shared::{Value, value::Kind};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("std::boolean::as_number", as_number, 1),
-    FunctionRegistration::eager("std::boolean::as_text", as_text, 1),
-    FunctionRegistration::eager("std::boolean::from_number", from_number, 1),
-    FunctionRegistration::eager("std::boolean::from_text", from_text, 1),
-    FunctionRegistration::eager("std::boolean::is_equal", is_equal, 2),
-    FunctionRegistration::eager("std::boolean::negate", negate, 1),
-];
+taurus_macros::module! {
+    identifier = "taurus-boolean",
+    name(en_US = "Boolean"),
+    description(en_US = "Work with Booleans."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:toggle-left",
+    version = "0.0.33",
+}
 
+taurus_macros::data_type! {
+    identifier = "BOOLEAN",
+    module = "taurus-boolean",
+    name(en_US = "Boolean"),
+    display_message(en_US = "Boolean"),
+    alias(en_US = "bool;boolean;bit"),
+    type_string = "boolean",
+}
+
+#[taurus_macros::runtime_function(
+    identifier = "std::boolean::as_number",
+    module = "taurus-boolean",
+    signature = "(value: BOOLEAN): NUMBER",
+    name(en_US = "Boolean as Number"),
+    description(en_US = "Will convert the boolean to a number."),
+    display_message(en_US = "Convert ${value} to number"),
+    alias(en_US = "to number;numeric;boolean;logic;std;as;number"),
+    display_icon = "tabler:toggle-left",
+    linked_data_type_identifiers = ["BOOLEAN", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "Converts a boolean to a number.")
+)]
 fn as_number(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -30,6 +55,22 @@ fn as_number(
     Signal::Success(value_from_i64(if value { 1 } else { 0 }))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::boolean::as_text",
+    module = "taurus-boolean",
+    signature = "(value: BOOLEAN): TEXT",
+    name(en_US = "Boolean as Text"),
+    description(en_US = "Will convert the boolean to text."),
+    display_message(en_US = "Convert ${value} to text"),
+    alias(en_US = "to text;string;format number;boolean;logic;std;as;text"),
+    display_icon = "tabler:toggle-left",
+    linked_data_type_identifiers = ["BOOLEAN", "TEXT"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "Converts a boolean to a text.")
+)]
 fn as_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -41,6 +82,22 @@ fn as_text(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::boolean::from_number",
+    module = "taurus-boolean",
+    signature = "(value: NUMBER): BOOLEAN",
+    name(en_US = "Boolean from Number"),
+    description(en_US = "Will convert the number to a boolean."),
+    display_message(en_US = "Convert ${value} to boolean"),
+    alias(en_US = "from number;to boolean;convert;boolean;logic;std;from;number"),
+    display_icon = "tabler:toggle-left",
+    linked_data_type_identifiers = ["BOOLEAN", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "Converts a number to a boolean.")
+)]
 fn from_number(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -53,6 +110,22 @@ fn from_number(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::boolean::from_text",
+    module = "taurus-boolean",
+    signature = "(value: TEXT): BOOLEAN",
+    name(en_US = "Boolean from Text"),
+    description(en_US = "Will convert the string to a boolean."),
+    display_message(en_US = "Convert ${value} to boolean"),
+    alias(en_US = "from text;parse;convert;boolean;logic;std;from;text"),
+    display_icon = "tabler:toggle-left",
+    linked_data_type_identifiers = ["TEXT", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "Converts a text to a boolean.")
+)]
 fn from_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -73,6 +146,29 @@ fn from_text(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::boolean::is_equal",
+    module = "taurus-boolean",
+    signature = "(first: BOOLEAN, second: BOOLEAN): BOOLEAN",
+    name(en_US = "Is Equal"),
+    description(
+        en_US = "Compares two boolean values for equality. Returns true if they are the same, false otherwise."
+    ),
+    display_message(en_US = "${first} Equals ${second}"),
+    alias(en_US = "equal;equals;same;boolean;logic;std;is"),
+    display_icon = "tabler:toggle-left",
+    linked_data_type_identifiers = ["BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First"),
+    description(en_US = "The first boolean value to compare.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second"),
+    description(en_US = "The second boolean value to compare.")
+)]
 fn is_equal(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -84,6 +180,22 @@ fn is_equal(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::boolean::negate",
+    module = "taurus-boolean",
+    signature = "(value: BOOLEAN): BOOLEAN",
+    name(en_US = "Negate Boolean"),
+    description(en_US = "Negates a boolean value."),
+    display_message(en_US = "Negate ${value}"),
+    alias(en_US = "negate;negative;invert;opposite;boolean;logic;std"),
+    display_icon = "tabler:toggle-left",
+    linked_data_type_identifiers = ["BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The boolean value to negate.")
+)]
 fn negate(
     args: &[Argument],
     _ctx: &mut ValueStore,

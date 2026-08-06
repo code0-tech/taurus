@@ -1353,6 +1353,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inventory"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f0c30c76f2f4ccee3fe55a2435f691ca00c0e4bd87abe4f4a851b1d4dac39b"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2858,15 +2867,26 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "futures-lite",
+ "inventory",
  "log",
  "lupus",
  "rand 0.10.2",
  "serde",
  "serde_json",
+ "taurus-macros",
  "tokio",
  "tucana",
  "ureq",
  "uuid",
+]
+
+[[package]]
+name = "taurus-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

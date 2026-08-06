@@ -1,0 +1,13 @@
+[package]
+name = "taurus-macros"
+description = "Attribute/declaration macros that self-register taurus-core runtime functions, data types, and modules"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

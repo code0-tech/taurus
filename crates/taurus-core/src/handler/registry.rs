@@ -69,6 +69,12 @@ pub struct FunctionRegistration {
     pub entry: HandlerFunctionEntry,
 }
 
+// Populated by `#[taurus_macros::runtime_function(...)]` via
+// `inventory::submit!`, in addition to the hand-written `ALL_FUNCTION_SETS`
+// below (until every function is migrated -- see `taurus-core`'s migration
+// plan).
+inventory::collect!(FunctionRegistration);
+
 impl FunctionRegistration {
     pub const fn eager(id: &'static str, handler: HandlerFn, param_count: u8) -> Self {
         Self {
@@ -99,6 +105,9 @@ impl Default for FunctionStore {
         let mut store = Self::new();
         for set in ALL_FUNCTION_SETS {
             store.populate(set);
+        }
+        for reg in inventory::iter::<FunctionRegistration>() {
+            store.functions.insert(reg.id, reg.entry);
         }
         store
     }

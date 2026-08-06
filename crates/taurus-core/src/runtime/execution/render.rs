@@ -42,9 +42,6 @@ impl TraceTheme {
     fn returned(&self, value: &str) -> String {
         format!("{} {}", self.paint("RETURN", "33"), value)
     }
-    fn respond(&self, value: &str) -> String {
-        format!("{} {}", self.paint("RESPOND", "35"), value)
-    }
     fn stop(&self) -> String {
         self.paint("STOP", "31")
     }
@@ -226,7 +223,6 @@ fn render_frame(
         Some(Outcome::Success { value_preview }) => theme.success(value_preview),
         Some(Outcome::Failure { error_preview }) => theme.failure(error_preview),
         Some(Outcome::Return { value_preview }) => theme.returned(value_preview),
-        Some(Outcome::Respond { value_preview }) => theme.respond(value_preview),
         Some(Outcome::Stop) => theme.stop(),
         None => "INCOMPLETE".to_string(),
     };

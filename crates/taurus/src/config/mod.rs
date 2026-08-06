@@ -55,15 +55,6 @@ pub struct Config {
     /// as a starting point -- tune via env for your actual workload).
     pub max_concurrent_executions: usize,
 
-    /// Capacity of the NATS respond emitter's outbound event channel.
-    /// `emit` drops events (rather than blocking the caller) once this
-    /// many are queued waiting to be published -- these are best-effort
-    /// lifecycle notifications, not the authoritative execution result.
-    /// Defaults to 8x max_concurrent_executions, since a burst of
-    /// concurrent flows can each emit several events (starting/ongoing/
-    /// finished) before the publish worker drains them.
-    pub emitter_channel_capacity: usize,
-
     /// OpenTelemetry exporter configuration.
     pub opentelemetry: OpenTelemetry,
 }
@@ -103,10 +94,6 @@ impl Config {
             ),
             remote_runtime_timeout_secs: env_with_default("REMOTE_RUNTIME_TIMEOUT_SECS", 30_u64),
             max_concurrent_executions,
-            emitter_channel_capacity: env_with_default(
-                "EMITTER_CHANNEL_CAPACITY",
-                max_concurrent_executions.saturating_mul(8),
-            ),
             opentelemetry: OpenTelemetry {
                 enabled: env_with_default("OPENTELEMETRY_ENABLED", false),
                 service_name: env_with_default(

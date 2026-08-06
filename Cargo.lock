@@ -2880,17 +2880,12 @@ name = "taurus-provider"
 version = "0.1.0"
 dependencies = [
  "async-nats",
- "base64 0.23.0",
- "code0-flow",
- "env_logger",
  "futures-lite",
  "log",
  "prost",
- "rand 0.10.2",
  "taurus-core",
  "tokio",
  "tonic",
- "tonic-health",
  "tucana 0.0.77",
 ]
 

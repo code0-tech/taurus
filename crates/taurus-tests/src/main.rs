@@ -109,7 +109,6 @@ impl Testable for Case {
                 self.flow.node_functions.clone(),
                 flow_input,
                 remote.as_ref().map(|runtime| runtime as &dyn RemoteRuntime),
-                None,
                 false,
             );
 
@@ -130,12 +129,6 @@ impl Testable for Case {
                     }
                 }
                 taurus_core::types::signal::Signal::Return(value) => {
-                    let json = to_json_value(value);
-                    if json != input.clone().expected_result {
-                        return CaseResult::Failure(input, json);
-                    }
-                }
-                taurus_core::types::signal::Signal::Respond(value) => {
                     let json = to_json_value(value);
                     if json != input.clone().expected_result {
                         return CaseResult::Failure(input, json);

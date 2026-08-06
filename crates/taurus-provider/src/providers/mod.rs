@@ -1,6 +1,3 @@
-//! The two NATS-backed provider implementations: [`remote`] for delegating
-//! node execution to remote services, [`emitter`] for streaming execution
-//! lifecycle events.
+//! NATS-backed provider for delegating node execution to remote services.
 
-pub mod emitter;
 pub mod remote;

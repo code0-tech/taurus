@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use crate::handler::argument::{Argument, FunctionThunk, ParameterNode, Thunk};
 use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
-use crate::runtime::engine::emitter::{EmitType, ExecutionId, RespondEmitter};
 use crate::runtime::engine::model::{
     CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget,
 };
@@ -35,8 +34,6 @@ pub async fn execute_compiled(
     handlers: &FunctionStore,
     value_store: &mut ValueStore,
     remote: Option<&dyn RemoteRuntime>,
-    execution_id: ExecutionId,
-    respond_emitter: Option<&dyn RespondEmitter>,
     with_trace: bool,
 ) -> (Signal, Option<TraceRun>) {
     // Keep trace allocation fully optional so the hot path stays lean when tracing is disabled.
@@ -45,8 +42,6 @@ pub async fn execute_compiled(
         flow,
         handlers,
         remote,
-        execution_id,
-        respond_emitter,
         tracer: tracer.as_ref(),
     };
 
@@ -68,9 +63,6 @@ struct ExecutionResult {
 struct NodeResult {
     signal: Signal,
     frame_id: Option<u64>,
-    parameter_results: Vec<NodeParameterNodeExecutionResult>,
-    started_at: i64,
-    finished_at: i64,
 }
 
 struct ExecutedNode {
@@ -82,8 +74,6 @@ struct EngineExecutor<'a> {
     flow: &'a CompiledFlow,
     handlers: &'a FunctionStore,
     remote: Option<&'a dyn RemoteRuntime>,
-    execution_id: ExecutionId,
-    respond_emitter: Option<&'a dyn RespondEmitter>,
     tracer: Option<&'a Mutex<Tracer>>,
 }
 
@@ -99,7 +89,6 @@ impl<'a> EngineExecutor<'a> {
         let mut previous_frame = None;
 
         loop {
-            let node_id = self.flow.nodes[current_idx].id;
             let next_idx = self.flow.nodes[current_idx].next_idx;
             let result = self.execute_single_node(current_idx, value_store).await;
 
@@ -124,29 +113,6 @@ impl<'a> EngineExecutor<'a> {
                         };
                     }
                 },
-                Signal::Respond(value) => {
-                    // `Respond` is an observable side effect; execution may still continue.
-                    if let Some(emitter) = self.respond_emitter {
-                        emitter.emit(self.execution_id, EmitType::OngoingExec, value.clone());
-                    }
-
-                    value_store.insert_success_with_timing(
-                        node_id,
-                        value.clone(),
-                        result.parameter_results,
-                        result.started_at,
-                        result.finished_at,
-                    );
-                    match next_idx {
-                        Some(next) => current_idx = next,
-                        None => {
-                            return ExecutionResult {
-                                signal: Signal::Success(value),
-                                root_frame: call_root_frame,
-                            };
-                        }
-                    }
-                }
                 // `Return`/`Stop`/`Failure` unwind immediately to the direct caller.
                 other => {
                     return ExecutionResult {
@@ -169,7 +135,6 @@ impl<'a> EngineExecutor<'a> {
         let mut previous_frame = None;
 
         loop {
-            let node_id = self.flow.nodes[current_idx].id;
             let next_idx = self.flow.nodes[current_idx].next_idx;
             let result = self.execute_single_node_sync(current_idx, value_store);
 
@@ -193,28 +158,6 @@ impl<'a> EngineExecutor<'a> {
                         };
                     }
                 },
-                Signal::Respond(value) => {
-                    if let Some(emitter) = self.respond_emitter {
-                        emitter.emit(self.execution_id, EmitType::OngoingExec, value.clone());
-                    }
-
-                    value_store.insert_success_with_timing(
-                        node_id,
-                        value.clone(),
-                        result.parameter_results,
-                        result.started_at,
-                        result.finished_at,
-                    );
-                    match next_idx {
-                        Some(next) => current_idx = next,
-                        None => {
-                            return ExecutionResult {
-                                signal: Signal::Success(value),
-                                root_frame: call_root_frame,
-                            };
-                        }
-                    }
-                }
                 other => {
                     return ExecutionResult {
                         signal: other,
@@ -445,27 +388,13 @@ impl<'a> EngineExecutor<'a> {
                     finished_at,
                     value_store,
                 );
-                NodeResult {
-                    signal,
-                    frame_id,
-                    parameter_results,
-                    started_at,
-                    finished_at,
-                }
+                NodeResult { signal, frame_id }
             }
             NodeExecutionTarget::Remote { service } => {
-                let started_at = now_unix_micros();
                 let signal = self
                     .execute_remote_node(node, service, value_store, frame_id)
                     .await;
-                let finished_at = now_unix_micros();
-                NodeResult {
-                    signal,
-                    frame_id,
-                    parameter_results: Vec::new(),
-                    started_at,
-                    finished_at,
-                }
+                NodeResult { signal, frame_id }
             }
         };
         self.trace_exit(frame_id, &result.signal, value_store);
@@ -496,13 +425,7 @@ impl<'a> EngineExecutor<'a> {
                     finished_at,
                     value_store,
                 );
-                NodeResult {
-                    signal,
-                    frame_id,
-                    parameter_results,
-                    started_at,
-                    finished_at,
-                }
+                NodeResult { signal, frame_id }
             }
             NodeExecutionTarget::Remote { .. } => {
                 let started_at = now_unix_micros();
@@ -518,13 +441,7 @@ impl<'a> EngineExecutor<'a> {
                     now_unix_micros(),
                     value_store,
                 );
-                NodeResult {
-                    signal,
-                    frame_id,
-                    parameter_results: Vec::new(),
-                    started_at,
-                    finished_at: now_unix_micros(),
-                }
+                NodeResult { signal, frame_id }
             }
         };
         self.trace_exit(frame_id, &result.signal, value_store);
@@ -1136,9 +1053,6 @@ impl<'a> EngineExecutor<'a> {
                 error_preview: format!("{}:{} {}", error.code, error.category, error.message),
             },
             Signal::Return(value) => Outcome::Return {
-                value_preview: preview_value(value),
-            },
-            Signal::Respond(value) => Outcome::Respond {
                 value_preview: preview_value(value),
             },
             Signal::Stop => Outcome::Stop,

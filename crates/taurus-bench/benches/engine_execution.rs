@@ -150,9 +150,7 @@ fn bench_chain(c: &mut Criterion) {
                 &size,
                 |b, _| {
                     let engine = ExecutionEngine::new();
-                    b.iter(|| {
-                        engine.execute_graph(start, nodes.clone(), None, None, None, with_trace)
-                    });
+                    b.iter(|| engine.execute_graph(start, nodes.clone(), None, None, with_trace));
                 },
             );
         }
@@ -170,9 +168,7 @@ fn bench_array_map(c: &mut Criterion) {
                 &size,
                 |b, _| {
                     let engine = ExecutionEngine::new();
-                    b.iter(|| {
-                        engine.execute_graph(start, nodes.clone(), None, None, None, with_trace)
-                    });
+                    b.iter(|| engine.execute_graph(start, nodes.clone(), None, None, with_trace));
                 },
             );
         }
@@ -240,7 +236,7 @@ fn bench_compile_vs_encode(c: &mut Criterion) {
     });
     group.bench_function("full_execute_graph/200 (for comparison)", |b| {
         let engine = ExecutionEngine::new();
-        b.iter(|| engine.execute_graph(start, nodes.clone(), None, None, None, false));
+        b.iter(|| engine.execute_graph(start, nodes.clone(), None, None, false));
     });
     group.finish();
 }

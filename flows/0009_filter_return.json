@@ -1,6 +1,6 @@
 {
-	"name": "10_multiple_respond",
-	"description": "This flow checks if the emitter is working correctly, only works with taurus-manual",
+	"name": "0009_filter_return",
+	"description": "Checks if `return` works inside of a iterator",
 	"inputs": [
 		{
 			"input": {
@@ -33,17 +33,10 @@
 					]
 				}
 			},
-			"expected_result": {
-				"headers": {
-					"x": "y"
-				},
-				"http_status_code": 200,
-				"payload": [
-					"timmy doe",
-					"willy wokner"
-				],
-				"http_schema": "application/json"
-			}
+			"expected_result": [
+				"timmy doe",
+				"willy wokner"
+			]
 		},
 		{
 			"input": {
@@ -51,16 +44,22 @@
 				"headers": {
 					"Content-Type": "text/plain"
 				},
-				"payload": []
+				"payload": {
+					"users": [
+						{
+							"age": 11,
+							"email": "tom@text.com",
+							"name": "timmy doe"
+						},
+						{
+							"age": 2,
+							"email": "willy@text.com",
+							"name": "willy wokner"
+						}
+					]
+				}
 			},
-			"expected_result": {
-				"headers": {
-					"x": "y"
-				},
-				"http_status_code": 200,
-				"payload": [],
-				"http_schema": "application/json"
-			}
+			"expected_result": []
 		}
 	],
 	"flow": {
@@ -306,167 +305,14 @@
 			},
 			{
 				"databaseId": "11",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "27",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "32",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
-						"databaseId": "31",
-						"runtimeParameterId": "payload",
-						"value": {
-							"referenceValue": {
-								"nodeId": "10"
-							}
-						}
-					},
-					{
-						"databaseId": "30",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"x": {
-											"stringValue": "y"
-										}
-									}
-								}
-							}
-						}
-					}
-				],
-				"nextNodeId": "20"
-			},
-			{
-				"nextNodeId": "21",
-				"databaseId": "20",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "27",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "32",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
-						"databaseId": "31",
-						"runtimeParameterId": "payload",
-						"value": {
-							"referenceValue": {
-								"nodeId": "10"
-							}
-						}
-					},
-					{
-						"databaseId": "30",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"x": {
-											"stringValue": "y"
-										}
-									}
-								}
-							}
-						}
-					}
-				]
-			},
-			{
-				"databaseId": "21",
-				"nextNodeId": "22",
-				"runtimeFunctionId": "rest::control::respond",
-				"parameters": [
-					{
-						"databaseId": "27",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "32",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
-						"databaseId": "31",
-						"runtimeParameterId": "payload",
-						"value": {
-							"referenceValue": {
-								"nodeId": "10"
-							}
-						}
-					},
-					{
-						"databaseId": "30",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {
-									"fields": {
-										"x": {
-											"stringValue": "y"
-										}
-									}
-								}
-							}
-						}
-					}
-				]
-			},
-			{
-				"databaseId": "22",
 				"runtimeFunctionId": "std::control::return",
 				"parameters": [
 					{
-						"databaseId": "8",
-						"runtimeParameterId": "http_response",
+						"databaseId": "31",
+						"runtimeParameterId": "value",
 						"value": {
 							"referenceValue": {
-								"nodeId": "11"
+								"nodeId": "10"
 							}
 						}
 					}

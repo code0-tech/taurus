@@ -1,0 +1,53 @@
+{
+	"name": "0002_return_flow_input",
+	"description": "Returns the flow input unchanged",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": null
+		},
+		{
+			"input": {
+				"name": "Joe Doe",
+				"age": 51,
+				"pets": [
+					"dog",
+					"cat",
+					"bird"
+				]
+			},
+			"expected_result": {
+				"name": "Joe Doe",
+				"age": 51,
+				"pets": [
+					"dog",
+					"cat",
+					"bird"
+				]
+			}
+		}
+	],
+	"flow": {
+		"flowId": "2",
+		"projectId": "1",
+		"startingNodeId": "3",
+		"nodeFunctions": [
+			{
+				"definition_source": "taurus",
+				"databaseId": "3",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "7",
+						"runtimeParameterId": "value",
+						"value": {
+							"referenceValue": {
+								"flowInput": {}
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

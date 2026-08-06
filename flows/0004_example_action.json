@@ -1,5 +1,5 @@
 {
-	"name": "04_example_action",
+	"name": "0004_example_action",
 	"description": "This flow expects a simple http response object as the return value",
 	"inputs": [
 		{

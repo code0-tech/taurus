@@ -1,5 +1,5 @@
 {
-	"name": "13_remote_function_subflow",
+	"name": "0012_remote_function_subflow",
 	"description": "This flow validates that a non-local function-backed sub_flow is dispatched to the remote runtime with its callback input",
 	"inputs": [
 		{

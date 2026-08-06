@@ -20,10 +20,11 @@ use tucana::shared::{Struct, Value};
 use ureq::http;
 use ureq::{Body, RequestExt};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("http::request::send", send_request, 8),
-    FunctionRegistration::eager("rest::control::respond", respond, 4),
-];
+pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[FunctionRegistration::eager(
+    "http::request::send",
+    send_request,
+    8,
+)];
 
 fn fail(category: &str, message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new("T-STD-00001", category, message))
@@ -40,36 +41,6 @@ fn run_blocking<R>(f: impl FnOnce() -> R) -> R {
     } else {
         f()
     }
-}
-
-fn respond(
-    args: &[Argument],
-    _ctx: &mut ValueStore,
-    _run: &mut crate::handler::registry::ThunkRunner<'_>,
-) -> Signal {
-    args!(args => http_status_code: i64, http_schema: String, payload: Value, headers: Value);
-
-    let http_headers = match headers_from_value(&headers) {
-        Ok(headers) => headers,
-        Err(signal) => return signal,
-    };
-
-    let mut fields = HashMap::new();
-    fields.insert("http_status_code".to_string(), http_status_code.to_value());
-    fields.insert(
-        "headers".to_string(),
-        Value {
-            kind: Some(Kind::StructValue(http_headers)),
-        },
-    );
-
-    fields.insert("payload".to_string(), payload);
-    fields.insert("http_schema".to_string(), http_schema.to_value());
-
-    // `Respond` is a control signal; the executor can still continue with `next` if present.
-    Signal::Respond(Value {
-        kind: Some(Kind::StructValue(Struct { fields })),
-    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

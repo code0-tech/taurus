@@ -79,19 +79,14 @@ pub async fn push_definitions_until_success(config: &Config) {
         );
 
         match client.update(request).await {
-            Ok(response) if response.into_inner().success => {
+            Ok(response) if response.get_ref().success => {
                 log::info!("Module definition update has been successful");
                 break;
             }
             Ok(_) => log::warn!("Module definition update has been unsuccessful"),
             Err(err) => {
                 log::error!("Module definition update failed. Reason: {:?}", err);
-                errors::record(
-                    "transport",
-                    "definitions.update",
-                    &err,
-                    "service=aquila",
-                );
+                errors::record("transport", "definitions.update", &err, "service=aquila");
             }
         }
 

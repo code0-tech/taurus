@@ -7,12 +7,11 @@
 //! the worker task to stop via a `Notify` and waits for it to exit on its own,
 //! so in-flight flow executions can finish before the process exits.
 
+mod definitions;
 mod worker;
 
 use code0_flow::flow_config::environment::Environment;
 use code0_flow::flow_config::mode::Mode::{DYNAMIC, STATIC};
-use code0_flow::flow_definition::Reader;
-use code0_flow::flow_service::FlowUpdateService;
 use std::sync::Arc;
 use std::time::Duration;
 use taurus_core::runtime::engine::ExecutionEngine;
@@ -20,7 +19,6 @@ use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::signal;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
-use tokio::time::sleep;
 use tonic_health::pb::health_server::HealthServer;
 use tucana::shared::module_status::StatusVariant;
 
@@ -191,7 +189,7 @@ async fn setup_dynamic_services_if_needed(
         return (None, None, None);
     }
 
-    push_definitions_until_success(config).await;
+    definitions::push_definitions_until_success(config).await;
 
     let runtime_execution_service = Some(
         TaurusRuntimeExecutionService::from_url(
@@ -207,7 +205,7 @@ async fn setup_dynamic_services_if_needed(
         TaurusRuntimeStatusService::from_url(
             config.aquila_url.clone(),
             config.aquila_token.clone(),
-            read_module_status_identifiers(config.definitions.as_str()),
+            definitions::module_identifiers(),
             Duration::from_secs(config.aquila_grpc_connect_timeout_secs),
             Duration::from_secs(config.aquila_grpc_request_timeout_secs),
         )
@@ -257,56 +255,6 @@ async fn setup_dynamic_services_if_needed(
         runtime_execution_service,
         runtime_status_heartbeat_task,
     )
-}
-
-fn read_module_status_identifiers(definition_path: &str) -> Vec<String> {
-    let reader = Reader::configure(definition_path.to_string(), true, Vec::new(), None);
-    match reader.read_modules() {
-        Ok(modules) => modules
-            .into_iter()
-            .map(|module| module.identifier)
-            .filter(|identifier| !identifier.is_empty())
-            .collect(),
-        Err(err) => {
-            log::error!(
-                "Failed to read module definitions for runtime status: {:?}",
-                err
-            );
-            errors::record_message(
-                "configuration",
-                "definitions.read_modules",
-                format!("{err:?}"),
-                format!("path={definition_path}"),
-            );
-            Vec::new()
-        }
-    }
-}
-
-async fn push_definitions_until_success(config: &Config) {
-    let mut definition_service = FlowUpdateService::from_url(
-        config.aquila_url.clone(),
-        config.definitions.as_str(),
-        config.aquila_token.clone(),
-        Duration::from_secs(config.aquila_grpc_connect_timeout_secs),
-        Duration::from_secs(config.aquila_grpc_request_timeout_secs),
-    )
-    .await
-    .with_definition_source(String::from("taurus"));
-
-    let mut retry_count = 1;
-    loop {
-        if definition_service.send_with_status().await {
-            break;
-        }
-
-        log::warn!(
-            "Updating definitions failed, trying again in 3 seconds (retry #{})",
-            retry_count
-        );
-        retry_count += 1;
-        sleep(Duration::from_secs(3)).await;
-    }
 }
 
 async fn update_stopped_status(runtime_status_service: Option<&Arc<TaurusRuntimeStatusService>>) {
@@ -381,38 +329,5 @@ async fn wait_for_shutdown(
             "NATS worker task ended unexpectedly during shutdown: {}",
             err
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn reads_status_identifiers_for_each_readable_module() {
-        let root =
-            std::env::temp_dir().join(format!("taurus-module-status-test-{}", std::process::id()));
-        let module_a = root.join("module-a");
-        let module_b = root.join("module-b");
-        fs::create_dir_all(&module_a).expect("create module-a");
-        fs::create_dir_all(&module_b).expect("create module-b");
-        fs::write(
-            module_a.join("module.json"),
-            r#"{"identifier":"alpha","name":[],"description":[],"documentation":"","author":"","icon":""}"#,
-        )
-        .expect("write module-a");
-        fs::write(
-            module_b.join("module.json"),
-            r#"{"identifier":"beta","name":[],"description":[],"documentation":"","author":"","icon":""}"#,
-        )
-        .expect("write module-b");
-
-        let mut identifiers = read_module_status_identifiers(root.to_str().expect("utf-8 path"));
-        identifiers.sort();
-
-        assert_eq!(identifiers, vec!["alpha".to_string(), "beta".to_string()]);
-
-        fs::remove_dir_all(root).expect("cleanup module status test");
     }
 }

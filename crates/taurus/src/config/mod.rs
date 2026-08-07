@@ -31,8 +31,6 @@ pub struct Config {
 
     pub grpc_port: u16,
 
-    pub definitions: String,
-
     /// Runtime status heartbeat interval in seconds while Taurus is running.
     /// Set to 0 to disable periodic heartbeat updates.
     pub runtime_status_update_interval_seconds: u64,
@@ -79,7 +77,6 @@ impl Config {
             with_health_service: env_with_default("WITH_HEALTH_SERVICE", false),
             grpc_host: env_with_default("GRPC_HOST", "127.0.0.1".to_string()),
             grpc_port: env_with_default("GRPC_PORT", 50051),
-            definitions: env_with_default("DEFINITIONS", String::from("./definitions")),
             runtime_status_update_interval_seconds: env_with_default(
                 "RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS",
                 30_u64,

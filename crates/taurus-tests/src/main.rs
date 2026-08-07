@@ -8,6 +8,7 @@ use taurus_core::fixtures::{Case, Cases, Input, RemoteFixture, print_failure, pr
 use taurus_core::runtime::engine::ExecutionEngine;
 use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
+use tucana::aquila::action_node_value;
 use tucana::shared::node_execution_result::{
     Id as NodeExecutionResultId, Result as NodeExecutionOutcome,
 };
@@ -47,12 +48,18 @@ impl RemoteRuntime for FixtureRemoteRuntime {
             ));
         }
 
+        // Parameters are positional on the wire now (no key), so fixtures
+        // with a `resultParameter` only make sense with a single remote
+        // parameter — take it directly rather than looking it up by name.
         let value = execution
             .request
             .parameters
-            .as_ref()
-            .and_then(|parameters| parameters.fields.get(&self.fixture.result_parameter))
-            .cloned()
+            .first()
+            .and_then(|parameter| parameter.value.as_ref())
+            .and_then(|value| match value {
+                action_node_value::Value::LiteralValue(value) => Some(value.clone()),
+                action_node_value::Value::SubFlow(_) => None,
+            })
             .ok_or_else(|| {
                 RuntimeError::new(
                     "T-TEST-000003",
@@ -105,6 +112,7 @@ impl Testable for Case {
         for input in self.inputs.clone() {
             let flow_input = input.clone().input.map(from_json_value);
             let (res, _) = engine.execute_graph(
+                "test-execution",
                 self.flow.starting_node_id,
                 self.flow.node_functions.clone(),
                 flow_input,

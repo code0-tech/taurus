@@ -85,7 +85,7 @@ fn main() {
 
     let mut total = HashMap::new();
     for i in 0..iterations {
-        let (signal, _reason) = engine.execute_graph(start, nodes.clone(), None, None, with_trace);
+        let (signal, _reason) = engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace);
         total.insert(i, signal.exit_reason());
     }
     // Prevent the compiler from optimizing the loop away.

@@ -41,6 +41,7 @@ pub fn spawn_worker(
     flow_type: String,
     shutdown: Arc<Notify>,
     max_concurrent_executions: usize,
+    with_trace: bool,
 ) -> JoinHandle<()> {
     let engine = Arc::new(engine);
     let semaphore = Arc::new(Semaphore::new(max_concurrent_executions.max(1)));
@@ -90,6 +91,7 @@ pub fn spawn_worker(
                                     &nats_remote,
                                     runtime_execution_service,
                                     flow_type.as_str(),
+                                    with_trace,
                                 ).await;
                             });
                         }
@@ -120,6 +122,7 @@ async fn process_execution_message(
     nats_remote: &NATSRemoteRuntime,
     mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     flow_type: &str,
+    with_trace: bool,
 ) {
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")
         .unwrap_or_else(|| {
@@ -168,6 +171,7 @@ async fn process_execution_message(
         Some(nats_remote),
         flow_type,
         function_identifiers,
+        with_trace,
     )
     .await;
     log::debug!(
@@ -210,15 +214,18 @@ async fn execute_flow(
     remote: Option<&dyn RemoteRuntime>,
     flow_type: &str,
     function_identifiers: std::collections::HashMap<i64, String>,
+    with_trace: bool,
 ) -> FlowRunResult {
     let started_at = now_unix_micros();
     let flow_id = flow.flow_id;
     let project_id = flow.project_id;
     let input = flow.input_value.clone();
     // Trace V2 collection is O(n^2) in executed nodes (see taurus-core's
-    // ValueStore::trace_snapshot) and nothing here consumes the trace_run
-    // engine.rs prints when with_trace is true; leave it off in production.
-    let report = engine.execute_flow_report_async(flow, remote, false).await;
+    // ValueStore::trace_snapshot); only worth paying for in development,
+    // where engine.rs prints the trace via `with_trace`.
+    let report = engine
+        .execute_flow_report_async(&execution_id.to_string(), flow, remote, with_trace)
+        .await;
     let finished_at = now_unix_micros();
     record_flow_metrics(
         flow_id,
@@ -458,6 +465,7 @@ mod tests {
             None,
             "test",
             function_identifiers,
+            false,
         )
         .await;
 

@@ -50,21 +50,30 @@ impl ExecutionEngine {
     /// Execute an `ExecutionFlow` and return the final signal plus per-node execution results.
     pub fn execute_flow_report(
         &self,
+        execution_id: &str,
         flow: ExecutionFlow,
         remote: Option<&dyn RemoteRuntime>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        block_on(self.execute_flow_report_async(flow, remote, with_trace))
+        block_on(self.execute_flow_report_async(execution_id, flow, remote, with_trace))
     }
 
     /// Execute an `ExecutionFlow` asynchronously and return per-node results.
+    ///
+    /// `execution_id` is reused as the `execution_identifier` on any remote
+    /// call this flow makes back into an action (e.g. a `respond`-style
+    /// callback) — the action correlates that id against the one it used to
+    /// originally trigger this flow, so it must match exactly, not be a
+    /// freshly generated id per remote call.
     pub async fn execute_flow_report_async(
         &self,
+        execution_id: &str,
         flow: ExecutionFlow,
         remote: Option<&dyn RemoteRuntime>,
         with_trace: bool,
     ) -> EngineExecutionReport {
         self.execute_graph_with_project_id_report_async(
+            execution_id,
             flow.project_id,
             flow.starting_node_id,
             flow.node_functions,
@@ -78,6 +87,7 @@ impl ExecutionEngine {
     /// Execute a graph described by node list and start node.
     pub fn execute_graph(
         &self,
+        execution_id: &str,
         start_node_id: i64,
         node_functions: Vec<NodeFunction>,
         flow_input: Option<Value>,
@@ -85,6 +95,7 @@ impl ExecutionEngine {
         with_trace: bool,
     ) -> (Signal, ExitReason) {
         let report = block_on(self.execute_graph_with_project_id_report_async(
+            execution_id,
             0,
             start_node_id,
             node_functions,
@@ -98,6 +109,7 @@ impl ExecutionEngine {
     /// Execute a graph and return the final signal plus per-node execution results.
     pub fn execute_graph_report(
         &self,
+        execution_id: &str,
         start_node_id: i64,
         node_functions: Vec<NodeFunction>,
         flow_input: Option<Value>,
@@ -105,6 +117,7 @@ impl ExecutionEngine {
         with_trace: bool,
     ) -> EngineExecutionReport {
         block_on(self.execute_graph_with_project_id_report_async(
+            execution_id,
             0,
             start_node_id,
             node_functions,
@@ -114,8 +127,10 @@ impl ExecutionEngine {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_graph_with_project_id_report_async(
         &self,
+        execution_id: &str,
         project_id: i64,
         start_node_id: i64,
         node_functions: Vec<NodeFunction>,
@@ -139,6 +154,7 @@ impl ExecutionEngine {
         };
 
         let (signal, trace_run) = executor::execute_compiled(
+            execution_id,
             &compiled,
             &self.handlers,
             &mut value_store,

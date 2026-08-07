@@ -69,8 +69,10 @@ async fn main() {
     if args.offline {
         let engine = ExecutionEngine::new();
         let started_at = now_unix_micros();
+        let execution_id = format!("manual-{started_at}");
         let start = Instant::now();
         let report = engine.execute_graph_report(
+            &execution_id,
             case.flow.starting_node_id,
             case.flow.node_functions.clone(),
             flow_input,
@@ -108,8 +110,10 @@ async fn main() {
     let engine = ExecutionEngine::new();
 
     let started_at = now_unix_micros();
+    let execution_id = format!("manual-{started_at}");
     let start = Instant::now();
     let report = engine.execute_graph_report(
+        &execution_id,
         case.flow.starting_node_id,
         case.flow.node_functions.clone(),
         flow_input,

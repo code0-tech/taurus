@@ -54,6 +54,7 @@ pub async fn run() {
         mode_label(&config).to_string(),
         worker_shutdown.clone(),
         config.max_concurrent_executions,
+        config.environment == Environment::Development,
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task, &worker_shutdown).await;

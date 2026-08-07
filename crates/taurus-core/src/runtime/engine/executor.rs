@@ -1,19 +1,16 @@
 //! Runtime engine execution loop for compiled flow plans.
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use futures_lite::future::block_on;
-use tucana::aquila::ActionExecutionRequest;
+use tucana::aquila::{ActionExecutionRequest, ActionNodeValue, action_node_value};
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{
     InputType, NodeExecutionResult as TucanaNodeExecutionResult, NodeParameterNodeExecutionResult,
-    ReferenceValue, Struct, SubFlowSetting, Value,
+    ReferenceValue, SubFlowSetting, Value,
 };
-use uuid::Uuid;
-
 use crate::handler::argument::{Argument, FunctionThunk, ParameterNode, Thunk};
 use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
 use crate::runtime::engine::model::{
@@ -30,6 +27,7 @@ use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 
 pub async fn execute_compiled(
+    execution_id: &str,
     flow: &CompiledFlow,
     handlers: &FunctionStore,
     value_store: &mut ValueStore,
@@ -39,6 +37,7 @@ pub async fn execute_compiled(
     // Keep trace allocation fully optional so the hot path stays lean when tracing is disabled.
     let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
+        execution_id,
         flow,
         handlers,
         remote,
@@ -71,6 +70,11 @@ struct ExecutedNode {
 }
 
 struct EngineExecutor<'a> {
+    /// The originating flow execution's id — reused verbatim as the
+    /// `execution_identifier` on every remote call this flow makes, so an
+    /// action can correlate a callback (e.g. `respond`) against the run
+    /// that triggered it.
+    execution_id: &'a str,
     flow: &'a CompiledFlow,
     handlers: &'a FunctionStore,
     remote: Option<&'a dyn RemoteRuntime>,
@@ -865,15 +869,20 @@ impl<'a> EngineExecutor<'a> {
             ));
         }
 
-        let mut fields = HashMap::new();
-        for (parameter, value) in node.parameters.iter().zip(values) {
-            fields.insert(parameter.runtime_parameter_id.clone(), value);
-        }
+        // Parameters are matched positionally on the receiving end, not by
+        // key — `node.parameters` must already be in the function's declared
+        // parameter order.
+        let parameters = values
+            .into_iter()
+            .map(|value| ActionNodeValue {
+                value: Some(action_node_value::Value::LiteralValue(value)),
+            })
+            .collect();
 
         Ok(ActionExecutionRequest {
-            execution_identifier: Uuid::new_v4().to_string(),
+            execution_identifier: self.execution_id.to_string(),
             function_identifier: node.handler_id.clone(),
-            parameters: Some(Struct { fields }),
+            parameters,
             project_id: self.flow.project_id,
         })
     }
@@ -891,8 +900,11 @@ impl<'a> EngineExecutor<'a> {
             ));
         }
 
-        let mut fields = HashMap::new();
-        for (setting, argument) in function.settings.iter().zip(args) {
+        // Parameters are matched positionally on the receiving end, not by
+        // key — `function.settings` must already be in the function's
+        // declared parameter order.
+        let mut parameters = Vec::with_capacity(args.len());
+        for argument in args {
             let Argument::Eval(value) = argument else {
                 return Err(RuntimeError::new(
                     "T-CORE-000005",
@@ -900,13 +912,15 @@ impl<'a> EngineExecutor<'a> {
                     "Remote function parameters must be evaluated values",
                 ));
             };
-            fields.insert(setting.identifier.clone(), value.clone());
+            parameters.push(ActionNodeValue {
+                value: Some(action_node_value::Value::LiteralValue(value.clone())),
+            });
         }
 
         Ok(ActionExecutionRequest {
-            execution_identifier: Uuid::new_v4().to_string(),
+            execution_identifier: self.execution_id.to_string(),
             function_identifier: function.identifier.clone(),
-            parameters: Some(Struct { fields }),
+            parameters,
             project_id: self.flow.project_id,
         })
     }

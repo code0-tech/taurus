@@ -188,11 +188,12 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
-    use tucana::aquila::ActionExecutionRequest;
+    use tucana::aquila::{ActionExecutionRequest, action_node_value};
     use tucana::shared::{
         InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
-        Struct, SubFlow, SubFlowSetting, Value, node_execution_result, node_value, reference_value,
-        sub_flow::{ExecutionReference, SubFlowFunction},
+        Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value, node_execution_result,
+        node_value, reference_value,
+        sub_flow::ExecutionReference,
         value::Kind,
     };
 
@@ -490,6 +491,7 @@ mod tests {
         );
 
         let (signal, reason) = engine.execute_graph(
+            "test",
             2,
             vec![parent, next, return_node, unreachable_after_return],
             None,
@@ -566,6 +568,7 @@ mod tests {
         );
 
         let (signal, reason) = engine.execute_graph(
+            "test",
             1,
             vec![
                 map_node,
@@ -618,7 +621,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -672,7 +675,7 @@ mod tests {
             input_value: None,
         };
 
-        let report = engine.execute_flow_report(flow, Some(&remote), false);
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -692,12 +695,16 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].function_identifier, "remote::add");
         assert_eq!(requests[0].project_id, 42);
-        let first_parameters = requests[0]
-            .parameters
-            .as_ref()
-            .expect("remote function request should contain parameters");
-        assert_eq!(first_parameters.fields.get("lhs"), Some(&int_value(1)));
-        assert_eq!(first_parameters.fields.get("rhs"), Some(&int_value(2)));
+        let first_parameters = &requests[0].parameters;
+        assert_eq!(first_parameters.len(), 2);
+        assert_eq!(
+            first_parameters[0].value,
+            Some(action_node_value::Value::LiteralValue(int_value(1)))
+        );
+        assert_eq!(
+            first_parameters[1].value,
+            Some(action_node_value::Value::LiteralValue(int_value(2)))
+        );
 
         let function_results: Vec<_> = report
             .node_execution_results
@@ -734,7 +741,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![map_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         match report.signal {
@@ -762,7 +769,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![map_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         assert!(report.node_execution_results.is_empty());
@@ -801,7 +808,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![filter_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![filter_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -829,7 +836,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -857,7 +864,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -891,7 +898,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(expect_success(signal), null_value());
@@ -922,7 +929,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Failure);
         match signal {
@@ -951,7 +958,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Failure);
         match signal {
@@ -979,7 +986,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![add_node], None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![add_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(expect_success(signal), int_value(42));
@@ -1010,7 +1017,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![add_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(expect_success(report.signal), int_value(22));
@@ -1053,7 +1060,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![add_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 1);
@@ -1091,7 +1098,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![value_node, add_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![value_node, add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 2);
@@ -1133,7 +1140,7 @@ mod tests {
         );
         remote_node.definition_source = Some("remote-service".to_string());
 
-        let report = engine.execute_graph_report(1, vec![remote_node], None, Some(&remote), false);
+        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         match report.signal {
@@ -1179,7 +1186,7 @@ mod tests {
         );
         remote_node.definition_source = Some("action.example".to_string());
 
-        let report = engine.execute_graph_report(1, vec![remote_node], None, Some(&remote), false);
+        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -1221,7 +1228,7 @@ mod tests {
             input_value: None,
         };
 
-        let report = engine.execute_flow_report(flow, Some(&remote), false);
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -1243,7 +1250,7 @@ mod tests {
         );
         remote_node.definition_source = Some("action.".to_string());
 
-        let report = engine.execute_graph_report(1, vec![remote_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         assert!(report.node_execution_results.is_empty());
@@ -1266,7 +1273,7 @@ mod tests {
         let engine = ExecutionEngine { handlers };
         let sleep_node = node(1, "test::sleep", vec![], None);
 
-        let report = engine.execute_graph_report(1, vec![sleep_node], None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![sleep_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 1);
@@ -1305,7 +1312,7 @@ mod tests {
         );
 
         let report =
-            engine.execute_graph_report(1, vec![for_each_node, callback_node], None, None, false);
+            engine.execute_graph_report("test", 1, vec![for_each_node, callback_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 4);
@@ -1390,7 +1397,7 @@ mod tests {
         for_each_node.definition_source = Some("draco-draco-cron".to_string());
 
         let report =
-            engine.execute_graph_report(2, vec![value_node, for_each_node], None, None, false);
+            engine.execute_graph_report("test", 2, vec![value_node, for_each_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(expect_success(report.signal), response_value);

@@ -11,6 +11,7 @@ pub struct ParameterMeta {
     pub runtime_name: &'static str,
     pub name: Vec<Translation>,
     pub description: Vec<Translation>,
+    pub documentation: Vec<Translation>,
 }
 
 pub struct RuntimeFunctionMeta {

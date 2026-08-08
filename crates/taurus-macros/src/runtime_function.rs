@@ -95,12 +95,14 @@ fn parameter_tokens(args: &AttrArgs) -> syn::Result<TokenStream> {
     let runtime_name = args.required_string("runtime_name")?;
     let name = translation_vec(&args.translations("name")?);
     let description = translation_vec(&args.translations("description")?);
+    let documentation = translation_vec(&args.translations("documentation")?);
 
     Ok(quote! {
         crate::meta::ParameterMeta {
             runtime_name: #runtime_name,
             name: #name,
             description: #description,
+            documentation: #documentation,
         }
     })
 }

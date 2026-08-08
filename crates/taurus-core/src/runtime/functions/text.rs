@@ -454,7 +454,8 @@ fn prepend(
 #[parameter(
     runtime_name = "text",
     name(en_US = "Text to Insert"),
-    description(en_US = "The text that will be inserted into the original text.")
+    description(en_US = "The text that will be inserted into the original text."),
+    documentation(en_US = "The subtext to be inserted at the specified position.")
 )]
 fn insert(
     args: &[Argument],
@@ -538,7 +539,8 @@ fn length(
 #[parameter(
     runtime_name = "end",
     name(en_US = "End Index"),
-    description(en_US = "The zero-based index where removal ends (exclusive).")
+    description(en_US = "The zero-based index where removal ends (exclusive)."),
+    documentation(en_US = "The position just after the last character to be removed.")
 )]
 fn remove(
     args: &[Argument],

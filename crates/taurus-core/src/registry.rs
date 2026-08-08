@@ -87,7 +87,7 @@ fn runtime_function_definition(
                 hidden: None,
                 name: p.name.clone(),
                 description: p.description.clone(),
-                documentation: Vec::new(),
+                documentation: p.documentation.clone(),
             })
             .collect(),
         signature: meta.signature.to_string(),
@@ -123,7 +123,7 @@ fn function_definition(meta: &RuntimeFunctionMeta, version: String) -> FunctionD
                 hidden: None,
                 name: p.name.clone(),
                 description: p.description.clone(),
-                documentation: Vec::new(),
+                documentation: p.documentation.clone(),
                 runtime_definition_name: p.runtime_name.to_string(),
             })
             .collect(),

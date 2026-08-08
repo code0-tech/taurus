@@ -24,6 +24,7 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let regex = args.string("regex")?;
     let number_range_from = args.int("number_range_from")?;
     let number_range_to = args.int("number_range_to")?;
+    let number_range_steps = args.int("number_range_steps")?;
     let mut rules = Vec::new();
     if let Some(pattern) = regex {
         rules.push(quote! {
@@ -35,14 +36,27 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
         });
     }
     match (number_range_from, number_range_to) {
-        (Some(from), Some(to)) => rules.push(quote! {
-            ::tucana::shared::DefinitionDataTypeRule {
-                config: Some(::tucana::shared::definition_data_type_rule::Config::NumberRange(
-                    ::tucana::shared::DataTypeNumberRangeRuleConfig { from: #from, to: #to, steps: None },
-                )),
+        (Some(from), Some(to)) => {
+            let steps = match number_range_steps {
+                Some(steps) => quote! { Some(#steps) },
+                None => quote! { None },
+            };
+            rules.push(quote! {
+                ::tucana::shared::DefinitionDataTypeRule {
+                    config: Some(::tucana::shared::definition_data_type_rule::Config::NumberRange(
+                        ::tucana::shared::DataTypeNumberRangeRuleConfig { from: #from, to: #to, steps: #steps },
+                    )),
+                }
+            });
+        }
+        (None, None) => {
+            if number_range_steps.is_some() {
+                return Err(syn::Error::new(
+                    proc_macro2::Span::call_site(),
+                    "`number_range_steps` requires `number_range_from`/`number_range_to`",
+                ));
             }
-        }),
-        (None, None) => {}
+        }
         _ => {
             return Err(syn::Error::new(
                 proc_macro2::Span::call_site(),

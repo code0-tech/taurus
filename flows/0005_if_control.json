@@ -1,6 +1,6 @@
 {
-	"name": "05_if_control",
-	"description": "This flow expects an object as input (from http request) structured payload.test = bool which the flow will return (remeber: respond does not stop the flow so only the adapter will have `Blub` or `true` but the flow always results into `Blub`)",
+	"name": "0005_if_control",
+	"description": "Validates a returned true branch and false-branch continuation to the fallback node",
 	"inputs": [
 		{
 			"input": {
@@ -27,12 +27,7 @@
 					"test": false
 				}
 			},
-			"expected_result": {
-				"http_status_code": 200,
-				"headers": {},
-				"payload": "Blub",
-				"http_schema": "application/json"
-			}
+			"expected_result": "Blub"
 		},
 		{
 			"input": {
@@ -44,12 +39,7 @@
 					"test": true
 				}
 			},
-			"expected_result": {
-				"http_status_code": 200,
-				"headers": {},
-				"payload": "Blub",
-				"http_schema": "application/json"
-			}
+			"expected_result": true
 		}
 	],
 	"flow": {
@@ -76,43 +66,14 @@
 		"nodeFunctions": [
 			{
 				"databaseId": "14",
-				"runtimeFunctionId": "rest::control::respond",
+				"runtimeFunctionId": "std::control::return",
 				"parameters": [
 					{
-						"databaseId": "54",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "57",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
 						"databaseId": "56",
-						"runtimeParameterId": "payload",
+						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
 								"stringValue": "Blub"
-							}
-						}
-					},
-					{
-						"databaseId": "55",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
 							}
 						}
 					}
@@ -155,31 +116,11 @@
 			},
 			{
 				"databaseId": "12",
-				"runtimeFunctionId": "rest::control::respond",
+				"runtimeFunctionId": "std::control::return",
 				"parameters": [
 					{
-						"databaseId": "51",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "54",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
 						"databaseId": "53",
-						"runtimeParameterId": "payload",
+						"runtimeParameterId": "value",
 						"value": {
 							"referenceValue": {
 								"paths": [
@@ -191,15 +132,6 @@
 									}
 								],
 								"flowInput": {}
-							}
-						}
-					},
-					{
-						"databaseId": "52",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
 							}
 						}
 					}

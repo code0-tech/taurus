@@ -11,7 +11,6 @@ Taurus is the execution runtime in the CodeZero execution block.
 
 - Consumes flow execution requests from NATS (`execution.*`)
 - Executes flow graphs via `taurus-core::runtime::engine::ExecutionEngine`
-- Emits lifecycle events to NATS (`runtime.emitter.<execution_id>`)
 - Delegates remote nodes to external services over NATS (`action.<service>.<execution_id>`)
 - Reports runtime status and execution results to Aquila in dynamic mode
 
@@ -21,7 +20,7 @@ Taurus is the execution runtime in the CodeZero execution block.
 | --- | --- |
 | `crates/taurus` | Main runtime binary (startup, config, NATS worker, dynamic integrations) |
 | `crates/taurus-core` | Execution engine, compiler, runtime functions, errors, tracing |
-| `crates/taurus-provider` | Transport adapters (NATS emitter + NATS remote runtime) |
+| `crates/taurus-provider` | NATS remote-runtime transport adapter |
 | `crates/taurus-manual` | Manual CLI executor for running a single validation flow file |
 | `crates/taurus-tests` | Local execution-suite runner for JSON flow fixtures under `flows/` |
 | `flows/` | Example/validation flow cases used by `taurus-tests` |
@@ -35,8 +34,6 @@ graph TD
   crates/taurus]
   Core[ExecutionEngine
   crates/taurus-core]
-  Emitter[Runtime Emitter
-  crates/taurus-provider]
   Remote[Remote Runtime Adapter
   crates/taurus-provider]
   Service[Remote Service / Action Runtime]
@@ -45,8 +42,6 @@ graph TD
 
   NATS -->|execution.*| Taurus
   Taurus --> Core
-  Core --> Emitter
-  Emitter -->|runtime.emitter.<execution_id>| NATS
   Core --> Remote
   Remote -->|action.<service>.<execution_id>| NATS
   NATS --> Service
@@ -60,8 +55,7 @@ graph TD
 3. `ExecutionEngine::execute_flow_with_execution_id(...)` compiles and executes nodes.
 4. Local nodes run handlers from the built-in function registry.
 5. Non-local `definition_source` values are executed remotely via `RemoteRuntime`.
-6. Lifecycle events are emitted as `starting`, `ongoing`, `finished`, or `failed`.
-7. The completed `ExecutionResult` is transmitted through the Aquila execution gRPC API in dynamic mode.
+6. The completed `ExecutionResult` is transmitted through the Aquila execution gRPC API in dynamic mode.
 
 ## Runtime Modes
 
@@ -127,7 +121,7 @@ cargo run -p taurus
 ### 4. Run the execution suite
 
 ```bash
-cargo run -p tests
+cargo run -p taurus-tests
 ```
 
 This executes all JSON files in `./flows` and compares runtime outputs.
@@ -135,7 +129,7 @@ This executes all JSON files in `./flows` and compares runtime outputs.
 ### 5. Run one flow manually
 
 ```bash
-cargo run -p manual -- --path ./flows/01_return_object.json --index 0 --nats-url nats://127.0.0.1:4222
+cargo run -p taurus-manual -- --path ./flows/0003_for_each.json --index 0 --offline
 ```
 
 This is useful when debugging one case or remote-execution behavior.

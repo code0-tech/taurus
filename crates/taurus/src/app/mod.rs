@@ -5,8 +5,7 @@
 //!
 //! Shutdown is cooperative rather than an abort: [`wait_for_shutdown`] signals
 //! the worker task to stop via a `Notify` and waits for it to exit on its own,
-//! so the worker gets a chance to drain its emitter (publish any queued
-//! lifecycle events) before the process exits.
+//! so in-flight flow executions can finish before the process exits.
 
 mod worker;
 
@@ -17,7 +16,6 @@ use code0_flow::flow_service::FlowUpdateService;
 use std::sync::Arc;
 use std::time::Duration;
 use taurus_core::runtime::engine::ExecutionEngine;
-use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::signal;
 use tokio::sync::Notify;
@@ -47,17 +45,16 @@ pub async fn run() {
         client.clone(),
         Duration::from_secs(config.remote_runtime_timeout_secs),
     );
-    let runtime_emitter = NATSRespondEmitter::new(client.clone(), config.emitter_channel_capacity);
     let worker_shutdown = Arc::new(Notify::new());
     let mut worker_task = worker::spawn_worker(
         client,
         engine,
         nats_remote,
-        runtime_emitter,
         runtime_execution_service,
         mode_label(&config).to_string(),
         worker_shutdown.clone(),
         config.max_concurrent_executions,
+        config.environment == Environment::Development,
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task, &worker_shutdown).await;
@@ -377,8 +374,8 @@ async fn wait_for_shutdown(
         }
     }
 
-    // Let the worker task drain its emitter (publish queued lifecycle events)
-    // instead of aborting it, so in-flight results aren't silently dropped.
+    // Let every in-flight execution finish so authoritative results aren't
+    // silently dropped during shutdown.
     if !worker_already_finished && let Err(err) = worker_task.await {
         log::warn!(
             "NATS worker task ended unexpectedly during shutdown: {}",

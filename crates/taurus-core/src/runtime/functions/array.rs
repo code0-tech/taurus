@@ -142,7 +142,7 @@ fn run_with_binary_inputs(
 fn callback_result_value(signal: Signal) -> Result<Value, Signal> {
     match signal {
         Signal::Success(value) | Signal::Return(value) => Ok(value),
-        other @ (Signal::Failure(_) | Signal::Respond(_) | Signal::Stop) => Err(other),
+        other @ (Signal::Failure(_) | Signal::Stop) => Err(other),
     }
 }
 

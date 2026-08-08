@@ -8,12 +8,12 @@ edition = "2024"
 
 [workspace.dependencies]
 async-trait = "0.1.89"
-code0-flow = { version = "0.0.42" }
-tucana = { version = "0.0.77" }
+code0-flow = { version = "0.0.43" }
+tucana = { version = "0.0.80" }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "signal"] }
 log = "0.4.27"
 opentelemetry = { version = "0.32.0", features = ["metrics"] }
-lupus = "0.0.2"
+lupus = "0.0.3"
 futures-lite = "2.6.0"
 rand = "0.10.0"
 base64 = "0.23.0"
@@ -33,7 +33,6 @@ path = "./crates/taurus-core"
 
 [workspace.dependencies.taurus-provider]
 path = "./crates/taurus-provider"
-
 
 # `cargo build --profile profiling` — a release build with debug symbols,
 # for flamegraph/sampling work. Kept separate from [profile.release] so

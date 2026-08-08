@@ -12,22 +12,18 @@
 //! (waiting for a permit if needed) rather than dropping it on shutdown,
 //! since core NATS has no redelivery for an already-claimed message.
 //!
-//! [`spawn_worker`] owns the `NATSRespondEmitter` (shared with per-message
-//! tasks via `Arc`) for the lifetime of the task; it is only drained (via
-//! `NATSRespondEmitter::shutdown`) once every in-flight execution has
-//! finished and the loop exits, so callers must signal shutdown
-//! cooperatively (see [`crate::app::wait_for_shutdown`]) rather than
-//! aborting this task.
+//! Callers signal shutdown cooperatively (see
+//! [`crate::app::wait_for_shutdown`]) so the worker stops accepting new
+//! messages and waits for every in-flight execution to finish.
 
 use futures_lite::StreamExt;
 use prost::Message;
 use std::sync::Arc;
-use taurus_core::runtime::engine::{EmitType, ExecutionEngine, ExecutionId, RespondEmitter};
+use taurus_core::runtime::engine::{ExecutionEngine, ExecutionId};
 use taurus_core::runtime::remote::RemoteRuntime;
 use taurus_core::time::now_unix_micros;
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
-use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::sync::{Notify, Semaphore};
 use tokio::task::{JoinHandle, JoinSet};
@@ -41,14 +37,13 @@ pub fn spawn_worker(
     client: async_nats::Client,
     engine: ExecutionEngine,
     nats_remote: NATSRemoteRuntime,
-    runtime_emitter: NATSRespondEmitter,
     runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     flow_type: String,
     shutdown: Arc<Notify>,
     max_concurrent_executions: usize,
+    with_trace: bool,
 ) -> JoinHandle<()> {
     let engine = Arc::new(engine);
-    let runtime_emitter = Arc::new(runtime_emitter);
     let semaphore = Arc::new(Semaphore::new(max_concurrent_executions.max(1)));
 
     tokio::spawn(async move {
@@ -68,7 +63,6 @@ pub fn spawn_worker(
                     &err,
                     "subject=execution.* queue=taurus",
                 );
-                shutdown_emitter(runtime_emitter).await;
                 return;
             }
         };
@@ -87,7 +81,6 @@ pub fn spawn_worker(
                             };
                             let engine = engine.clone();
                             let nats_remote = nats_remote.clone();
-                            let runtime_emitter = runtime_emitter.clone();
                             let runtime_execution_service = runtime_execution_service.clone();
                             let flow_type = flow_type.clone();
                             in_flight.spawn(async move {
@@ -96,9 +89,9 @@ pub fn spawn_worker(
                                     message,
                                     &engine,
                                     &nats_remote,
-                                    &runtime_emitter,
                                     runtime_execution_service,
                                     flow_type.as_str(),
+                                    with_trace,
                                 ).await;
                             });
                         }
@@ -120,31 +113,16 @@ pub fn spawn_worker(
             in_flight.len()
         );
         while in_flight.join_next().await.is_some() {}
-
-        shutdown_emitter(runtime_emitter).await;
     })
-}
-
-/// Drains the emitter's publish queue. Only ever called once every
-/// in-flight execution (each holding its own `Arc` clone) has finished, so
-/// this is always the sole remaining owner in practice; falls back to
-/// leaving queued events unpublished (logged) rather than panicking if not.
-async fn shutdown_emitter(runtime_emitter: Arc<NATSRespondEmitter>) {
-    match Arc::try_unwrap(runtime_emitter) {
-        Ok(emitter) => emitter.shutdown().await,
-        Err(_) => log::warn!(
-            "NATS emitter still has outstanding references at shutdown; skipping graceful drain"
-        ),
-    }
 }
 
 async fn process_execution_message(
     message: async_nats::Message,
     engine: &ExecutionEngine,
     nats_remote: &NATSRemoteRuntime,
-    runtime_emitter: &NATSRespondEmitter,
     mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
     flow_type: &str,
+    with_trace: bool,
 ) {
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")
         .unwrap_or_else(|| {
@@ -186,19 +164,14 @@ async fn process_execution_message(
 
     let flow_id = flow.flow_id;
     let function_identifiers = function_identifiers_by_node_id(&flow);
-    // Taurus app forwards all lifecycle events to emitter.
-    // Direct request/reply responses remain disabled; delivery is emitter-only.
-    let respond_emitter = |execution_id, emit_type: EmitType, value: Value| {
-        runtime_emitter.emit(execution_id, emit_type, value);
-    };
     let run_result = execute_flow(
         requested_execution_id,
         flow,
         engine,
         Some(nats_remote),
-        Some(&respond_emitter),
         flow_type,
         function_identifiers,
+        with_trace,
     )
     .await;
     log::debug!(
@@ -239,25 +212,19 @@ async fn execute_flow(
     flow: ExecutionFlow,
     engine: &ExecutionEngine,
     remote: Option<&dyn RemoteRuntime>,
-    respond_emitter: Option<&dyn RespondEmitter>,
     flow_type: &str,
     function_identifiers: std::collections::HashMap<i64, String>,
+    with_trace: bool,
 ) -> FlowRunResult {
     let started_at = now_unix_micros();
     let flow_id = flow.flow_id;
     let project_id = flow.project_id;
     let input = flow.input_value.clone();
     // Trace V2 collection is O(n^2) in executed nodes (see taurus-core's
-    // ValueStore::trace_snapshot) and nothing here consumes the trace_run
-    // engine.rs prints when with_trace is true; leave it off in production.
+    // ValueStore::trace_snapshot); only worth paying for in development,
+    // where engine.rs prints the trace via `with_trace`.
     let report = engine
-        .execute_flow_with_execution_id_report_async(
-            execution_id,
-            flow,
-            remote,
-            respond_emitter,
-            false,
-        )
+        .execute_flow_report_async(&execution_id.to_string(), flow, remote, with_trace)
         .await;
     let finished_at = now_unix_micros();
     record_flow_metrics(
@@ -338,7 +305,6 @@ fn signal_outcome(signal: &Signal) -> &'static str {
         Signal::Success(_) => "success",
         Signal::Failure(_) => "failure",
         Signal::Return(_) => "return",
-        Signal::Respond(_) => "respond",
         Signal::Stop => "stop",
     }
 }
@@ -367,7 +333,7 @@ fn build_execution_result(
     signal: Signal,
 ) -> ExecutionResult {
     let result = match signal {
-        Signal::Success(value) | Signal::Return(value) | Signal::Respond(value) => {
+        Signal::Success(value) | Signal::Return(value) => {
             Some(execution_result::Result::Success(value))
         }
         Signal::Failure(err) => Some(execution_result::Result::Error(err.as_tucana_error())),
@@ -433,7 +399,7 @@ mod tests {
     #[test]
     fn build_execution_result_preserves_success_payload() {
         let execution_id = ExecutionId::new_v4();
-        let fixture = load_fixture("flows/01_return_object.json");
+        let fixture = load_fixture("flows/0003_for_each.json");
         let expected_result = fixture.inputs[0].expected_result.clone();
         let flow = execution_flow_from_fixture(fixture);
         let success = from_json_value(expected_result.clone());
@@ -487,7 +453,7 @@ mod tests {
     #[tokio::test]
     async fn execute_flow_reports_microsecond_timestamps_and_duration() {
         let execution_id = ExecutionId::new_v4();
-        let fixture = load_fixture("flows/01_return_object.json");
+        let fixture = load_fixture("flows/0003_for_each.json");
         let flow = execution_flow_from_fixture(fixture);
         let engine = ExecutionEngine::new();
 
@@ -497,9 +463,9 @@ mod tests {
             flow,
             &engine,
             None,
-            None,
             "test",
             function_identifiers,
+            false,
         )
         .await;
 

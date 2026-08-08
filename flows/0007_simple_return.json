@@ -1,5 +1,5 @@
 {
-	"name": "07_simple_return",
+	"name": "0007_simple_return",
 	"description": "This Flow tries to test the control flow function `return`",
 	"inputs": [
 		{
@@ -16,16 +16,11 @@
 					}
 				}
 			},
-			"expected_result": {
-				"http_status_code": 200,
-				"headers": {},
-				"payload": [
-					null,
-					null,
-					"username"
-				],
-				"http_schema": "application/json"
-			}
+			"expected_result": [
+				null,
+				null,
+				"username"
+			]
 		}
 	],
 	"flow": {
@@ -191,43 +186,14 @@
 			},
 			{
 				"databaseId": "8",
-				"runtimeFunctionId": "rest::control::respond",
+				"runtimeFunctionId": "std::control::return",
 				"parameters": [
 					{
-						"databaseId": "16",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "38",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
 						"databaseId": "37",
-						"runtimeParameterId": "payload",
+						"runtimeParameterId": "value",
 						"value": {
 							"referenceValue": {
 								"nodeId": "9"
-							}
-						}
-					},
-					{
-						"databaseId": "36",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
 							}
 						}
 					}

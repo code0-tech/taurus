@@ -4,7 +4,6 @@
 //! It executes compiled flow plans via the runtime engine executor loop.
 
 mod compiler;
-mod emitter;
 mod executor;
 pub(crate) mod model;
 
@@ -17,13 +16,9 @@ use crate::runtime::remote::RemoteRuntime;
 use crate::types::exit_reason::ExitReason;
 use crate::types::signal::Signal;
 use compiler::compile_flow;
-pub use emitter::{EmitType, ExecutionId, RespondEmitter};
 
-fn null_value() -> Value {
-    Value {
-        kind: Some(tucana::shared::value::Kind::NullValue(0)),
-    }
-}
+/// Unique identifier for one top-level flow execution.
+pub type ExecutionId = uuid::Uuid;
 
 /// Runtime engine entrypoint used by runtime binaries and CLI tools.
 pub struct ExecutionEngine {
@@ -55,27 +50,26 @@ impl ExecutionEngine {
     /// Execute an `ExecutionFlow` and return the final signal plus per-node execution results.
     pub fn execute_flow_report(
         &self,
+        execution_id: &str,
         flow: ExecutionFlow,
         remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        block_on(self.execute_flow_with_execution_id_report_async(
-            ExecutionId::new_v4(),
-            flow,
-            remote,
-            respond_emitter,
-            with_trace,
-        ))
+        block_on(self.execute_flow_report_async(execution_id, flow, remote, with_trace))
     }
 
-    /// Execute an `ExecutionFlow` asynchronously with a caller-provided execution id and return per-node results.
-    pub async fn execute_flow_with_execution_id_report_async(
+    /// Execute an `ExecutionFlow` asynchronously and return per-node results.
+    ///
+    /// `execution_id` is reused as the `execution_identifier` on any remote
+    /// call this flow makes back into an action (e.g. a `respond`-style
+    /// callback) — the action correlates that id against the one it used to
+    /// originally trigger this flow, so it must match exactly, not be a
+    /// freshly generated id per remote call.
+    pub async fn execute_flow_report_async(
         &self,
-        execution_id: ExecutionId,
+        execution_id: &str,
         flow: ExecutionFlow,
         remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
         self.execute_graph_with_project_id_report_async(
@@ -85,7 +79,6 @@ impl ExecutionEngine {
             flow.node_functions,
             flow.input_value,
             remote,
-            respond_emitter,
             with_trace,
         )
         .await
@@ -94,21 +87,20 @@ impl ExecutionEngine {
     /// Execute a graph described by node list and start node.
     pub fn execute_graph(
         &self,
+        execution_id: &str,
         start_node_id: i64,
         node_functions: Vec<NodeFunction>,
         flow_input: Option<Value>,
         remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> (Signal, ExitReason) {
         let report = block_on(self.execute_graph_with_project_id_report_async(
-            ExecutionId::new_v4(),
+            execution_id,
             0,
             start_node_id,
             node_functions,
             flow_input,
             remote,
-            respond_emitter,
             with_trace,
         ));
         (report.signal, report.exit_reason)
@@ -117,49 +109,41 @@ impl ExecutionEngine {
     /// Execute a graph and return the final signal plus per-node execution results.
     pub fn execute_graph_report(
         &self,
+        execution_id: &str,
         start_node_id: i64,
         node_functions: Vec<NodeFunction>,
         flow_input: Option<Value>,
         remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
         block_on(self.execute_graph_with_project_id_report_async(
-            ExecutionId::new_v4(),
+            execution_id,
             0,
             start_node_id,
             node_functions,
             flow_input,
             remote,
-            respond_emitter,
             with_trace,
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_graph_with_project_id_report_async(
         &self,
-        execution_id: ExecutionId,
+        execution_id: &str,
         project_id: i64,
         start_node_id: i64,
         node_functions: Vec<NodeFunction>,
         flow_input: Option<Value>,
         remote: Option<&dyn RemoteRuntime>,
-        respond_emitter: Option<&dyn RespondEmitter>,
         with_trace: bool,
     ) -> EngineExecutionReport {
-        if let Some(emitter) = respond_emitter {
-            emitter.emit(execution_id, EmitType::StartingExec, null_value());
-        }
-
         let mut value_store = ValueStore::new(flow_input.unwrap_or_default(), with_trace);
 
         let compiled = match compile_flow(project_id, start_node_id, node_functions) {
             Ok(plan) => plan,
             Err(err) => {
                 let runtime_error = err.as_runtime_error();
-                if let Some(emitter) = respond_emitter {
-                    emitter.emit(execution_id, EmitType::FailedExec, runtime_error.as_value());
-                }
                 let signal = Signal::Failure(runtime_error);
                 return EngineExecutionReport {
                     signal,
@@ -170,12 +154,11 @@ impl ExecutionEngine {
         };
 
         let (signal, trace_run) = executor::execute_compiled(
+            execution_id,
             &compiled,
             &self.handlers,
             &mut value_store,
             remote,
-            execution_id,
-            respond_emitter,
             with_trace,
         )
         .await;
@@ -184,17 +167,6 @@ impl ExecutionEngine {
                 "{}",
                 crate::runtime::execution::render::render_trace(&trace_run)
             );
-        }
-        if let Some(emitter) = respond_emitter {
-            match &signal {
-                Signal::Failure(err) => {
-                    emitter.emit(execution_id, EmitType::FailedExec, err.as_value())
-                }
-                Signal::Success(value) | Signal::Return(value) | Signal::Respond(value) => {
-                    emitter.emit(execution_id, EmitType::FinishedExec, value.clone())
-                }
-                Signal::Stop => emitter.emit(execution_id, EmitType::FinishedExec, null_value()),
-            }
         }
         let exit_reason = signal.exit_reason();
         EngineExecutionReport {
@@ -216,11 +188,12 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
-    use tucana::aquila::ActionExecutionRequest;
+    use tucana::aquila::{ActionExecutionRequest, action_node_value};
     use tucana::shared::{
         InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
-        Struct, SubFlow, SubFlowSetting, Value, node_execution_result, node_value, reference_value,
-        sub_flow::{ExecutionReference, SubFlowFunction},
+        Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value, node_execution_result,
+        node_value, reference_value,
+        sub_flow::ExecutionReference,
         value::Kind,
     };
 
@@ -518,9 +491,9 @@ mod tests {
         );
 
         let (signal, reason) = engine.execute_graph(
+            "test",
             2,
             vec![parent, next, return_node, unreachable_after_return],
-            None,
             None,
             None,
             false,
@@ -595,6 +568,7 @@ mod tests {
         );
 
         let (signal, reason) = engine.execute_graph(
+            "test",
             1,
             vec![
                 map_node,
@@ -603,7 +577,6 @@ mod tests {
                 return_item_node,
                 return_null_node,
             ],
-            None,
             None,
             None,
             false,
@@ -648,7 +621,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -702,7 +675,7 @@ mod tests {
             input_value: None,
         };
 
-        let report = engine.execute_flow_report(flow, Some(&remote), None, false);
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -722,12 +695,16 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].function_identifier, "remote::add");
         assert_eq!(requests[0].project_id, 42);
-        let first_parameters = requests[0]
-            .parameters
-            .as_ref()
-            .expect("remote function request should contain parameters");
-        assert_eq!(first_parameters.fields.get("lhs"), Some(&int_value(1)));
-        assert_eq!(first_parameters.fields.get("rhs"), Some(&int_value(2)));
+        let first_parameters = &requests[0].parameters;
+        assert_eq!(first_parameters.len(), 2);
+        assert_eq!(
+            first_parameters[0].value,
+            Some(action_node_value::Value::LiteralValue(int_value(1)))
+        );
+        assert_eq!(
+            first_parameters[1].value,
+            Some(action_node_value::Value::LiteralValue(int_value(2)))
+        );
 
         let function_results: Vec<_> = report
             .node_execution_results
@@ -764,7 +741,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![map_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         match report.signal {
@@ -792,7 +769,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![map_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         assert!(report.node_execution_results.is_empty());
@@ -831,7 +808,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![filter_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![filter_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -859,7 +836,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -887,7 +864,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![map_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -921,7 +898,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(expect_success(signal), null_value());
@@ -952,7 +929,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Failure);
         match signal {
@@ -981,7 +958,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![if_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Failure);
         match signal {
@@ -1009,7 +986,7 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph(1, vec![add_node], None, None, None, false);
+        let (signal, reason) = engine.execute_graph("test", 1, vec![add_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(expect_success(signal), int_value(42));
@@ -1040,7 +1017,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![add_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(expect_success(report.signal), int_value(22));
@@ -1083,7 +1060,7 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(1, vec![add_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 1);
@@ -1121,8 +1098,7 @@ mod tests {
             None,
         );
 
-        let report =
-            engine.execute_graph_report(1, vec![value_node, add_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![value_node, add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 2);
@@ -1139,48 +1115,6 @@ mod tests {
             }
             other => panic!("expected node success result, got {:?}", other),
         }
-    }
-
-    #[test]
-    fn execution_report_includes_respond_node_parameter_results() {
-        let engine = ExecutionEngine::new();
-        let respond_node = node(
-            1,
-            "rest::control::respond",
-            vec![
-                literal_param(100, "http_status_code", int_value(200)),
-                literal_param(102, "http_schema", string_value("application/json")),
-                literal_param(103, "payload", string_value("hello")),
-                literal_param(101, "headers", empty_struct_value()),
-            ],
-            None,
-        );
-
-        let report = engine.execute_graph_report(1, vec![respond_node], None, None, None, false);
-
-        assert_eq!(report.exit_reason, ExitReason::Success);
-        assert_eq!(report.node_execution_results.len(), 1);
-
-        let node_result = &report.node_execution_results[0];
-        assert_node_result_id(node_result, 1);
-        assert_eq!(node_result.parameter_results.len(), 4);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(200)));
-        assert_eq!(
-            node_result.parameter_results[1].value,
-            Some(string_value("application/json"))
-        );
-        assert_eq!(
-            node_result.parameter_results[2].value,
-            Some(string_value("hello"))
-        );
-        assert_eq!(
-            node_result.parameter_results[3].value,
-            Some(empty_struct_value())
-        );
-        assert!(matches!(
-            node_result.result,
-            Some(node_execution_result::Result::Success(_))
-        ));
     }
 
     #[test]
@@ -1206,8 +1140,7 @@ mod tests {
         );
         remote_node.definition_source = Some("remote-service".to_string());
 
-        let report =
-            engine.execute_graph_report(1, vec![remote_node], None, Some(&remote), None, false);
+        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         match report.signal {
@@ -1253,8 +1186,7 @@ mod tests {
         );
         remote_node.definition_source = Some("action.example".to_string());
 
-        let report =
-            engine.execute_graph_report(1, vec![remote_node], None, Some(&remote), None, false);
+        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -1296,7 +1228,7 @@ mod tests {
             input_value: None,
         };
 
-        let report = engine.execute_flow_report(flow, Some(&remote), None, false);
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -1318,7 +1250,7 @@ mod tests {
         );
         remote_node.definition_source = Some("action.".to_string());
 
-        let report = engine.execute_graph_report(1, vec![remote_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         assert!(report.node_execution_results.is_empty());
@@ -1341,7 +1273,7 @@ mod tests {
         let engine = ExecutionEngine { handlers };
         let sleep_node = node(1, "test::sleep", vec![], None);
 
-        let report = engine.execute_graph_report(1, vec![sleep_node], None, None, None, false);
+        let report = engine.execute_graph_report("test", 1, vec![sleep_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 1);
@@ -1379,14 +1311,8 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report(
-            1,
-            vec![for_each_node, callback_node],
-            None,
-            None,
-            None,
-            false,
-        );
+        let report =
+            engine.execute_graph_report("test", 1, vec![for_each_node, callback_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 4);
@@ -1434,18 +1360,22 @@ mod tests {
     #[test]
     fn execution_report_keeps_every_for_each_function_identifier_callback_execution() {
         let engine = ExecutionEngine::new();
-        let mut respond_node = node(
+        let response_value = {
+            let mut fields = std::collections::HashMap::new();
+            fields.insert("http_status_code".to_string(), int_value(200));
+            fields.insert("headers".to_string(), empty_struct_value());
+            fields.insert("payload".to_string(), string_value("20"));
+            fields.insert("http_schema".to_string(), string_value("text/plain"));
+            Value {
+                kind: Some(Kind::StructValue(Struct { fields })),
+            }
+        };
+        let value_node = node(
             1,
-            "rest::control::respond",
-            vec![
-                literal_param(1, "http_status_code", int_value(200)),
-                literal_param(3, "http_schema", string_value("text/plain")),
-                literal_param(4, "payload", string_value("20")),
-                literal_param(2, "headers", empty_struct_value()),
-            ],
+            "std::control::value",
+            vec![literal_param(1, "value", response_value.clone())],
             None,
         );
-        respond_node.definition_source = Some("draco-draco-cron".to_string());
         let mut for_each_node = node(
             2,
             "std::list::for_each",
@@ -1466,26 +1396,11 @@ mod tests {
         );
         for_each_node.definition_source = Some("draco-draco-cron".to_string());
 
-        let report = engine.execute_graph_report(
-            2,
-            vec![respond_node, for_each_node],
-            None,
-            None,
-            None,
-            false,
-        );
+        let report =
+            engine.execute_graph_report("test", 2, vec![value_node, for_each_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
-        assert_eq!(expect_success(report.signal), {
-            let mut fields = std::collections::HashMap::new();
-            fields.insert("http_status_code".to_string(), int_value(200));
-            fields.insert("headers".to_string(), empty_struct_value());
-            fields.insert("payload".to_string(), string_value("20"));
-            fields.insert("http_schema".to_string(), string_value("text/plain"));
-            Value {
-                kind: Some(Kind::StructValue(Struct { fields })),
-            }
-        });
+        assert_eq!(expect_success(report.signal), response_value);
         assert_eq!(report.node_execution_results.len(), 5);
 
         let function_results: Vec<_> = report
@@ -1533,114 +1448,5 @@ mod tests {
         );
         assert_node_result_id(&report.node_execution_results[3], 2);
         assert_node_result_id(&report.node_execution_results[4], 1);
-    }
-
-    #[test]
-    fn emitter_emits_start_and_finish_for_successful_execution() {
-        let engine = ExecutionEngine::new();
-        let events = Mutex::new(Vec::<EmitType>::new());
-        let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
-            events
-                .lock()
-                .expect("event recorder should not be poisoned")
-                .push(emit_type);
-        };
-
-        let add_node = node(
-            1,
-            "std::number::add",
-            vec![
-                literal_param(100, "lhs", int_value(1)),
-                literal_param(101, "rhs", int_value(2)),
-            ],
-            None,
-        );
-
-        let (_signal, reason) =
-            engine.execute_graph(1, vec![add_node], None, None, Some(&emitter), false);
-        assert_eq!(reason, ExitReason::Success);
-        assert_eq!(
-            *events
-                .lock()
-                .expect("event recorder should not be poisoned"),
-            vec![EmitType::StartingExec, EmitType::FinishedExec]
-        );
-    }
-
-    #[test]
-    fn emitter_emits_ongoing_for_intermediate_respond() {
-        let engine = ExecutionEngine::new();
-        let events = Mutex::new(Vec::<EmitType>::new());
-        let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
-            events
-                .lock()
-                .expect("event recorder should not be poisoned")
-                .push(emit_type);
-        };
-
-        let respond_node = node(
-            1,
-            "rest::control::respond",
-            vec![
-                literal_param(100, "http_status_code", int_value(200)),
-                literal_param(102, "http_schema", string_value("application/json")),
-                literal_param(103, "payload", string_value("hello")),
-                literal_param(101, "headers", empty_struct_value()),
-            ],
-            Some(2),
-        );
-        let finish_node = node(
-            2,
-            "std::number::add",
-            vec![
-                literal_param(300, "lhs", int_value(1)),
-                literal_param(301, "rhs", int_value(1)),
-            ],
-            None,
-        );
-
-        let (_signal, reason) = engine.execute_graph(
-            1,
-            vec![respond_node, finish_node],
-            None,
-            None,
-            Some(&emitter),
-            false,
-        );
-        assert_eq!(reason, ExitReason::Success);
-        assert_eq!(
-            *events
-                .lock()
-                .expect("event recorder should not be poisoned"),
-            vec![
-                EmitType::StartingExec,
-                EmitType::OngoingExec,
-                EmitType::FinishedExec
-            ]
-        );
-    }
-
-    #[test]
-    fn emitter_emits_failed_for_runtime_failure() {
-        let engine = ExecutionEngine::new();
-        let events = Mutex::new(Vec::<EmitType>::new());
-        let emitter = |_execution_id, emit_type: EmitType, _value: Value| {
-            events
-                .lock()
-                .expect("event recorder should not be poisoned")
-                .push(emit_type);
-        };
-
-        let invalid_add_node = node(1, "std::number::add", vec![], None);
-
-        let (_signal, reason) =
-            engine.execute_graph(1, vec![invalid_add_node], None, None, Some(&emitter), false);
-        assert_eq!(reason, ExitReason::Failure);
-        assert_eq!(
-            *events
-                .lock()
-                .expect("event recorder should not be poisoned"),
-            vec![EmitType::StartingExec, EmitType::FailedExec]
-        );
     }
 }

@@ -1,0 +1,31 @@
+{
+	"name": "0001_return_value",
+	"description": "Returns a literal value through Taurus control flow",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": "Hello World"
+		}
+	],
+	"flow": {
+		"starting_node_id": "1",
+		"node_functions": [
+			{
+				"definition_source": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "3",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"stringValue": "Hello World"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

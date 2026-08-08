@@ -66,7 +66,6 @@ pub enum Outcome {
     Success { value_preview: String },
     Failure { error_preview: String },
     Return { value_preview: String },
-    Respond { value_preview: String },
     Stop,
 }
 

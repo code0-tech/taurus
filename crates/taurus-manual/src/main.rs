@@ -1,5 +1,5 @@
 //! CLI tool for running a single flow fixture by hand: offline through the
-//! engine directly, live against a NATS remote/emitter, or queued onto a
+//! engine directly, live against a NATS remote runtime, or queued onto a
 //! running `taurus` instance's `execution.*` subscription. See [`Args`] for
 //! the mode flags and `taurus_core::fixtures` for the fixture format shared
 //! with `taurus-tests`.
@@ -14,7 +14,6 @@ use taurus_core::normalize::normalize_node_execution_result;
 use taurus_core::runtime::engine::{ExecutionEngine, ExecutionId};
 use taurus_core::time::now_unix_micros;
 use taurus_core::types::signal::Signal;
-use taurus_provider::providers::emitter::nats_emitter::NATSRespondEmitter;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tucana::shared::ExecutionFlow;
 use tucana::shared::NodeExecutionResult;
@@ -41,7 +40,7 @@ struct Args {
     #[arg(long, default_value_t = false)]
     queue_execution: bool,
 
-    /// Execute locally without connecting to NATS remote runtime or emitter
+    /// Execute locally without connecting to the NATS remote runtime
     #[arg(long, default_value_t = false)]
     offline: bool,
 }
@@ -70,12 +69,13 @@ async fn main() {
     if args.offline {
         let engine = ExecutionEngine::new();
         let started_at = now_unix_micros();
+        let execution_id = format!("manual-{started_at}");
         let start = Instant::now();
         let report = engine.execute_graph_report(
+            &execution_id,
             case.flow.starting_node_id,
             case.flow.node_functions.clone(),
             flow_input,
-            None,
             None,
             true,
         );
@@ -106,20 +106,18 @@ async fn main() {
         return;
     }
 
-    let remote =
-        NATSRemoteRuntime::with_execution_result_timeout(client.clone(), Duration::from_secs(30));
-    // A single-flow CLI tool never needs real backpressure headroom here.
-    let emitter = NATSRespondEmitter::new(client, 64);
+    let remote = NATSRemoteRuntime::with_execution_result_timeout(client, Duration::from_secs(30));
     let engine = ExecutionEngine::new();
 
     let started_at = now_unix_micros();
+    let execution_id = format!("manual-{started_at}");
     let start = Instant::now();
     let report = engine.execute_graph_report(
+        &execution_id,
         case.flow.starting_node_id,
         case.flow.node_functions.clone(),
         flow_input,
         Some(&remote),
-        Some(&emitter),
         false,
     );
     let duration_us = start.elapsed().as_micros();
@@ -130,8 +128,6 @@ async fn main() {
         duration_us,
         &report.node_execution_results,
     );
-    emitter.shutdown().await;
-
     print_signal(report.signal);
 }
 
@@ -143,11 +139,6 @@ fn print_signal(signal: Signal) {
             println!("{}", pretty);
         }
         Signal::Return(value) => {
-            let json = to_json_value(value);
-            let pretty = serde_json::to_string_pretty(&json).unwrap();
-            println!("{}", pretty);
-        }
-        Signal::Respond(value) => {
             let json = to_json_value(value);
             let pretty = serde_json::to_string_pretty(&json).unwrap();
             println!("{}", pretty);

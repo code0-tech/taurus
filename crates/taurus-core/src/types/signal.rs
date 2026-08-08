@@ -18,8 +18,6 @@ use crate::types::exit_reason::ExitReason;
 /// - [`Signal::Failure`]: terminal error; current flow execution stops.
 /// - [`Signal::Return`]: exits only the current call context. When returned from a lazily
 ///   executed child flow, the parent receives it as a successful value.
-/// - [`Signal::Respond`]: out-of-band emission used for streaming replies; executor emits the
-///   value via a configured callback and then continues the flow.
 /// - [`Signal::Stop`]: explicit hard stop; execution ends immediately.
 #[derive(Debug, Clone)]
 pub enum Signal {
@@ -29,8 +27,6 @@ pub enum Signal {
     Failure(RuntimeError),
     /// Return from the current call frame with a value.
     Return(Value),
-    /// Emit an intermediate response value without terminating execution.
-    Respond(Value),
     /// Stop execution immediately.
     Stop,
 }
@@ -42,7 +38,6 @@ impl Signal {
             Signal::Success(_) => ExitReason::Success,
             Signal::Failure(_) => ExitReason::Failure,
             Signal::Return(_) => ExitReason::Return,
-            Signal::Respond(_) => ExitReason::Respond,
             Signal::Stop => ExitReason::Stop,
         }
     }
@@ -55,7 +50,7 @@ impl Signal {
     /// Borrow the value payload for value-carrying signals.
     pub const fn value(&self) -> Option<&Value> {
         match self {
-            Signal::Success(v) | Signal::Return(v) | Signal::Respond(v) => Some(v),
+            Signal::Success(v) | Signal::Return(v) => Some(v),
             Signal::Failure(_) | Signal::Stop => None,
         }
     }
@@ -64,7 +59,7 @@ impl Signal {
     pub const fn error(&self) -> Option<&RuntimeError> {
         match self {
             Signal::Failure(err) => Some(err),
-            Signal::Success(_) | Signal::Return(_) | Signal::Respond(_) | Signal::Stop => None,
+            Signal::Success(_) | Signal::Return(_) | Signal::Stop => None,
         }
     }
 }
@@ -81,7 +76,6 @@ impl Display for Signal {
                 )
             }
             Signal::Return(_) => write!(f, "Signal(return)"),
-            Signal::Respond(_) => write!(f, "Signal(respond)"),
             Signal::Stop => write!(f, "Signal(stop)"),
         }
     }
@@ -98,7 +92,6 @@ impl PartialEq for Signal {
                 | (Signal::Failure(_), Signal::Failure(_))
                 | (Signal::Return(_), Signal::Return(_))
                 | (Signal::Stop, Signal::Stop)
-                | (Signal::Respond(_), Signal::Respond(_))
         )
     }
 }

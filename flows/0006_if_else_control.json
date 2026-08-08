@@ -1,6 +1,6 @@
 {
-	"name": "06_if_else_control",
-	"description": "This flow expects an object as input (from http request) structured payload.test = bool which the flow will return",
+	"name": "0006_if_else_control",
+	"description": "Validates if/else control flow for true and false inputs",
 	"inputs": [
 		{
 			"input": {
@@ -27,12 +27,7 @@
 					"test": true
 				}
 			},
-			"expected_result": {
-				"http_status_code": 200,
-				"headers": {},
-				"payload": "Blub",
-				"http_schema": "application/json"
-			}
+			"expected_result": "Blub"
 		},
 		{
 			"input": {
@@ -44,12 +39,7 @@
 					"test": false
 				}
 			},
-			"expected_result": {
-				"http_status_code": 200,
-				"headers": {},
-				"payload": "Blob",
-				"http_schema": "application/json"
-			}
+			"expected_result": "Blob"
 		}
 	],
 	"flow": {
@@ -76,43 +66,14 @@
 		"nodeFunctions": [
 			{
 				"databaseId": "19",
-				"runtimeFunctionId": "rest::control::respond",
+				"runtimeFunctionId": "std::control::return",
 				"parameters": [
 					{
-						"databaseId": "51",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "80",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
 						"databaseId": "79",
-						"runtimeParameterId": "payload",
+						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
 								"stringValue": "Blub"
-							}
-						}
-					},
-					{
-						"databaseId": "78",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
 							}
 						}
 					}
@@ -165,43 +126,14 @@
 			},
 			{
 				"databaseId": "17",
-				"runtimeFunctionId": "rest::control::respond",
+				"runtimeFunctionId": "std::control::return",
 				"parameters": [
 					{
-						"databaseId": "72",
-						"runtimeParameterId": "http_status_code",
-						"value": {
-							"literalValue": {
-								"numberValue": {
-									"integer": "200"
-								}
-							}
-						}
-					},
-					{
-						"databaseId": "76",
-						"runtimeParameterId": "http_schema",
-						"value": {
-							"literalValue": {
-								"stringValue": "application/json"
-							}
-						}
-					},
-					{
 						"databaseId": "75",
-						"runtimeParameterId": "payload",
+						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
 								"stringValue": "Blob"
-							}
-						}
-					},
-					{
-						"databaseId": "73",
-						"runtimeParameterId": "headers",
-						"value": {
-							"literalValue": {
-								"structValue": {}
 							}
 						}
 					}

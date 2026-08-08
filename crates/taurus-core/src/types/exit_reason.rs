@@ -15,11 +15,6 @@ pub enum ExitReason {
     Failure,
     /// Execution ended due to an explicit `return`.
     Return,
-    /// A `respond` signal reached this boundary.
-    ///
-    /// Note: in the top-level flow loop, `respond` is currently normalized to
-    /// success for continuation semantics.
-    Respond,
     /// Execution ended due to an explicit `stop`.
     Stop,
 }
@@ -37,7 +32,6 @@ impl Display for ExitReason {
             ExitReason::Success => "success",
             ExitReason::Failure => "failure",
             ExitReason::Return => "return",
-            ExitReason::Respond => "respond",
             ExitReason::Stop => "stop",
         };
 

@@ -28,7 +28,7 @@ uuid =  { version = "1.23.0", features = ["v4"] }
 ureq = "3.0.0"
 chrono = { version = "0.4.42", default-features = false, features = ["std", "clock"] }
 inventory = "0.3.24"
-syn = { version = "2", features = ["full", "extra-traits"] }
+syn = { version = "3", features = ["full", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"
 

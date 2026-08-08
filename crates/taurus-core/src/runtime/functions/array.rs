@@ -11,41 +11,31 @@ use tucana::shared::InputType;
 use tucana::shared::{ListValue, Value, value::Kind};
 
 use crate::handler::argument::Argument;
-use crate::handler::argument::ParameterNode::{Eager, Lazy};
 use crate::handler::macros::args;
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::{number_to_f64, number_to_string, value_from_f64, value_from_i64};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("std::list::at", at, 2),
-    FunctionRegistration::eager("std::list::concat", concat, 2),
-    FunctionRegistration::modes("std::list::filter", filter, &[Eager, Lazy]),
-    FunctionRegistration::modes("std::list::find", find, &[Eager, Lazy]),
-    FunctionRegistration::modes("std::list::find_last", find_last, &[Eager, Lazy]),
-    FunctionRegistration::modes("std::list::find_index", find_index, &[Eager, Lazy]),
-    FunctionRegistration::eager("std::list::first", first, 1),
-    FunctionRegistration::eager("std::list::last", last, 1),
-    FunctionRegistration::modes("std::list::for_each", for_each, &[Eager, Lazy]),
-    FunctionRegistration::modes("std::list::map", map, &[Eager, Lazy]),
-    FunctionRegistration::eager("std::list::push", push, 2),
-    FunctionRegistration::eager("std::list::pop", pop, 1),
-    FunctionRegistration::eager("std::list::remove", remove, 2),
-    FunctionRegistration::eager("std::list::is_empty", is_empty, 1),
-    FunctionRegistration::eager("std::list::size", size, 1),
-    FunctionRegistration::eager("std::list::index_of", index_of, 2),
-    FunctionRegistration::eager("std::list::to_unique", to_unique, 1),
-    FunctionRegistration::modes("std::list::sort", sort, &[Eager, Lazy]),
-    FunctionRegistration::modes("std::list::sort_reverse", sort_reverse, &[Eager, Lazy]),
-    FunctionRegistration::eager("std::list::reverse", reverse, 1),
-    FunctionRegistration::eager("std::list::flat", flat, 1),
-    FunctionRegistration::eager("std::list::min", min, 1),
-    FunctionRegistration::eager("std::list::max", max, 1),
-    FunctionRegistration::eager("std::list::sum", sum, 1),
-    FunctionRegistration::eager("std::list::join", join, 2),
-];
+taurus_macros::module! {
+    identifier = "taurus-list",
+    name(en_US = "List"),
+    description(en_US = "Work with Lists"),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:list",
+    version = "0.0.33",
+}
+
+taurus_macros::data_type! {
+    identifier = "LIST",
+    module = "taurus-list",
+    name(en_US = "Generic List"),
+    display_message(en_US = "List of ${T}"),
+    alias(en_US = "list;array;collection"),
+    generic_keys = ["T"],
+    type_string = "T[]",
+}
 
 fn as_list(value: &Value, err: &'static str) -> Result<ListValue, RuntimeError> {
     match value.kind.clone().unwrap_or(Kind::NullValue(0)) {
@@ -177,6 +167,28 @@ fn comparator_ordering(signal: Signal, reverse: bool) -> Result<Ordering, Signal
     if reverse { Ok(ord.reverse()) } else { Ok(ord) }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::at",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, index: NUMBER): T",
+    name(en_US = "Get Element of List"),
+    description(en_US = "Retrieves the element at a specified index from a list."),
+    display_message(en_US = "Get element at ${index} of ${list}"),
+    alias(en_US = "at;array;list;collection;std;index"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "NUMBER"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(en_US = "The list from which to retrieve an element.")
+)]
+#[parameter(
+    runtime_name = "index",
+    name(en_US = "Index"),
+    description(en_US = "The zero-based index of the element to retrieve.")
+)]
 fn at(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -202,6 +214,28 @@ fn at(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::concat",
+    module = "taurus-list",
+    signature = "<T>(first: LIST<T>, second: LIST<T>): LIST<T>",
+    name(en_US = "Combine Lists"),
+    description(en_US = "Concatenates/combine two lists into a single list."),
+    display_message(en_US = "Combine ${first} with ${second}"),
+    alias(en_US = "concat;combine;join;append;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First List"),
+    description(en_US = "The first list to concatenate.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second List"),
+    description(en_US = "The second list to concatenate.")
+)]
 fn concat(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -236,6 +270,30 @@ fn concat(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::filter",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, predicate: PREDICATE<T>): LIST<T>",
+    name(en_US = "Filter List"),
+    description(en_US = "Returns a new list containing only the elements from the input list for which the predicate returns true."),
+    display_message(en_US = "Filter elements in ${list} matching ${predicate}"),
+    alias(en_US = "filter;array;list;collection;std"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST"],
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(en_US = "The list to be filtered.")
+)]
+#[parameter(
+    runtime_name = "predicate",
+    name(en_US = "Filter Predicate"),
+    description(
+        en_US = "A function that takes an element of the list and returns a boolean indicating whether the element should be included in the output list."
+    )
+)]
 fn filter(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -272,6 +330,31 @@ fn filter(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::find",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, predicate: PREDICATE<T>): T",
+    name(en_US = "Find Element in List"),
+    description(en_US = "Returns the first element from the input list for which the predicate returns true. If no element matches, returns null."),
+    display_message(en_US = "Find first element in ${list} matching ${predicate}"),
+    alias(en_US = "find;array;list;collection;std"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST", "PREDICATE"],
+    throws_error,
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(en_US = "The list in which an element satisfying the predicate will be searched.")
+)]
+#[parameter(
+    runtime_name = "predicate",
+    name(en_US = "Search Predicate"),
+    description(
+        en_US = "A function that takes an element of the list and returns a boolean indicating if the element matches the search criteria."
+    )
+)]
 fn find(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -307,6 +390,31 @@ fn find(
         "No item found that satisfies the predicate",
     ))
 }
+#[taurus_macros::runtime_function(
+    identifier = "std::list::find_last",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, predicate: PREDICATE<T>): T",
+    name(en_US = "Find Last Element in List"),
+    description(en_US = "Returns the last element from the input list for which the predicate returns true. If no element matches, returns null or equivalent."),
+    display_message(en_US = "Last Element of ${list} matching ${predicate}"),
+    alias(en_US = "find last;last index;last position;array;list;collection;std;find;last"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST", "PREDICATE"],
+    throws_error,
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(en_US = "The list in which an element satisfying the predicate will be searched.")
+)]
+#[parameter(
+    runtime_name = "predicate",
+    name(en_US = "Search Predicate"),
+    description(
+        en_US = "A function that takes an element of the list and returns a boolean indicating if the element matches the search criteria."
+    )
+)]
 fn find_last(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -343,6 +451,32 @@ fn find_last(
     ))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::find_index",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, predicate: PREDICATE<T>): NUMBER",
+    name(en_US = "Find Index of Element in List"),
+    description(en_US = "Returns the zero-based index of the first element for which the predicate returns true. If no element matches, returns -1."),
+    display_message(en_US = "Index of Element in ${list} matching ${predicate}"),
+    alias(en_US = "find index;index of;position;array;list;collection;std;find;index"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST", "NUMBER", "PREDICATE"],
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(
+        en_US = "The list in which to find the index of an element that satisfies the predicate."
+    )
+)]
+#[parameter(
+    runtime_name = "predicate",
+    name(en_US = "Search Predicate"),
+    description(
+        en_US = "A function that takes an element of the list and returns a boolean indicating if the element satisfies the search criteria."
+    )
+)]
 fn find_index(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -379,6 +513,22 @@ fn find_index(
         "No item found that satisfies the predicate",
     ))
 }
+#[taurus_macros::runtime_function(
+    identifier = "std::list::first",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): T",
+    name(en_US = "First Element of List"),
+    description(en_US = "Retrieves the first element from the list."),
+    display_message(en_US = "Get First Element in ${list}"),
+    alias(en_US = "first;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(en_US = "The list from which to retrieve the first element.")
+)]
 fn first(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -396,6 +546,22 @@ fn first(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::last",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): T",
+    name(en_US = "Last Element of List"),
+    description(en_US = "Retrieves the last element from the list."),
+    display_message(en_US = "Get Last Element of ${list}"),
+    alias(en_US = "last;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(en_US = "The list from which to retrieve the last element.")
+)]
 fn last(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -412,6 +578,32 @@ fn last(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::for_each",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, consumer: CONSUMER<T>): void",
+    name(en_US = "For Each Element"),
+    description(en_US = "Executes a consumer function for each element in the list."),
+    display_message(en_US = "For each in ${list} do ${consumer}"),
+    alias(en_US = "for_each;array;list;collection;std;for;each"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST", "CONSUMER"],
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(
+        en_US = "Each element of this list will be passed to the provided consumer function for processing."
+    )
+)]
+#[parameter(
+    runtime_name = "consumer",
+    name(en_US = "Consumer Function"),
+    description(
+        en_US = "This function is invoked once for each element in the list. It is not expected to return a value."
+    )
+)]
 fn for_each(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -473,6 +665,32 @@ fn format_value_json(value: &Value) -> String {
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::map",
+    module = "taurus-list",
+    signature = "<T, R>(list: LIST<T>, transform: TRANSFORM<T, R>): LIST<R>",
+    name(en_US = "Map List"),
+    description(en_US = "Transforms each element in the list using the provided function. This will create a new list of new elements which will be returned."),
+    display_message(en_US = "Apply ${transform} for each in ${list}"),
+    alias(en_US = "map;array;list;collection;std"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST", "TRANSFORM"],
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Input List"),
+    description(
+        en_US = "Each element of this list will be passed through the transform function."
+    )
+)]
+#[parameter(
+    runtime_name = "transform",
+    name(en_US = "Transform Function"),
+    description(
+        en_US = "The transform function is applied to every element of the list to produce a new list."
+    )
+)]
 fn map(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -504,6 +722,27 @@ fn map(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::push",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, item: T): NUMBER",
+    name(en_US = "Push to List"),
+    description(en_US = "Adds a new element to the end of the list and returns the new length of the list."),
+    display_message(en_US = "Push ${item} into ${list}"),
+    alias(en_US = "push;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The list to which an item will be added.")
+)]
+#[parameter(
+    runtime_name = "item",
+    name(en_US = "Item"),
+    description(en_US = "The value to be added at the end of the list.")
+)]
 fn push(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -523,6 +762,22 @@ fn push(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::pop",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): T",
+    name(en_US = "Pop from List"),
+    description(en_US = "Removes the last element from the specified list and returns it. The list will be modified."),
+    display_message(en_US = "Remove Last Item of ${list}"),
+    alias(en_US = "pop;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The list to remove the last item from.")
+)]
 fn pop(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -542,6 +797,27 @@ fn pop(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::remove",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, item: T): LIST<T>",
+    name(en_US = "Remove from List"),
+    description(en_US = "Removes the first matching item from the given list and returns the resulting list."),
+    display_message(en_US = "Remove ${item} from ${list}"),
+    alias(en_US = "remove;delete;strip;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The list from which the item will be removed.")
+)]
+#[parameter(
+    runtime_name = "item",
+    name(en_US = "Item"),
+    description(en_US = "The item to remove from the list.")
+)]
 fn remove(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -569,6 +845,22 @@ fn remove(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::is_empty",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): BOOLEAN",
+    name(en_US = "Is List Empty"),
+    description(en_US = "Returns true if the list contains no elements, otherwise returns false."),
+    display_message(en_US = "Check if ${list} is empty"),
+    alias(en_US = "is_empty;array;list;collection;std;is;empty"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The list to check for emptiness.")
+)]
 fn is_empty(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -587,6 +879,22 @@ fn is_empty(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::size",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): NUMBER",
+    name(en_US = "List Size"),
+    description(en_US = "This function returns the count of elements present in the given list."),
+    display_message(en_US = "Size of ${list}"),
+    alias(en_US = "size;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["NUMBER", "LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The list whose number of elements is to be returned.")
+)]
 fn size(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -603,6 +911,31 @@ fn size(
     Signal::Success(value_from_i64(array.values.len() as i64))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::index_of",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, item: T): NUMBER",
+    name(en_US = "Index of Item"),
+    description(en_US = "Returns the zero-based index of the first occurrence of a given item in the specified list. If the item is not found, it typically returns -1."),
+    display_message(en_US = "Get Index of ${item} in ${list}"),
+    alias(en_US = "index_of;array;list;collection;std;index;of"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(
+        en_US = "A list of elements in which the specified item will be searched for to determine its index."
+    )
+)]
+#[parameter(
+    runtime_name = "item",
+    name(en_US = "Item"),
+    description(
+        en_US = "The item for which the function searches in the list and returns the index of its first occurrence."
+    )
+)]
 fn index_of(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -626,6 +959,22 @@ fn index_of(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::to_unique",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): LIST<T>",
+    name(en_US = "To Unique"),
+    description(en_US = "Returns a new list containing only the unique elements from the input list."),
+    display_message(en_US = "Remove duplicates in ${list}"),
+    alias(en_US = "to_unique;array;list;collection;std;to;unique"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The input list from which duplicates will be removed.")
+)]
 fn to_unique(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -652,6 +1001,30 @@ fn to_unique(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::sort",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, comparator: COMPARATOR<T>): LIST<T>",
+    name(en_US = "Sort List"),
+    description(en_US = "Returns a new list with the elements sorted according to the comparator function provided."),
+    display_message(en_US = "Sort ${list} using ${comparator}"),
+    alias(en_US = "sort;array;list;collection;std"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST"],
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The input list to be sorted.")
+)]
+#[parameter(
+    runtime_name = "comparator",
+    name(en_US = "Comparator"),
+    description(
+        en_US = "A function that takes two elements and returns a negative, zero, or positive number to indicate their ordering."
+    )
+)]
 fn sort(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -717,6 +1090,30 @@ fn sort(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::sort_reverse",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>, comparator: COMPARATOR<T>): LIST<T>",
+    name(en_US = "Sort List in Reverse"),
+    description(en_US = "Returns a new list with the elements sorted in descending order according to the comparator function provided."),
+    display_message(en_US = "Reversed-Sort ${list} using ${comparator}"),
+    alias(en_US = "sort_reverse;array;list;collection;std;sort;reverse"),
+    display_icon = "tabler:arrow-iteration",
+    linked_data_type_identifiers = ["LIST"],
+    param_modes = [Eager, Lazy],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The input list to be sorted in reverse order.")
+)]
+#[parameter(
+    runtime_name = "comparator",
+    name(en_US = "Comparator"),
+    description(
+        en_US = "A function that takes two elements and returns a negative, zero, or positive number to indicate their ordering."
+    )
+)]
 fn sort_reverse(
     args: &[Argument],
     ctx: &mut ValueStore,
@@ -782,6 +1179,22 @@ fn sort_reverse(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::reverse",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<T>): LIST<T>",
+    name(en_US = "Reverse List"),
+    description(en_US = "Returns a new list with the elements of the input list in reverse order."),
+    display_message(en_US = "Reverse ${list}"),
+    alias(en_US = "reverse;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List"),
+    description(en_US = "The input list to be reversed.")
+)]
 fn reverse(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -801,6 +1214,24 @@ fn reverse(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::flat",
+    module = "taurus-list",
+    signature = "<T>(list: LIST<LIST<T>>): LIST<T>",
+    name(en_US = "Flatten List"),
+    description(en_US = "Flattens a nested list into a single-level list."),
+    display_message(en_US = "Flatten ${list}"),
+    alias(en_US = "flat;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Nested List"),
+    description(
+        en_US = "A list containing sub-lists that will be flattened into a single-level list."
+    )
+)]
 fn flat(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -828,6 +1259,22 @@ fn flat(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::min",
+    module = "taurus-list",
+    signature = "(list: LIST<NUMBER>): NUMBER",
+    name(en_US = "Find Minimum Number"),
+    description(en_US = "Finds the minimum value in a numeric list."),
+    display_message(en_US = "Minimum of ${list}"),
+    alias(en_US = "min;minimum;smallest;least;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Number List"),
+    description(en_US = "A list of numbers to find the minimum value from.")
+)]
 fn min(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -868,6 +1315,22 @@ fn min(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::max",
+    module = "taurus-list",
+    signature = "(list: LIST<NUMBER>): NUMBER",
+    name(en_US = "Find Maximum Number"),
+    description(en_US = "Finds the maximum value in a numeric list."),
+    display_message(en_US = "Maximum of ${list}"),
+    alias(en_US = "max;maximum;largest;greatest;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List of Numbers"),
+    description(en_US = "A list of numbers to find the maximum value from.")
+)]
 fn max(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -908,6 +1371,22 @@ fn max(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::sum",
+    module = "taurus-list",
+    signature = "(list: LIST<NUMBER>): NUMBER",
+    name(en_US = "Sum of Numbers"),
+    description(en_US = "Returns the total sum of the elements in the numeric list."),
+    display_message(en_US = "Sum of ${list}"),
+    alias(en_US = "sum;total;add all;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "Number List"),
+    description(en_US = "Calculates the sum of all numbers in the given list.")
+)]
 fn sum(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -948,6 +1427,29 @@ fn sum(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::list::join",
+    module = "taurus-list",
+    signature = "(list: LIST<TEXT>, join_text: TEXT): TEXT",
+    name(en_US = "Join Text List"),
+    description(en_US = "Returns a single concatenated string of text joined by the provided join text."),
+    display_message(en_US = "Joins ${list} using '${join_text}'"),
+    alias(en_US = "join;array;list;collection;std"),
+    display_icon = "tabler:list",
+    linked_data_type_identifiers = ["LIST", "TEXT"],
+)]
+#[parameter(
+    runtime_name = "list",
+    name(en_US = "List of Text"),
+    description(en_US = "A list of text elements to combined into a single word.")
+)]
+#[parameter(
+    runtime_name = "join_text",
+    name(en_US = "Join Text"),
+    description(
+        en_US = "The text that will be used to join the list elements into a single string."
+    )
+)]
 fn join(
     args: &[Argument],
     _ctx: &mut ValueStore,

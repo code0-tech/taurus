@@ -10,7 +10,6 @@ use tucana::shared::{NumberValue, Value, number_value, value::Kind};
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::{args, no_args};
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
@@ -27,48 +26,41 @@ fn num_f64(n: &NumberValue) -> Result<f64, Signal> {
     })
 }
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("std::number::add", add, 2),
-    FunctionRegistration::eager("std::number::multiply", multiply, 2),
-    FunctionRegistration::eager("std::number::subtract", subtract, 2),
-    FunctionRegistration::eager("std::number::divide", divide, 2),
-    FunctionRegistration::eager("std::number::modulo", modulo, 2),
-    FunctionRegistration::eager("std::number::abs", abs, 1),
-    FunctionRegistration::eager("std::number::is_positive", is_positive, 1),
-    FunctionRegistration::eager("std::number::is_greater", is_greater, 2),
-    FunctionRegistration::eager("std::number::is_less", is_less, 2),
-    FunctionRegistration::eager("std::number::is_zero", is_zero, 1),
-    FunctionRegistration::eager("std::number::square", square, 2),
-    FunctionRegistration::eager("std::number::exponential", exponential, 2),
-    FunctionRegistration::eager("std::number::pi", pi, 0),
-    FunctionRegistration::eager("std::number::euler", euler, 0),
-    FunctionRegistration::eager("std::number::round_up", round_up, 2),
-    FunctionRegistration::eager("std::number::round_down", round_down, 2),
-    FunctionRegistration::eager("std::number::round", round, 2),
-    FunctionRegistration::eager("std::number::square_root", square_root, 1),
-    FunctionRegistration::eager("std::number::root", root, 2),
-    FunctionRegistration::eager("std::number::log", log, 2),
-    FunctionRegistration::eager("std::number::ln", ln, 1),
-    FunctionRegistration::eager("std::number::from_text", from_text, 1),
-    FunctionRegistration::eager("std::number::as_text", as_text, 1),
-    FunctionRegistration::eager("std::number::min", min, 2),
-    FunctionRegistration::eager("std::number::max", max, 2),
-    FunctionRegistration::eager("std::number::negate", negate, 1),
-    FunctionRegistration::eager("std::number::random_number", random, 2),
-    FunctionRegistration::eager("std::number::sin", sin, 1),
-    FunctionRegistration::eager("std::number::cos", cos, 1),
-    FunctionRegistration::eager("std::number::tan", tan, 1),
-    FunctionRegistration::eager("std::number::arcsin", arcsin, 1),
-    FunctionRegistration::eager("std::number::arccos", arccos, 1),
-    FunctionRegistration::eager("std::number::arctan", arctan, 1),
-    FunctionRegistration::eager("std::number::sinh", sinh, 1),
-    FunctionRegistration::eager("std::number::cosh", cosh, 1),
-    FunctionRegistration::eager("std::number::clamp", clamp, 3),
-    FunctionRegistration::eager("std::number::is_equal", is_equal, 2),
-    FunctionRegistration::eager("std::number::has_digits", has_digits, 2),
-    FunctionRegistration::eager("std::number::remove_digits", remove_digits, 2),
-];
+taurus_macros::module! {
+    identifier = "taurus-number",
+    name(en_US = "Number"),
+    description(en_US = "Work with Numbers."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:math-function",
+    version = "0.0.33",
+}
 
+taurus_macros::data_type! {
+    identifier = "NUMBER",
+    module = "taurus-number",
+    name(en_US = "Number"),
+    display_message(en_US = "Number"),
+    alias(en_US = "number;integer;float;double;long"),
+    type_string = "number",
+}
+
+#[taurus_macros::runtime_function(
+    identifier = "std::number::has_digits",
+    module = "taurus-number",
+    signature = "(number: NUMBER): BOOLEAN",
+    name(en_US = "Has Digits in Number"),
+    description(en_US = "Checks if the given number contains any digit characters"),
+    display_message(en_US = "Does ${number} have digits"),
+    alias(en_US = "has;digits;contains;number;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "number",
+    name(en_US = "Number Input"),
+    description(en_US = "The number to check for digit characters.")
+)]
 fn has_digits(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -89,6 +81,24 @@ fn has_digits(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::remove_digits",
+    module = "taurus-number",
+    signature = "(number: NUMBER): NUMBER",
+    name(en_US = "Remove Digits from Number"),
+    description(en_US = "Removes all digit characters from the input number, effectively stripping it down to its non-digit components."),
+    display_message(en_US = "Remove Digits from ${number}"),
+    alias(en_US = "remove:digits;strip;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "number",
+    name(en_US = "Number Input"),
+    description(
+        en_US = "This is the numeric input. The result will be its value without any digits."
+    )
+)]
 fn remove_digits(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -105,6 +115,27 @@ fn remove_digits(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::add",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Add Numbers"),
+    description(en_US = "Adds two numbers together."),
+    display_message(en_US = "${first} Plus ${second}"),
+    alias(en_US = "add;plus;sum;total;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(en_US = "The first number to add.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "The second number to add.")
+)]
 fn add(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -129,6 +160,27 @@ fn add(
     Signal::Success(value_from_f64(lhs + rhs))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::multiply",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Multiply"),
+    description(en_US = "Takes two numeric inputs and returns their product."),
+    display_message(en_US = "${first} Multiply by ${second}"),
+    alias(en_US = "multiply;times;product;mul;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(en_US = "The first number to multiply.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "The second number to multiply.")
+)]
 fn multiply(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -152,6 +204,29 @@ fn multiply(
     Signal::Success(value_from_f64(lhs * rhs))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::subtract",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Subtract"),
+    description(en_US = "Subtracts the second number from the first number."),
+    display_message(en_US = "${first} Minus ${second}"),
+    alias(en_US = "subtract;minus;difference;sub;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "Minuend"),
+    description(
+        en_US = "The number from which another number (the subtrahend) is to be subtracted."
+    )
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Subtrahend"),
+    description(en_US = "The number to subtract from the first number (the minuend).")
+)]
 fn subtract(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -175,6 +250,31 @@ fn subtract(
     Signal::Success(value_from_f64(lhs - rhs))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::divide",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Divide Numbers"),
+    description(
+        en_US = "Returns the result of dividing the first numeric input (dividend) by the second (divisor)."
+    ),
+    display_message(en_US = "${first} Divided by ${second}"),
+    alias(en_US = "divide;division;quotient;div;number;math;std"),
+    display_icon = "tabler:math-function",
+    throws_error
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "Dividend"),
+    description(
+        en_US = "This is the numerator or the number that will be divided by the second value."
+    )
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Divisor"),
+    description(en_US = "This is the denominator or the value that divides the first number.")
+)]
 fn divide(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -210,6 +310,27 @@ fn divide(
     Signal::Success(value_from_f64(lhs_f / rhs_f))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::modulo",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Modulo"),
+    description(en_US = "Computes the modulus (remainder) of dividing the first numeric input by the second."),
+    display_message(en_US = "${first} Modulus ${second}"),
+    alias(en_US = "modulo;mod;remainder;modulus;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "Number"),
+    description(en_US = "The number to apply the modulo operator onto.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Modulo"),
+    description(en_US = "The modulo operator.")
+)]
 fn modulo(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -244,6 +365,24 @@ fn modulo(
     Signal::Success(value_from_f64(lhs_f % rhs_f))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::abs",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Absolute Value"),
+    description(en_US = "Removes the sign from the input number, returning its non-negative value."),
+    display_message(en_US = "Absolute Value of ${value}"),
+    alias(en_US = "absolute;abs;magnitude;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Number Input"),
+    description(
+        en_US = "This is the numeric input. The result will be its absolute (non-negative) value."
+    )
+)]
 fn abs(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -262,6 +401,22 @@ fn abs(
     Signal::Success(value_from_f64(value.abs()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::is_positive",
+    module = "taurus-number",
+    signature = "(value: NUMBER): BOOLEAN",
+    name(en_US = "Is Positive Number"),
+    description(en_US = "Evaluates the input number and returns true if it is positive (greater than zero), otherwise false."),
+    display_message(en_US = "${value} Is Greater than 0"),
+    alias(en_US = "positive;greater than zero;number;math;std;is"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The number to check for positivity.")
+)]
 fn is_positive(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -277,6 +432,29 @@ fn is_positive(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::is_greater",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): BOOLEAN",
+    name(en_US = "Is Greater"),
+    description(en_US = "Returns true if the first numeric input is greater than the second; otherwise, returns false."),
+    display_message(en_US = "${first} Is Greater than ${second}"),
+    alias(en_US = "greater;larger;more;number;math;std;is"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["BOOLEAN", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(
+        en_US = "This is the number that will be evaluated to determine if it is greater than the second number."
+    )
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "This is the number that the first number will be compared to.")
+)]
 fn is_greater(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -296,6 +474,29 @@ fn is_greater(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::is_less",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): BOOLEAN",
+    name(en_US = "Is Less"),
+    description(en_US = "Returns true if the first numeric input is less than the second; otherwise, returns false."),
+    display_message(en_US = "${first} Less than ${second}"),
+    alias(en_US = "less;smaller;fewer;number;math;std;is"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(
+        en_US = "This is the number that will be evaluated to determine if it is less than the second number."
+    )
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "This is the number that the first number will be compared to.")
+)]
 fn is_less(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -315,6 +516,24 @@ fn is_less(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::is_zero",
+    module = "taurus-number",
+    signature = "(value: NUMBER): BOOLEAN",
+    name(en_US = "Number Is Zero"),
+    description(en_US = "Returns true if the input number is zero. Otherwise returns false."),
+    display_message(en_US = "${value} Equals 0"),
+    alias(en_US = "zero;equals zero;number;math;std;is"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(
+        en_US = "This is the numeric input evaluated to determine whether it equals zero."
+    )
+)]
 fn is_zero(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -330,6 +549,22 @@ fn is_zero(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::square",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Square"),
+    description(en_US = "Returns the square of the given number."),
+    display_message(en_US = "${value} Squared"),
+    alias(en_US = "square;squared;power two;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The number to be squared.")
+)]
 fn square(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -348,6 +583,29 @@ fn square(
     Signal::Success(value_from_f64(value.powf(2.0)))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::exponential",
+    module = "taurus-number",
+    signature = "(base: NUMBER, exponent: NUMBER): NUMBER",
+    name(en_US = "Exponential"),
+    description(en_US = "Computes the result of raising the base to the power specified by the exponent."),
+    display_message(en_US = "${base} to the Exponent of ${exponent}"),
+    alias(en_US = "exponential;exp;e power;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "base",
+    name(en_US = "Base"),
+    description(
+        en_US = "This is the numeric value that will be raised to the power of the exponent."
+    )
+)]
+#[parameter(
+    runtime_name = "exponent",
+    name(en_US = "Exponent"),
+    description(en_US = "This numeric value indicates the power to which the base is raised.")
+)]
 fn exponential(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -377,6 +635,17 @@ fn exponential(
     Signal::Success(value_from_f64(base.powf(exponent)))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::pi",
+    module = "taurus-number",
+    signature = "(): NUMBER",
+    name(en_US = "Pi"),
+    description(en_US = "Provides the constant value of pi, approximately 3.14159, used in many mathematical calculations."),
+    display_message(en_US = "Pi"),
+    alias(en_US = "pi;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
 fn pi(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -386,6 +655,17 @@ fn pi(
     Signal::Success(value_from_f64(f64::consts::PI))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::euler",
+    module = "taurus-number",
+    signature = "(): NUMBER",
+    name(en_US = "Euler's Number"),
+    description(en_US = "Provides the constant value of Euler's number, approximately 2.71828, which is the base of the natural logarithm."),
+    display_message(en_US = "Euler's Number"),
+    alias(en_US = "euler;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
 fn euler(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -395,6 +675,27 @@ fn euler(
     Signal::Success(value_from_f64(f64::consts::E))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::round_up",
+    module = "taurus-number",
+    signature = "(value: NUMBER, decimals: NUMBER): NUMBER",
+    name(en_US = "Round Up"),
+    description(en_US = "Performs rounding on the given value, always rounding up to the nearest value at the given decimal precision."),
+    display_message(en_US = "Round Upwards ${value} with ${decimals} Decimal Places"),
+    alias(en_US = "round up;ceil;ceiling;number;math;std;round;up"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Number Input"),
+    description(en_US = "The number to be rounded up.")
+)]
+#[parameter(
+    runtime_name = "decimals",
+    name(en_US = "Decimal Places"),
+    description(en_US = "The number of decimal places to round up to.")
+)]
 fn round_up(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -419,6 +720,27 @@ fn round_up(
     Signal::Success(value_from_f64((value * factor).ceil() / factor))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::round_down",
+    module = "taurus-number",
+    signature = "(value: NUMBER, decimals: NUMBER): NUMBER",
+    name(en_US = "Round Number Down"),
+    description(en_US = "Rounds a number downward to the specified number of decimal places."),
+    display_message(en_US = "Round Down ${value} with ${decimals} Decimal Places"),
+    alias(en_US = "round down;floor;number;math;std;round;down"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The numeric input that will be rounded downwards.")
+)]
+#[parameter(
+    runtime_name = "decimals",
+    name(en_US = "Decimal Places"),
+    description(en_US = "Specifies how many decimal digits to keep after rounding down.")
+)]
 fn round_down(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -443,6 +765,27 @@ fn round_down(
     Signal::Success(value_from_f64((value * factor).floor() / factor))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::round",
+    module = "taurus-number",
+    signature = "(value: NUMBER, decimals: NUMBER): NUMBER",
+    name(en_US = "Round Number"),
+    description(en_US = "Rounds a number to the nearest value at the specified number of decimal places."),
+    display_message(en_US = "Round ${value} with ${decimals} Decimal Places"),
+    alias(en_US = "round;nearest;approximate;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The numeric input that will be rounded to the nearest value.")
+)]
+#[parameter(
+    runtime_name = "decimals",
+    name(en_US = "Decimal Places"),
+    description(en_US = "Specifies how many decimal digits to keep after rounding.")
+)]
 fn round(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -467,6 +810,22 @@ fn round(
     Signal::Success(value_from_f64((value * factor).round() / factor))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::square_root",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Square Root"),
+    description(en_US = "Calculates the positive square root of the input number."),
+    display_message(en_US = "Square Root of ${value}"),
+    alias(en_US = "square root;sqrt;root;number;math;std;square"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The number to find the square root of.")
+)]
 fn square_root(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -480,6 +839,27 @@ fn square_root(
     Signal::Success(value_from_f64(value.sqrt()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::root",
+    module = "taurus-number",
+    signature = "(value: NUMBER, root_exponent: NUMBER): NUMBER",
+    name(en_US = "Root"),
+    description(en_US = "Calculates the nth root of the input number, where n is specified by the root exponent."),
+    display_message(en_US = "${root_exponent} Root of ${value}"),
+    alias(en_US = "root;nth root;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Input Value"),
+    description(en_US = "The numeric input for which the root will be calculated.")
+)]
+#[parameter(
+    runtime_name = "root_exponent",
+    name(en_US = "Root Exponent"),
+    description(en_US = "The degree of the root to extract.")
+)]
 fn root(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -497,6 +877,29 @@ fn root(
     Signal::Success(value_from_f64(value.powf(root)))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::log",
+    module = "taurus-number",
+    signature = "(value: NUMBER, base: NUMBER): NUMBER",
+    name(en_US = "Logarithm"),
+    description(en_US = "Calculates and returns the logarithm of a number with respect to a specified base."),
+    display_message(en_US = "Logarithm with Base ${base} of ${value}"),
+    alias(en_US = "log;logarithm;log base;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The numeric input whose logarithm is to be calculated.")
+)]
+#[parameter(
+    runtime_name = "base",
+    name(en_US = "Base"),
+    description(
+        en_US = "Specifies the logarithmic base to use (e.g., 10 for common log, e for natural log)."
+    )
+)]
 fn log(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -543,6 +946,24 @@ fn log(
     Signal::Success(value_from_f64(result))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::ln",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Natural Logarithm"),
+    description(en_US = "Calculates the natural logarithm (log base e) of a number."),
+    display_message(en_US = "Natural Logarithm of ${value}"),
+    alias(en_US = "natural log;ln;log e;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Input Number"),
+    description(
+        en_US = "The numeric input whose natural logarithm (log base e) will be calculated."
+    )
+)]
 fn ln(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -556,6 +977,22 @@ fn ln(
     Signal::Success(value_from_f64(value.ln()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::from_text",
+    module = "taurus-number",
+    signature = "(text: TEXT): NUMBER",
+    name(en_US = "Number from Text"),
+    description(en_US = "Attempts to parse the provided text input and return its numeric equivalent."),
+    display_message(en_US = "Convert ${text} to Number"),
+    alias(en_US = "from text;parse;convert;number;math;std;from;text"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "TEXT"],
+)]
+#[parameter(
+    runtime_name = "text",
+    name(en_US = "Text"),
+    description(en_US = "The text string to convert to a number.")
+)]
 fn from_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -576,6 +1013,22 @@ fn from_text(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::as_text",
+    module = "taurus-number",
+    signature = "(number: NUMBER): TEXT",
+    name(en_US = "Number as Text"),
+    description(en_US = "Converts a number into text."),
+    display_message(en_US = "Convert ${number} to Text"),
+    alias(en_US = "to text;string;format number;number;math;std;as;text"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "TEXT"],
+)]
+#[parameter(
+    runtime_name = "number",
+    name(en_US = "Number"),
+    description(en_US = "The number to convert to text.")
+)]
 fn as_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -591,6 +1044,27 @@ fn as_text(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::min",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Minimum"),
+    description(en_US = "Compares two numbers and returns the minimum value."),
+    display_message(en_US = "Minimum of ${first} and ${second}"),
+    alias(en_US = "min;minimum;smallest;least;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(en_US = "The first number to compare.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "The second number to compare.")
+)]
 fn min(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -613,6 +1087,27 @@ fn min(
     Signal::Success(value_from_f64(lhs.min(rhs)))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::max",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): NUMBER",
+    name(en_US = "Maximum Number"),
+    description(en_US = "Compares two numbers and returns the maximum value."),
+    display_message(en_US = "Maximum of ${first} and ${second}"),
+    alias(en_US = "max;maximum;largest;greatest;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(en_US = "The first number to compare.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "The second number to compare.")
+)]
 fn max(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -635,6 +1130,22 @@ fn max(
     Signal::Success(value_from_f64(lhs.max(rhs)))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::negate",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Negate"),
+    description(en_US = "Returns the negation of a number (multiplies by -1)."),
+    display_message(en_US = "Negate ${value}"),
+    alias(en_US = "negate;negative;invert;opposite;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The number to negate.")
+)]
 fn negate(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -653,6 +1164,27 @@ fn negate(
     Signal::Success(value_from_f64(-value))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::random_number",
+    module = "taurus-number",
+    signature = "(min: NUMBER, max: NUMBER): NUMBER",
+    name(en_US = "Random Number"),
+    description(en_US = "Returns a randomly generated number within the given range, inclusive of both minimum and maximum."),
+    display_message(en_US = "Random Number Between ${min} and ${max}"),
+    alias(en_US = "random;rand;random number;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "min",
+    name(en_US = "Minimum Value"),
+    description(en_US = "Defines the lower bound (inclusive) for the random number generation.")
+)]
+#[parameter(
+    runtime_name = "max",
+    name(en_US = "Maximum Value"),
+    description(en_US = "Defines the upper bound (inclusive) for the random number generation.")
+)]
 fn random(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -682,6 +1214,22 @@ fn random(
     Signal::Success(value_from_f64(value))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::sin",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Sine"),
+    description(en_US = "Calculates the sine of the input value."),
+    display_message(en_US = "Sine of ${value}"),
+    alias(en_US = "sin;sine;trigonometry;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Number Input"),
+    description(en_US = "The number for which to calculate the sine.")
+)]
 fn sin(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -695,6 +1243,22 @@ fn sin(
     Signal::Success(value_from_f64(value.sin()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::cos",
+    module = "taurus-number",
+    signature = "(radians: NUMBER): NUMBER",
+    name(en_US = "Cosine"),
+    description(en_US = "Calculates the cosine value of the input angle measured in radians."),
+    display_message(en_US = "Cosine of ${radians}"),
+    alias(en_US = "cos;cosine;trigonometry;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "radians",
+    name(en_US = "Radians"),
+    description(en_US = "Computes the cosine of the given angle in radians.")
+)]
 fn cos(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -708,6 +1272,22 @@ fn cos(
     Signal::Success(value_from_f64(value.cos()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::tan",
+    module = "taurus-number",
+    signature = "(radians: NUMBER): NUMBER",
+    name(en_US = "Tangent"),
+    description(en_US = "Calculates the tangent value of the input angle measured in radians."),
+    display_message(en_US = "Tangent of ${radians}"),
+    alias(en_US = "tan;tangent;trigonometry;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "radians",
+    name(en_US = "Radians"),
+    description(en_US = "Computes the tangent of the given angle in radians.")
+)]
 fn tan(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -721,6 +1301,22 @@ fn tan(
     Signal::Success(value_from_f64(value.tan()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::arcsin",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Arcsine"),
+    description(en_US = "Computes the angle in radians whose sine is the given number."),
+    display_message(en_US = "Arcsine of ${value}"),
+    alias(en_US = "arcsin;asin;inverse sine;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "Calculates the arcsine (inverse sine) of the input value.")
+)]
 fn arcsin(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -734,6 +1330,22 @@ fn arcsin(
     Signal::Success(value_from_f64(value.asin()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::arccos",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Arccosine"),
+    description(en_US = "Computes the angle in radians whose cosine is the given number."),
+    display_message(en_US = "Arccosine of ${value}"),
+    alias(en_US = "arccos;acos;inverse cosine;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Input Number"),
+    description(en_US = "Calculates the arccosine (inverse cosine) of the input value.")
+)]
 fn arccos(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -747,6 +1359,22 @@ fn arccos(
     Signal::Success(value_from_f64(value.acos()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::arctan",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Arctangent"),
+    description(en_US = "Computes the angle in radians whose tangent is the given number."),
+    display_message(en_US = "Arctangent of ${value}"),
+    alias(en_US = "arctan;atan;inverse tangent;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Input Value"),
+    description(en_US = "Calculates the arctangent (inverse tangent) of the input value.")
+)]
 fn arctan(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -760,6 +1388,22 @@ fn arctan(
     Signal::Success(value_from_f64(value.atan()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::sinh",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Hyperbolic Sine"),
+    description(en_US = "Calculates the hyperbolic sine (sinh) of the input value."),
+    display_message(en_US = "Hyperbolic Sine of ${value}"),
+    alias(en_US = "sinh;hyperbolic sine;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Number Input"),
+    description(en_US = "The number for which to calculate the hyperbolic sine.")
+)]
 fn sinh(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -773,6 +1417,22 @@ fn sinh(
     Signal::Success(value_from_f64(value.sinh()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::cosh",
+    module = "taurus-number",
+    signature = "(value: NUMBER): NUMBER",
+    name(en_US = "Hyperbolic Cosine"),
+    description(en_US = "Calculates the hyperbolic cosine (cosh) of the input value."),
+    display_message(en_US = "Hyperbolic Cosine of ${value}"),
+    alias(en_US = "cosh;hyperbolic cosine;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Number Input"),
+    description(en_US = "The number for which to calculate the hyperbolic cosine.")
+)]
 fn cosh(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -786,6 +1446,32 @@ fn cosh(
     Signal::Success(value_from_f64(value.cosh()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::clamp",
+    module = "taurus-number",
+    signature = "(value: NUMBER, min: NUMBER, max: NUMBER): NUMBER",
+    name(en_US = "Clamp Number"),
+    description(en_US = "Returns the given number clamped between the minimum and maximum bounds."),
+    display_message(en_US = "Clamp ${value} between ${min} and ${max}"),
+    alias(en_US = "clamp;limit;bound;number;math;std"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Number Input"),
+    description(en_US = "The input number that will be limited (clamped) to the specified range.")
+)]
+#[parameter(
+    runtime_name = "min",
+    name(en_US = "Minimum"),
+    description(en_US = "The minimum allowed value in the clamping operation.")
+)]
+#[parameter(
+    runtime_name = "max",
+    name(en_US = "Maximum"),
+    description(en_US = "The maximum allowed value in the clamping operation.")
+)]
 fn clamp(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -815,6 +1501,27 @@ fn clamp(
     Signal::Success(value_from_f64(value.clamp(min, max)))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::number::is_equal",
+    module = "taurus-number",
+    signature = "(first: NUMBER, second: NUMBER): BOOLEAN",
+    name(en_US = "Is Equal"),
+    description(en_US = "Returns true if the first number is equal to the second number, otherwise false."),
+    display_message(en_US = "${first} Equals ${second}"),
+    alias(en_US = "equal;equals;same;number;math;std;is"),
+    display_icon = "tabler:math-function",
+    linked_data_type_identifiers = ["NUMBER", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "first",
+    name(en_US = "First Number"),
+    description(en_US = "The first number to compare.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second Number"),
+    description(en_US = "The second number to compare.")
+)]
 fn is_equal(
     args: &[Argument],
     _ctx: &mut ValueStore,

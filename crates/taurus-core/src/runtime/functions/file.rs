@@ -6,16 +6,52 @@
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::signal::Signal;
 use crate::value::value_from_i64;
 use base64::Engine;
 use tucana::shared::{Struct, value::Kind};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] =
-    &[FunctionRegistration::eager("std::file::size", size, 1)];
+// No `definitions/taurus-file/*.json` counterpart exists in this repo -- see
+// the note in `date.rs`. The metadata below is transcribed from Aquila's
+// live definitions instead.
+taurus_macros::module! {
+    identifier = "taurus-file",
+    name(en_US = "File"),
+    description(en_US = "Work with Files."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:file",
+    version = "0.0.33",
+}
 
+taurus_macros::data_type! {
+    identifier = "FILE",
+    module = "taurus-file",
+    name(en_US = "File"),
+    display_message(en_US = "File"),
+    alias(en_US = "file;document;blob;attachment;binary"),
+    generic_keys = ["M extends TEXT"],
+    type_string = "{ contentType: M; valueType: 'base64'; value: string }",
+    linked_data_type_identifiers = ["TEXT"],
+}
+
+#[taurus_macros::runtime_function(
+    identifier = "std::file::size",
+    module = "taurus-file",
+    signature = "<M extends TEXT>(file: FILE<M>): NUMBER",
+    name(en_US = "File Size"),
+    description(en_US = "Returns the size of the given file in bytes."),
+    display_message(en_US = "Size of ${file}"),
+    alias(en_US = "size;file;bytes;length;document;blob;std"),
+    display_icon = "tabler:file",
+    linked_data_type_identifiers = ["FILE", "NUMBER", "TEXT"],
+)]
+#[parameter(
+    runtime_name = "file",
+    name(en_US = "File"),
+    description(en_US = "The file whose size in bytes is to be returned.")
+)]
 fn size(
     args: &[Argument],
     _ctx: &mut ValueStore,

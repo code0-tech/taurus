@@ -7,7 +7,6 @@
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::{args, no_args};
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
@@ -16,13 +15,61 @@ use crate::value::value_from_i64;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use tucana::shared::{Value, value::Kind};
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("std::date::now", now, 0),
-    FunctionRegistration::eager("std::date::from", from, 6),
-    FunctionRegistration::eager("std::date::from_text", from_text, 1),
-    FunctionRegistration::eager("std::date::from_unix", from_unix, 1),
-    FunctionRegistration::eager("std::date::format", format, 2),
-];
+// This module had no `definitions/taurus-date/*.json` counterpart in this
+// repo (it was implemented after the JSON tree stopped being kept in sync --
+// exactly the drift this self-registration replaces). The metadata below is
+// transcribed from Aquila's live definitions instead.
+taurus_macros::module! {
+    identifier = "taurus-date",
+    name(en_US = "Date"),
+    description(en_US = "Work with Dates."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:calendar",
+    version = "0.0.33",
+}
+
+taurus_macros::data_type! {
+    identifier = "DATE",
+    module = "taurus-date",
+    name(en_US = "Date"),
+    display_message(en_US = "Date"),
+    alias(en_US = "date;day;day of month;calendar day"),
+    type_string = "number",
+}
+
+taurus_macros::data_type! {
+    identifier = "MONTH",
+    module = "taurus-date",
+    name(en_US = "Month"),
+    display_message(en_US = "Month"),
+    alias(en_US = "month;months;month of year;calendar month"),
+    type_string = "'JAN' | 'FEB' | 'MAR' | 'APR' | 'MAY' | 'JUN' | 'JUL' | 'AUG' | 'SEP' | 'OCT' | 'NOV' | 'DEC'",
+}
+
+taurus_macros::data_type! {
+    identifier = "HOUR",
+    module = "taurus-date",
+    name(en_US = "Hour"),
+    display_message(en_US = "Hour"),
+    alias(en_US = "hour;hours;hr;time"),
+    type_string = "number",
+    number_range_from = 0,
+    number_range_to = 23,
+    number_range_steps = 1,
+}
+
+taurus_macros::data_type! {
+    identifier = "MINUTE",
+    module = "taurus-date",
+    name(en_US = "Minute"),
+    display_message(en_US = "Minute"),
+    alias(en_US = "minute;minutes;min;time"),
+    type_string = "number",
+    number_range_from = 0,
+    number_range_to = 59,
+    number_range_steps = 1,
+}
 
 fn fail(message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new(
@@ -52,6 +99,17 @@ fn month_from_code(code: &str) -> Option<u32> {
     Some(month)
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::now",
+    module = "taurus-date",
+    signature = "(): DATE",
+    name(en_US = "Now"),
+    description(en_US = "Returns the current date and time as a date."),
+    display_message(en_US = "Now"),
+    alias(en_US = "now;current;today;current date;current time;date;time;std"),
+    display_icon = "tabler:calendar",
+    linked_data_type_identifiers = ["DATE"],
+)]
 fn now(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -61,6 +119,48 @@ fn now(
     Signal::Success(value_from_i64(now_unix_micros()))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::from",
+    module = "taurus-date",
+    signature = "(year: NUMBER, month: MONTH, day: NUMBER, hour: HOUR, minute: MINUTE, second: NUMBER): DATE",
+    name(en_US = "Date from Components"),
+    description(en_US = "Creates a date from the given year, month, day, hour, minute and second. Throws an error if the combination does not represent a valid date."),
+    display_message(en_US = "Date ${day} ${month} ${year} at ${hour}:${minute}:${second}"),
+    alias(en_US = "from;create;build;construct;date;year;month;day;time;std"),
+    display_icon = "tabler:calendar-plus",
+    linked_data_type_identifiers = ["DATE", "NUMBER", "MONTH", "HOUR", "MINUTE"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "year",
+    name(en_US = "Year"),
+    description(en_US = "The year of the date, for example 2026.")
+)]
+#[parameter(
+    runtime_name = "month",
+    name(en_US = "Month"),
+    description(en_US = "The month of the date.")
+)]
+#[parameter(
+    runtime_name = "day",
+    name(en_US = "Day"),
+    description(en_US = "The day of the month, ranging from 1 to 31.")
+)]
+#[parameter(
+    runtime_name = "hour",
+    name(en_US = "Hour"),
+    description(en_US = "The hour of the day, ranging from 0 to 23.")
+)]
+#[parameter(
+    runtime_name = "minute",
+    name(en_US = "Minute"),
+    description(en_US = "The minute of the hour, ranging from 0 to 59.")
+)]
+#[parameter(
+    runtime_name = "second",
+    name(en_US = "Second"),
+    description(en_US = "The second of the minute, ranging from 0 to 59.")
+)]
 fn from(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -104,6 +204,25 @@ fn from(
     ))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::from_text",
+    module = "taurus-date",
+    signature = "(value: TEXT): DATE",
+    name(en_US = "Date from Text"),
+    description(en_US = "Parses a date from its textual representation. Throws an error if the text cannot be parsed into a valid date."),
+    display_message(en_US = "Date from text ${value}"),
+    alias(en_US = "from text;parse;string;iso;from;date;time;std"),
+    display_icon = "tabler:calendar-plus",
+    linked_data_type_identifiers = ["DATE", "TEXT"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(
+        en_US = "The textual representation of the date, for example an ISO 8601 string like 2026-07-28T10:15:30Z."
+    )
+)]
 fn from_text(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -122,6 +241,24 @@ fn from_text(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::from_unix",
+    module = "taurus-date",
+    signature = "(value: NUMBER): DATE",
+    name(en_US = "Date from Unix Timestamp"),
+    description(en_US = "Creates a date from a Unix timestamp given in seconds since the Unix epoch."),
+    display_message(en_US = "Date from Unix timestamp ${value}"),
+    alias(en_US = "from unix;unix;timestamp;epoch;from;date;time;std"),
+    display_icon = "tabler:calendar-plus",
+    linked_data_type_identifiers = ["DATE", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Unix Timestamp"),
+    description(
+        en_US = "The Unix timestamp in seconds since the Unix epoch (1970-01-01T00:00:00Z)."
+    )
+)]
 fn from_unix(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -173,6 +310,30 @@ fn translate_pattern(pattern: &str) -> Result<String, String> {
     Ok(out)
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::date::format",
+    module = "taurus-date",
+    signature = "(date: DATE, pattern: TEXT): TEXT",
+    name(en_US = "Format Date"),
+    description(en_US = "Converts a date into a formatted text using the given pattern. Throws an error if the pattern is invalid."),
+    display_message(en_US = "Format ${date} as ${pattern}"),
+    alias(en_US = "format;pattern;stringify;to text;display;date;time;std"),
+    display_icon = "tabler:calendar-cog",
+    linked_data_type_identifiers = ["DATE", "TEXT"],
+    throws_error,
+)]
+#[parameter(
+    runtime_name = "date",
+    name(en_US = "Date"),
+    description(en_US = "The date that will be formatted.")
+)]
+#[parameter(
+    runtime_name = "pattern",
+    name(en_US = "Pattern"),
+    description(
+        en_US = "The pattern used to format the date, for example DD:MM:YYYY or YY:MM:DD."
+    )
+)]
 fn format(
     args: &[Argument],
     _ctx: &mut ValueStore,

@@ -13,9 +13,12 @@
 //! JSON fixture and proto-value-normalization helpers shared by the runtime
 //! binaries.
 
+pub mod export;
 pub mod fixtures;
 mod handler;
+pub mod meta;
 pub mod normalize;
+pub mod registry;
 pub mod runtime;
 pub mod time;
 pub mod types;

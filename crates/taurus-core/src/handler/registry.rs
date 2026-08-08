@@ -2,7 +2,6 @@
 
 use crate::handler::argument::{Argument, ParameterNode, Thunk};
 use crate::runtime::execution::value_store::ValueStore;
-use crate::runtime::functions::ALL_FUNCTION_SETS;
 use crate::types::signal::Signal;
 use std::collections::HashMap;
 
@@ -69,6 +68,10 @@ pub struct FunctionRegistration {
     pub entry: HandlerFunctionEntry,
 }
 
+// Populated by `#[taurus_macros::runtime_function(...)]` via
+// `inventory::submit!`.
+inventory::collect!(FunctionRegistration);
+
 impl FunctionRegistration {
     pub const fn eager(id: &'static str, handler: HandlerFn, param_count: u8) -> Self {
         Self {
@@ -97,8 +100,8 @@ pub struct FunctionStore {
 impl Default for FunctionStore {
     fn default() -> Self {
         let mut store = Self::new();
-        for set in ALL_FUNCTION_SETS {
-            store.populate(set);
+        for reg in inventory::iter::<FunctionRegistration>() {
+            store.functions.insert(reg.id, reg.entry);
         }
         store
     }
@@ -117,7 +120,9 @@ impl FunctionStore {
         self.functions.get(id)
     }
 
-    /// Register a group of handlers.
+    /// Register a group of handlers. Only used by tests to inject
+    /// test-only handlers without polluting the global inventory registry.
+    #[cfg(test)]
     pub fn populate(&mut self, regs: &[FunctionRegistration]) {
         for reg in regs {
             self.functions.insert(reg.id, reg.entry);

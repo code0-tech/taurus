@@ -6,19 +6,64 @@ use tucana::shared::{Struct, Value, value::Kind};
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
-use crate::handler::registry::FunctionRegistration;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::value_from_i64;
 
-pub(crate) const FUNCTIONS: &[FunctionRegistration] = &[
-    FunctionRegistration::eager("std::object::contains_key", contains_key, 2),
-    FunctionRegistration::eager("std::object::keys", keys, 1),
-    FunctionRegistration::eager("std::object::size", size, 1),
-    FunctionRegistration::eager("std::object::set", set, 3),
-    FunctionRegistration::eager("std::object::get", get, 2),
-];
+taurus_macros::module! {
+    identifier = "taurus-object",
+    name(en_US = "Object"),
+    description(en_US = "Work with Objects."),
+    documentation = "",
+    author = "CodeZero",
+    icon = "tabler:cube",
+    version = "0.0.33",
+}
+
+taurus_macros::data_type! {
+    identifier = "OBJECT",
+    module = "taurus-object",
+    name(en_US = "Object"),
+    display_message(en_US = "Object"),
+    alias(en_US = "object;struct;data"),
+    generic_keys = ["T"],
+    type_string = "{ [K in keyof T]: T[K] }",
+}
+
+taurus_macros::data_type! {
+    identifier = "TYPE",
+    module = "taurus-object",
+    name(en_US = "Type"),
+    display_message(en_US = "Type of ${T}"),
+    alias(
+        en_US = "type;data type;data-type;datatype;type definition;type-definition;type-def;typedef"
+    ),
+    generic_keys = ["T"],
+    type_string = "T",
+}
+
+#[taurus_macros::runtime_function(
+    identifier = "std::object::get",
+    module = "taurus-object",
+    signature = "<T, K extends keyof T>(object: OBJECT<T>, key: K | string): T[K]",
+    name(en_US = "Get key of object"),
+    description(en_US = "Returns the value of a key inside of the object."),
+    display_message(en_US = "Get ${key} of ${object}"),
+    alias(en_US = "get;object;std"),
+    display_icon = "tabler:cube",
+    linked_data_type_identifiers = ["OBJECT"],
+)]
+#[parameter(
+    runtime_name = "object",
+    name(en_US = "Object"),
+    description(en_US = "The object that contains the value referenced by the key.")
+)]
+#[parameter(
+    runtime_name = "key",
+    name(en_US = "Key"),
+    description(en_US = "The property name under which the value will be referenced.")
+)]
 fn get(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -35,6 +80,29 @@ fn get(
     }
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::object::contains_key",
+    module = "taurus-object",
+    signature = "<T>(object: OBJECT<T>, key: keyof OBJECT<T> | string): BOOLEAN",
+    name(en_US = "Contains Key"),
+    description(
+        en_US = "Returns true if the given key is a property of the object; otherwise, returns false."
+    ),
+    display_message(en_US = "Checks if ${object} Contains ${key}"),
+    alias(en_US = "contains_key;object;std;contains;key"),
+    display_icon = "tabler:cube",
+    linked_data_type_identifiers = ["OBJECT", "BOOLEAN"],
+)]
+#[parameter(
+    runtime_name = "object",
+    name(en_US = "Object"),
+    description(en_US = "The object to check for the presence of a key.")
+)]
+#[parameter(
+    runtime_name = "key",
+    name(en_US = "Key"),
+    description(en_US = "The key to check for existence in the object.")
+)]
 fn contains_key(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -48,6 +116,22 @@ fn contains_key(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::object::size",
+    module = "taurus-object",
+    signature = "<T>(object: OBJECT<T>): NUMBER",
+    name(en_US = "Get Object Size"),
+    description(en_US = "Returns an integer count of all enumerable property keys in the specified object."),
+    display_message(en_US = "Size of ${object}"),
+    alias(en_US = "size;object;std"),
+    display_icon = "tabler:cube",
+    linked_data_type_identifiers = ["OBJECT", "NUMBER"],
+)]
+#[parameter(
+    runtime_name = "object",
+    name(en_US = "Object"),
+    description(en_US = "Returns the number of keys present in the given object.")
+)]
 fn size(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -57,6 +141,22 @@ fn size(
     Signal::Success(value_from_i64(object.fields.len() as i64))
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::object::keys",
+    module = "taurus-object",
+    signature = "<T>(object: OBJECT<T>): LIST<keyof OBJECT<T>>",
+    name(en_US = "Get Object Keys"),
+    description(en_US = "Returns a list containing all keys of the specified object."),
+    display_message(en_US = "Keys of ${object}"),
+    alias(en_US = "keys;object;std"),
+    display_icon = "tabler:cube",
+    linked_data_type_identifiers = ["OBJECT", "LIST"],
+)]
+#[parameter(
+    runtime_name = "object",
+    name(en_US = "Object"),
+    description(en_US = "Returns a list of all the keys (property names) of the given object.")
+)]
 fn keys(
     args: &[Argument],
     _ctx: &mut ValueStore,
@@ -80,6 +180,34 @@ fn keys(
     })
 }
 
+#[taurus_macros::runtime_function(
+    identifier = "std::object::set",
+    module = "taurus-object",
+    signature = "<T, K extends TEXT, V>(object: OBJECT<T>, key: K, value: V): OBJECT<T & { [P in K]: V }>",
+    name(en_US = "Set Object Key"),
+    description(en_US = "Returns a new object with the specified key set to the given value."),
+    display_message(en_US = "Set ${key} to ${value} of ${object}"),
+    alias(en_US = "set;object;std"),
+    display_icon = "tabler:cube",
+    linked_data_type_identifiers = ["OBJECT", "TEXT"],
+)]
+#[parameter(
+    runtime_name = "object",
+    name(en_US = "Object"),
+    description(
+        en_US = "The original object that will be modified with the specified key-value pair."
+    )
+)]
+#[parameter(
+    runtime_name = "key",
+    name(en_US = "Key"),
+    description(en_US = "The property name under which the value will be stored in the object.")
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The value to assign to the object property identified by the key.")
+)]
 fn set(
     args: &[Argument],
     _ctx: &mut ValueStore,

@@ -2834,6 +2834,7 @@ dependencies = [
  "async-nats",
  "base64 0.23.1",
  "code0-flow",
+ "env_logger",
  "futures-lite",
  "log",
  "opentelemetry",
@@ -2847,6 +2848,7 @@ dependencies = [
  "tonic",
  "tonic-health",
  "tucana",
+ "uuid",
 ]
 
 [[package]]

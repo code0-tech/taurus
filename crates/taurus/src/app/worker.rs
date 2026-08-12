@@ -611,7 +611,7 @@ mod tests {
     use taurus_core::types::exit_reason::ExitReason;
     use tucana::aquila::{ActionNodeSubFlowValue, action_node_value};
     use tucana::shared::{
-        FlowInput, NodeFunction, NodeParameter, ReferencePath, ValidationFlow, execution_result,
+        NodeFunction, NodeParameter, ValidationFlow, execution_result,
         helper::value::{from_json_value, to_json_value},
         node_value, reference_value,
         sub_flow::ExecutionReference,
@@ -819,23 +819,34 @@ mod tests {
         }
     }
 
-    /// Reads the first positional value out of the sub-flow's seeded flow
-    /// input -- `ExecutionEngine::execute_sub_flow` wraps
-    /// `ActionSubFlowExecutionRequest.parameters` as a single `ListValue`
-    /// flow input, so this is how a sub-flow node range would read its
-    /// first action-supplied argument.
-    fn first_flow_input_param(database_id: i64, runtime_parameter_id: &str) -> NodeParameter {
+    /// Reads the first positional value the sub-flow was invoked with --
+    /// `ExecutionEngine::execute_sub_flow` seeds those as
+    /// `InputType{node_id: caller_node_id, parameter_index:
+    /// caller_parameter_index, input_index}`, the same addressing a local
+    /// consumer callback gets (see `functions/array.rs::run_with_unary_input`),
+    /// keyed here against the node/parameter that minted the sub-flow
+    /// reference in the first place (node `caller_node_id`'s parameter at
+    /// `caller_parameter_index`).
+    fn first_input_type_param(
+        database_id: i64,
+        runtime_parameter_id: &str,
+        caller_node_id: i64,
+        caller_parameter_index: i64,
+    ) -> NodeParameter {
         NodeParameter {
             database_id,
             runtime_parameter_id: runtime_parameter_id.to_string(),
             value: Some(tucana::shared::NodeValue {
                 value: Some(node_value::Value::ReferenceValue(
                     tucana::shared::ReferenceValue {
-                        target: Some(reference_value::Target::FlowInput(FlowInput {})),
-                        paths: vec![ReferencePath {
-                            path: None,
-                            array_index: Some(0),
-                        }],
+                        target: Some(reference_value::Target::InputType(
+                            tucana::shared::InputType {
+                                node_id: caller_node_id,
+                                parameter_index: caller_parameter_index,
+                                input_index: 0,
+                            },
+                        )),
+                        paths: vec![],
                     },
                 )),
             }),
@@ -923,7 +934,7 @@ mod tests {
         let sub_flow_target = node(
             2,
             "std::control::value",
-            vec![first_flow_input_param(200, "value")],
+            vec![first_input_type_param(200, "value", 1, 0)],
             None,
             None,
         );

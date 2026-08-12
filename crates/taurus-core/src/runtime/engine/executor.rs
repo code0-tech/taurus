@@ -908,6 +908,8 @@ impl<'a> EngineExecutor<'a> {
                         *node_id,
                         self.execution_id,
                         Arc::clone(activity),
+                        value_store.get_current_node_id(),
+                        index as i64,
                     ) {
                         Some(id) => {
                             minted_ids.push(id.clone());

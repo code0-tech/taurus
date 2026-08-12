@@ -34,6 +34,17 @@ pub struct PendingSubFlow {
     /// for any remote call the sub-flow itself makes, and as the key for the
     /// idle-timeout activity marker (see `activity` below).
     pub parent_execution_id: String,
+    /// Id of the node whose parameter this sub-flow was minted from (e.g.
+    /// the `for_each` node), and that parameter's positional index (e.g.
+    /// `consumer`). Together with each call's positional slot these form the
+    /// `InputType{node_id, parameter_index, input_index}` key the sub-flow's
+    /// node range references for its action-supplied arguments -- the same
+    /// addressing a local consumer callback gets via
+    /// `ValueStore::insert_input_type` (see `functions/array.rs::run_with_unary_input`).
+    /// `execute_sub_flow` seeds the store with these before running the
+    /// node range standalone.
+    pub caller_node_id: i64,
+    pub caller_parameter_index: i64,
     /// Shared with the in-flight `NATSRemoteRuntime::execute_remote` call
     /// that minted this entry (and any sibling entries minted for the same
     /// remote call). Every successful lookup+run bumps this so that call's
@@ -66,6 +77,8 @@ impl SubFlowRegistry {
         node_id: i64,
         parent_execution_id: &str,
         activity: Arc<Notify>,
+        caller_node_id: i64,
+        caller_parameter_index: i64,
     ) -> Option<String> {
         let start_idx = *flow.node_idx_by_id.get(&node_id)?;
         let id = uuid::Uuid::new_v4().to_string();
@@ -74,6 +87,8 @@ impl SubFlowRegistry {
             start_idx,
             parent_execution_id: parent_execution_id.to_string(),
             activity,
+            caller_node_id,
+            caller_parameter_index,
         };
         self.entries
             .lock()
@@ -139,7 +154,7 @@ mod tests {
         let activity = Arc::new(Notify::new());
 
         let id = registry
-            .mint(&flow, 7, "parent-1", activity)
+            .mint(&flow, 7, "parent-1", activity, 1, 1)
             .expect("node 7 exists in flow");
 
         let pending = registry.get(&id).expect("entry should exist after mint");
@@ -159,7 +174,7 @@ mod tests {
         let flow = flow_with_node(7);
         let activity = Arc::new(Notify::new());
 
-        assert!(registry.mint(&flow, 999, "parent-1", activity).is_none());
+        assert!(registry.mint(&flow, 999, "parent-1", activity, 1, 1).is_none());
         assert_eq!(registry.len(), 0);
     }
 
@@ -175,7 +190,7 @@ mod tests {
                 std::thread::spawn(move || {
                     let activity = Arc::new(Notify::new());
                     registry
-                        .mint(&flow, 7, &format!("parent-{i}"), activity)
+                        .mint(&flow, 7, &format!("parent-{i}"), activity, 1, 1)
                         .expect("node 7 exists in flow")
                 })
             })

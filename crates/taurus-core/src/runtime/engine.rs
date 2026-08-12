@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use futures_lite::future::block_on;
 use tucana::shared::value::Kind;
-use tucana::shared::{ExecutionFlow, ListValue, NodeExecutionResult, NodeFunction, Value};
+use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
 
 use crate::handler::registry::FunctionStore;
 use crate::runtime::execution::trace::TraceRun;
@@ -187,9 +187,15 @@ impl ExecutionEngine {
     ///
     /// `parameters` are the action-supplied positional values from
     /// `ActionSubFlowExecutionRequest.parameters` -- bound the same way a
-    /// normal top-level flow execution binds `ExecutionFlow.input_value`,
-    /// wrapped as a single `ListValue` so `Target::FlowInput` references
-    /// inside the sub-flow's node range resolve positionally against them.
+    /// local consumer callback binds them for a native `for_each`/`map`/etc.
+    /// (see `functions/array.rs::run_with_unary_input`): each positional
+    /// value is seeded as `InputType{node_id: caller_node_id, parameter_index:
+    /// caller_parameter_index, input_index}`, so `Target::InputType`
+    /// references inside the sub-flow's node range -- which is exactly what
+    /// the compiler emits for a value the sub-flow was invoked with -- find
+    /// them keyed the same way regardless of whether the callback ran
+    /// in-process or, as here, standalone in response to an
+    /// `ActionSubFlowExecutionRequest`.
     ///
     /// Returns `None` if `execution_identifier` doesn't match any pending
     /// sub-flow -- already completed (parent call resolved and the entry
@@ -207,10 +213,22 @@ impl ExecutionEngine {
         // is itself proof the parent call is still being actively driven.
         pending.activity.notify_one();
 
-        let flow_input = Value {
-            kind: Some(Kind::ListValue(ListValue { values: parameters })),
-        };
-        let mut value_store = ValueStore::new(flow_input, with_trace);
+        let mut value_store = ValueStore::new(
+            Value {
+                kind: Some(Kind::NullValue(0)),
+            },
+            with_trace,
+        );
+        for (input_index, value) in parameters.into_iter().enumerate() {
+            value_store.insert_input_type(
+                tucana::shared::InputType {
+                    node_id: pending.caller_node_id,
+                    parameter_index: pending.caller_parameter_index,
+                    input_index: input_index as i64,
+                },
+                value,
+            );
+        }
 
         // Deliberately *not* `pending.parent_execution_id`: if a node inside
         // this sub-flow's own node range is itself dispatched remotely, it

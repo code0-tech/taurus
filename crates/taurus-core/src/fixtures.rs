@@ -31,7 +31,20 @@ pub struct Case {
 pub struct RemoteFixture {
     pub target_service: String,
     pub function_identifier: String,
-    pub result_parameter: String,
+    /// Only meaningful when `sub_flow_calls` is empty: the literal-valued
+    /// parameter to echo straight back as this remote call's own result
+    /// (see `0012_remote_function_subflow.json`).
+    #[serde(default)]
+    pub result_parameter: Option<String>,
+    /// Positional values to drive one `ExecutionEngine::execute_sub_flow`
+    /// call per entry against this request's `SubFlow`-valued parameter, in
+    /// order -- simulates an action invoking a minted sub-flow reference
+    /// the same number of times a real action would (e.g. once per element
+    /// for a remotely-dispatched `for_each`'s consumer callback). When
+    /// non-empty, the remote call itself resolves to `null` once every call
+    /// has run, mirroring a `void`-signature remote function.
+    #[serde(default)]
+    pub sub_flow_calls: Vec<serde_json::Value>,
 }
 
 #[derive(Clone, Deserialize)]

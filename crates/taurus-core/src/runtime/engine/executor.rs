@@ -1,9 +1,12 @@
 //! Runtime engine execution loop for compiled flow plans.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use futures_lite::future::block_on;
-use tucana::aquila::{ActionExecutionRequest, ActionNodeValue, action_node_value};
+use tokio::sync::Notify;
+use tucana::aquila::{
+    ActionExecutionRequest, ActionNodeSubFlowValue, ActionNodeValue, action_node_value,
+};
 use tucana::shared::node_execution_result::Result as TucanaNodeResult;
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
@@ -16,6 +19,7 @@ use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
 use crate::runtime::engine::model::{
     CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget,
 };
+use crate::runtime::engine::sub_flow_registry::SubFlowRegistry;
 use crate::runtime::execution::trace::{
     ArgKind, ArgTrace, EdgeKind, Outcome, ReferenceKind, TraceRun,
 };
@@ -26,27 +30,33 @@ use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 
-pub async fn execute_compiled(
+/// Executes a compiled flow plan starting at `start_idx` -- used both by a
+/// normal top-level run (`start_idx == flow.start_idx`) and by the
+/// `sub_flow_execution.*` subscriber running a previously minted sub-flow
+/// node range standalone (`ExecutionEngine::execute_sub_flow`).
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_compiled_from(
     execution_id: &str,
-    flow: &CompiledFlow,
+    flow: &Arc<CompiledFlow>,
+    start_idx: usize,
     handlers: &FunctionStore,
     value_store: &mut ValueStore,
     remote: Option<&dyn RemoteRuntime>,
     with_trace: bool,
+    sub_flow_registry: SubFlowRegistry,
 ) -> (Signal, Option<TraceRun>) {
     // Keep trace allocation fully optional so the hot path stays lean when tracing is disabled.
     let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
         execution_id,
-        flow,
+        flow: Arc::clone(flow),
         handlers,
         remote,
         tracer: tracer.as_ref(),
+        sub_flow_registry,
     };
 
-    let result = executor
-        .execute_from_index(flow.start_idx, value_store)
-        .await;
+    let result = executor.execute_from_index(start_idx, value_store).await;
     let trace = tracer.and_then(|collector| collector.into_inner().ok()?.take_run());
     (result.signal, trace)
 }
@@ -75,10 +85,14 @@ struct EngineExecutor<'a> {
     /// action can correlate a callback (e.g. `respond`) against the run
     /// that triggered it.
     execution_id: &'a str,
-    flow: &'a CompiledFlow,
+    /// `Arc`-wrapped so minting a sub-flow registry entry (which captures
+    /// the flow standalone -- see `sub_flow_registry`) is a cheap refcount
+    /// bump rather than a deep clone of the node graph.
+    flow: Arc<CompiledFlow>,
     handlers: &'a FunctionStore,
     remote: Option<&'a dyn RemoteRuntime>,
     tracer: Option<&'a Mutex<Tracer>>,
+    sub_flow_registry: SubFlowRegistry,
 }
 
 impl<'a> EngineExecutor<'a> {
@@ -345,6 +359,11 @@ impl<'a> EngineExecutor<'a> {
                     Ok(request) => match block_on(remote_runtime.execute_remote(RemoteExecution {
                         target_service: service.to_string(),
                         request,
+                        // Function-thunk settings are always eagerly resolved
+                        // to literals (see `build_function_thunk_args`) --
+                        // never a `CompiledThunk::Node` reference -- so this
+                        // path never mints a sub-flow UUID.
+                        sub_flow_activity: None,
                     })) {
                         Ok(result) => remote_result_to_signal(result),
                         Err(err) => Signal::Failure(err),
@@ -549,24 +568,33 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        let values = match self.resolve_remote_args(&mut args, value_store, frame_id) {
-            Ok(values) => values,
-            Err(signal) => {
-                return self.commit_result(
-                    node.id,
-                    signal,
-                    parameter_results_from_args(&args),
-                    started_at,
-                    now_unix_micros(),
-                    value_store,
-                );
-            }
-        };
-        let parameter_results = parameter_results_from_values(&values);
+        // Shared by every sub-flow UUID minted while resolving this call's
+        // parameters (if any): the `sub_flow_execution.*` subscriber bumps
+        // it on every lookup+run, so the idle timeout below only fires on
+        // genuine inactivity, not because the call is legitimately long-lived.
+        let activity = Arc::new(Notify::new());
+        let (params, minted_ids) =
+            match self.resolve_remote_args(&mut args, value_store, frame_id, &activity) {
+                Ok(resolved) => resolved,
+                Err(signal) => {
+                    return self.commit_result(
+                        node.id,
+                        signal,
+                        parameter_results_from_args(&args),
+                        started_at,
+                        now_unix_micros(),
+                        value_store,
+                    );
+                }
+            };
+        let parameter_results = parameter_results_from_remote_params(&params);
 
-        let request = match self.build_remote_request(node, values) {
+        let request = match self.build_remote_request(node, params) {
             Ok(request) => request,
             Err(err) => {
+                for id in &minted_ids {
+                    self.sub_flow_registry.remove(id);
+                }
                 return self.commit_result(
                     node.id,
                     Signal::Failure(err),
@@ -578,13 +606,33 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        match remote_runtime
+        // Only calls that actually minted a sub-flow reference get the
+        // renewable idle timeout; an ordinary call with no sub-flow
+        // parameters has no activity to track and keeps today's flat
+        // from-the-start deadline (see `NATSRemoteRuntime::execute_remote`).
+        let sub_flow_activity = if minted_ids.is_empty() {
+            None
+        } else {
+            Some(Arc::clone(&activity))
+        };
+
+        let result = remote_runtime
             .execute_remote(RemoteExecution {
                 target_service: service.to_string(),
                 request,
+                sub_flow_activity,
             })
-            .await
-        {
+            .await;
+
+        // The parent call is done (success or failure) -- every sub-flow
+        // UUID minted for it is no longer reachable by the action and can
+        // be dropped, regardless of how many times (if any) it was actually
+        // invoked while the call was outstanding.
+        for id in &minted_ids {
+            self.sub_flow_registry.remove(id);
+        }
+
+        match result {
             Ok(result) => self.commit_remote_result(
                 node.id,
                 result,
@@ -818,19 +866,68 @@ impl<'a> EngineExecutor<'a> {
         None
     }
 
+    /// Resolves one remote node's arguments to either a materialized literal
+    /// or a minted sub-flow UUID, per positional slot. Returns the resolved
+    /// slots alongside every id minted along the way, so the caller can
+    /// remove them all once the remote call this request belongs to
+    /// resolves (see `execute_remote_node`).
     fn resolve_remote_args(
         &self,
         args: &mut [Argument],
         value_store: &mut ValueStore,
         frame_id: Option<u64>,
-    ) -> Result<Vec<Value>, Signal> {
-        let mut values = Vec::with_capacity(args.len());
+        activity: &Arc<Notify>,
+    ) -> Result<(Vec<RemoteParam>, Vec<String>), Signal> {
+        let mut params = Vec::with_capacity(args.len());
+        let mut minted_ids = Vec::new();
 
         for (index, argument) in args.iter_mut().enumerate() {
             match argument {
-                Argument::Eval(value) => values.push(value.clone()),
-                Argument::Thunk(thunk) => {
-                    // Remote execution always receives materialized values, never thunks.
+                Argument::Eval(value) => params.push(RemoteParam::Literal(value.clone())),
+                // A `CompiledThunk::Node` sub-flow reference destined for a
+                // *remote* node's parameter is not resolved here at all --
+                // unlike every other thunk in this engine (including the
+                // exact same variant reached through the local `build_args`
+                // path used by `std::control::if`/`if_else`, which stays
+                // eager and synchronous, see `control.rs`), it may need to
+                // run zero, one, or many times, driven by the action itself
+                // over `ActionSubFlowExecutionRequest` while this call is
+                // outstanding. So instead of executing it we mint a UUID
+                // and hand the action a `SubFlow` reference it can invoke
+                // on its own schedule (see `sub_flow_registry`).
+                //
+                // `CompiledThunk::Function` (the other `Deferred` variant)
+                // is unaffected and keeps executing eagerly below, exactly
+                // as before -- only a bare node reference gets this
+                // treatment.
+                Argument::Thunk(Thunk::Node(node_id)) => {
+                    // Not executed, so left exactly as `build_args` already
+                    // recorded it: `eager: false, executed: false`.
+                    match self.sub_flow_registry.mint(
+                        &self.flow,
+                        *node_id,
+                        self.execution_id,
+                        Arc::clone(activity),
+                        value_store.get_current_node_id(),
+                        index as i64,
+                    ) {
+                        Some(id) => {
+                            minted_ids.push(id.clone());
+                            params.push(RemoteParam::SubFlow(id));
+                        }
+                        None => {
+                            return Err(Signal::Failure(RuntimeError::new(
+                                "T-CORE-000001",
+                                "NodeNotFound",
+                                format!("Node {} not found", node_id),
+                            )));
+                        }
+                    }
+                }
+                Argument::Thunk(thunk @ Thunk::Function(_)) => {
+                    // Remote execution always receives materialized values for
+                    // function-thunk args -- this mirrors the pre-existing
+                    // eager-resolution behavior unchanged.
                     self.trace_mark_thunk(frame_id, index, true, true);
                     let child = self.execute_thunk(thunk, value_store);
                     if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
@@ -843,7 +940,7 @@ impl<'a> EngineExecutor<'a> {
                     match child.signal {
                         Signal::Success(value) => {
                             *argument = Argument::Eval(value.clone());
-                            values.push(value);
+                            params.push(RemoteParam::Literal(value));
                         }
                         // Same unwind rule as local eager params: return exits this call frame only.
                         Signal::Return(value) => return Err(Signal::Success(value)),
@@ -853,15 +950,15 @@ impl<'a> EngineExecutor<'a> {
             }
         }
 
-        Ok(values)
+        Ok((params, minted_ids))
     }
 
     fn build_remote_request(
         &self,
         node: &CompiledNode,
-        values: Vec<Value>,
+        params: Vec<RemoteParam>,
     ) -> Result<ActionExecutionRequest, RuntimeError> {
-        if node.parameters.len() != values.len() {
+        if node.parameters.len() != params.len() {
             return Err(RuntimeError::new(
                 "T-CORE-000005",
                 "RemoteParameterMismatch",
@@ -872,10 +969,17 @@ impl<'a> EngineExecutor<'a> {
         // Parameters are matched positionally on the receiving end, not by
         // key — `node.parameters` must already be in the function's declared
         // parameter order.
-        let parameters = values
+        let parameters = params
             .into_iter()
-            .map(|value| ActionNodeValue {
-                value: Some(action_node_value::Value::LiteralValue(value)),
+            .map(|param| ActionNodeValue {
+                value: Some(match param {
+                    RemoteParam::Literal(value) => action_node_value::Value::LiteralValue(value),
+                    RemoteParam::SubFlow(execution_identifier) => {
+                        action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                            execution_identifier,
+                        })
+                    }
+                }),
             })
             .collect();
 
@@ -1131,11 +1235,27 @@ fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeParameterNodeExecut
         .collect()
 }
 
-fn parameter_results_from_values(values: &[Value]) -> Vec<NodeParameterNodeExecutionResult> {
-    values
+/// One resolved remote-call parameter slot: either a materialized literal
+/// value, or a minted sub-flow UUID standing in for a `CompiledThunk::Node`
+/// reference the action may invoke later (see `resolve_remote_args`).
+enum RemoteParam {
+    Literal(Value),
+    SubFlow(String),
+}
+
+fn parameter_results_from_remote_params(
+    params: &[RemoteParam],
+) -> Vec<NodeParameterNodeExecutionResult> {
+    params
         .iter()
-        .map(|value| NodeParameterNodeExecutionResult {
-            value: Some(value.clone()),
+        .map(|param| NodeParameterNodeExecutionResult {
+            value: match param {
+                RemoteParam::Literal(value) => Some(value.clone()),
+                // No literal value was materialized for a minted sub-flow
+                // reference -- same convention as an unresolved `Argument::Thunk`
+                // in `parameter_results_from_args`.
+                RemoteParam::SubFlow(_) => None,
+            },
         })
         .collect()
 }

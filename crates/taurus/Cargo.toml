@@ -18,6 +18,8 @@ tonic-health = { workspace = true }
 tonic = { workspace = true }
 taurus-core = { workspace = true }
 taurus-provider = { workspace = true }
+uuid = { workspace = true }
+env_logger = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

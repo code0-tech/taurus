@@ -6,16 +6,22 @@
 mod compiler;
 mod executor;
 pub(crate) mod model;
+mod sub_flow_registry;
+
+use std::sync::Arc;
 
 use futures_lite::future::block_on;
+use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
 
 use crate::handler::registry::FunctionStore;
+use crate::runtime::execution::trace::TraceRun;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::runtime::remote::RemoteRuntime;
 use crate::types::exit_reason::ExitReason;
 use crate::types::signal::Signal;
 use compiler::compile_flow;
+use sub_flow_registry::SubFlowRegistry;
 
 /// Unique identifier for one top-level flow execution.
 pub type ExecutionId = uuid::Uuid;
@@ -23,6 +29,11 @@ pub type ExecutionId = uuid::Uuid;
 /// Runtime engine entrypoint used by runtime binaries and CLI tools.
 pub struct ExecutionEngine {
     handlers: FunctionStore,
+    /// Registry of sub-flow node ranges minted while a remote node call is
+    /// outstanding -- shared with every `EngineExecutor` (to mint) and with
+    /// the `sub_flow_execution.*` NATS subscriber (via `execute_sub_flow`,
+    /// to look up and run). See `sub_flow_registry` for the full rationale.
+    sub_flow_registry: SubFlowRegistry,
 }
 
 /// Full result of one engine execution, including per-node results for reporting.
@@ -44,6 +55,7 @@ impl ExecutionEngine {
     pub fn new() -> Self {
         Self {
             handlers: FunctionStore::default(),
+            sub_flow_registry: SubFlowRegistry::new(),
         }
     }
 
@@ -140,8 +152,11 @@ impl ExecutionEngine {
     ) -> EngineExecutionReport {
         let mut value_store = ValueStore::new(flow_input.unwrap_or_default(), with_trace);
 
+        // Wrapped in `Arc` here, at the point the flow is compiled, so that
+        // minting a sub-flow registry entry is a cheap refcount bump instead
+        // of a deep clone of the node graph (see `sub_flow_registry`).
         let compiled = match compile_flow(project_id, start_node_id, node_functions) {
-            Ok(plan) => plan,
+            Ok(plan) => Arc::new(plan),
             Err(err) => {
                 let runtime_error = err.as_runtime_error();
                 let signal = Signal::Failure(runtime_error);
@@ -152,16 +167,118 @@ impl ExecutionEngine {
                 };
             }
         };
+        let start_idx = compiled.start_idx;
 
-        let (signal, trace_run) = executor::execute_compiled(
+        let (signal, trace_run) = executor::execute_compiled_from(
             execution_id,
             &compiled,
+            start_idx,
             &self.handlers,
             &mut value_store,
             remote,
             with_trace,
+            self.sub_flow_registry.clone(),
         )
         .await;
+        Self::finish_report(signal, trace_run, &mut value_store, with_trace)
+    }
+
+    /// Run a previously minted sub-flow node range (see `SubFlowRegistry`).
+    ///
+    /// `parameters` are the action-supplied positional values from
+    /// `ActionSubFlowExecutionRequest.parameters` -- bound the same way a
+    /// local consumer callback binds them for a native `for_each`/`map`/etc.
+    /// (see `functions/array.rs::run_with_unary_input`): each positional
+    /// value is seeded as `InputType{node_id: caller_node_id, parameter_index:
+    /// caller_parameter_index, input_index}`, so `Target::InputType`
+    /// references inside the sub-flow's node range -- which is exactly what
+    /// the compiler emits for a value the sub-flow was invoked with -- find
+    /// them keyed the same way regardless of whether the callback ran
+    /// in-process or, as here, standalone in response to an
+    /// `ActionSubFlowExecutionRequest`.
+    ///
+    /// Returns `None` if `execution_identifier` doesn't match any pending
+    /// sub-flow -- already completed (parent call resolved and the entry
+    /// was removed), never minted, or minted by a process instance that has
+    /// since restarted (the registry is in-memory only).
+    pub async fn execute_sub_flow(
+        &self,
+        execution_identifier: &str,
+        parameters: Vec<Value>,
+        remote: Option<&dyn RemoteRuntime>,
+        with_trace: bool,
+    ) -> Option<EngineExecutionReport> {
+        let pending = self.sub_flow_registry.get(execution_identifier)?;
+        // Bump the parent call's idle-timeout activity marker: this lookup
+        // is itself proof the parent call is still being actively driven.
+        pending.activity.notify_one();
+
+        let mut value_store = ValueStore::new(
+            Value {
+                kind: Some(Kind::NullValue(0)),
+            },
+            with_trace,
+        );
+        for (input_index, value) in parameters.into_iter().enumerate() {
+            value_store.insert_input_type(
+                tucana::shared::InputType {
+                    node_id: pending.caller_node_id,
+                    parameter_index: pending.caller_parameter_index,
+                    input_index: input_index as i64,
+                },
+                value,
+            );
+        }
+
+        // Deliberately *not* `pending.parent_execution_id`: if a node inside
+        // this sub-flow's own node range is itself dispatched remotely, it
+        // needs a fresh, unique `execution_identifier` for its own
+        // `ActionExecutionRequest`. Aquila's `PendingReplyStore`
+        // (`nats_bridge.rs`) is a flat `HashMap<execution_identifier,
+        // reply_subject>` with last-write-wins semantics on collision — and
+        // the parent's own remote call is *guaranteed* to still be
+        // outstanding under `parent_execution_id` for as long as this
+        // sub-flow run can happen at all (that's the entire premise of
+        // sub-flow execution). Reusing it here would silently clobber the
+        // parent's pending-reply entry the moment this run makes its own
+        // remote call, cross-wiring both calls' eventual replies. The
+        // action doesn't need this id to equal the parent's to correlate
+        // the sub-flow run back to its session -- it already has that via
+        // the sub-flow's own minted id (`execution_identifier` above),
+        // which travelled to it in `ActionSubFlowExecutionRequest`.
+        let run_execution_id = uuid::Uuid::new_v4().to_string();
+        log::debug!(
+            "Running sub flow execution_identifier={} for parent_execution_id={} as run_execution_id={}",
+            execution_identifier,
+            pending.parent_execution_id,
+            run_execution_id
+        );
+
+        let (signal, trace_run) = executor::execute_compiled_from(
+            &run_execution_id,
+            &pending.flow,
+            pending.start_idx,
+            &self.handlers,
+            &mut value_store,
+            remote,
+            with_trace,
+            self.sub_flow_registry.clone(),
+        )
+        .await;
+        Some(Self::finish_report(
+            signal,
+            trace_run,
+            &mut value_store,
+            with_trace,
+        ))
+    }
+
+    fn finish_report(
+        signal: Signal,
+        trace_run: Option<TraceRun>,
+        value_store: &mut ValueStore,
+        with_trace: bool,
+    ) -> EngineExecutionReport {
         if with_trace && let Some(trace_run) = trace_run {
             println!(
                 "{}",
@@ -188,7 +305,7 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
-    use tucana::aquila::{ActionExecutionRequest, action_node_value};
+    use tucana::aquila::{ActionExecutionRequest, ActionNodeSubFlowValue, action_node_value};
     use tucana::shared::{
         InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
         Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value, node_execution_result,
@@ -1000,7 +1117,10 @@ mod tests {
             echo_first_arg_handler,
             1,
         )]);
-        let engine = ExecutionEngine { handlers };
+        let engine = ExecutionEngine {
+            handlers,
+            sub_flow_registry: SubFlowRegistry::new(),
+        };
 
         let add_node = node(
             1,
@@ -1239,6 +1359,283 @@ mod tests {
         );
     }
 
+    /// Records the outgoing request and, while the (mocked) remote call is
+    /// still "in flight", probes the sub-flow registry directly through a
+    /// handle cloned from the engine before the run started -- proving the
+    /// entry exists *during* the call, not just inferring it from the
+    /// request shape.
+    struct SubFlowMintProbeRuntime {
+        registry: SubFlowRegistry,
+        result: NodeExecutionResult,
+        requests: Arc<Mutex<Vec<ActionExecutionRequest>>>,
+        found_pending_during_call: Arc<Mutex<Option<bool>>>,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for SubFlowMintProbeRuntime {
+        async fn execute_remote(
+            &self,
+            execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            if let Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+            })) = &execution.request.parameters[0].value
+            {
+                *self
+                    .found_pending_during_call
+                    .lock()
+                    .expect("probe recorder should not be poisoned") =
+                    Some(self.registry.get(execution_identifier).is_some());
+            }
+            self.requests
+                .lock()
+                .expect("request recorder should not be poisoned")
+                .push(execution.request.clone());
+            Ok(self.result.clone())
+        }
+    }
+
+    #[test]
+    fn remote_node_with_sub_flow_parameter_mints_uuid_instead_of_executing_eagerly() {
+        let engine = ExecutionEngine::new();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let found_pending_during_call = Arc::new(Mutex::new(None));
+        let remote = SubFlowMintProbeRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(int_value(1))),
+            },
+            requests: Arc::clone(&requests),
+            found_pending_during_call: Arc::clone(&found_pending_during_call),
+        };
+
+        // Node 1 is dispatched remotely and takes node 2's range as a
+        // sub-flow-valued parameter instead of a literal.
+        let mut remote_node = node(
+            1,
+            "remote::open_stream",
+            vec![thunk_param(100, "on_message", 2)],
+            None,
+        );
+        remote_node.definition_source = Some("action.example".to_string());
+
+        // Node 2 is never actually run by this test -- only the compile +
+        // mint + request-shape behavior is under test here.
+        let sub_flow_target = node(
+            2,
+            "std::control::value",
+            vec![literal_param(200, "value", int_value(9))],
+            None,
+        );
+
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![remote_node, sub_flow_target],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        assert_eq!(
+            *found_pending_during_call
+                .lock()
+                .expect("probe recorder should not be poisoned"),
+            Some(true),
+            "registry should hold a matching entry while the remote call is outstanding"
+        );
+
+        let requests = requests
+            .lock()
+            .expect("request recorder should not be poisoned");
+        assert_eq!(requests.len(), 1);
+        let parameters = &requests[0].parameters;
+        assert_eq!(parameters.len(), 1);
+
+        let execution_identifier = match &parameters[0].value {
+            Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+            })) => {
+                assert!(
+                    uuid::Uuid::parse_str(execution_identifier).is_ok(),
+                    "expected a minted UUID, got {:?}",
+                    execution_identifier
+                );
+                execution_identifier.clone()
+            }
+            other => panic!(
+                "expected a minted sub_flow parameter, got {:?} -- the parameter must not be \
+                 eagerly resolved to a literal for a remote node",
+                other
+            ),
+        };
+
+        // The parent node's own remote call has resolved (successfully), so
+        // the registry entry it minted must already have been cleaned up.
+        assert!(
+            engine.sub_flow_registry.get(&execution_identifier).is_none(),
+            "registry entry should be removed once the parent call resolves"
+        );
+    }
+
+    /// Records every outgoing `execution_identifier`. Blocks on `release`
+    /// only for the parent's own call (identified by its `SubFlow`-valued
+    /// parameter) so the test can drive `execute_sub_flow` while that call
+    /// is still outstanding -- exactly the condition under which a nested
+    /// remote call inside the sub-flow's own node range would collide with
+    /// the parent's still-registered entry in aquila's `PendingReplyStore`
+    /// if it reused the parent's `execution_identifier`.
+    struct NestedRemoteCapturingRuntime {
+        result: NodeExecutionResult,
+        minted_sub_flow_id: Arc<Mutex<Option<String>>>,
+        release: Arc<tokio::sync::Notify>,
+        execution_ids: Arc<Mutex<Vec<String>>>,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for NestedRemoteCapturingRuntime {
+        async fn execute_remote(
+            &self,
+            execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            self.execution_ids
+                .lock()
+                .expect("execution id recorder should not be poisoned")
+                .push(execution.request.execution_identifier.clone());
+
+            if let Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+            })) = execution
+                .request
+                .parameters
+                .first()
+                .and_then(|param| param.value.as_ref())
+            {
+                *self
+                    .minted_sub_flow_id
+                    .lock()
+                    .expect("mint recorder should not be poisoned") =
+                    Some(execution_identifier.clone());
+                // Stay outstanding, mirroring the parent's remote call
+                // staying open while sub-flow traffic happens.
+                self.release.notified().await;
+            }
+
+            Ok(self.result.clone())
+        }
+    }
+
+    #[test]
+    fn sub_flow_execution_uses_a_fresh_execution_identifier_for_its_own_remote_calls() {
+        let engine = ExecutionEngine::new();
+        let minted_sub_flow_id = Arc::new(Mutex::new(None));
+        let release = Arc::new(tokio::sync::Notify::new());
+        let execution_ids = Arc::new(Mutex::new(Vec::new()));
+        let remote = NestedRemoteCapturingRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(int_value(1))),
+            },
+            minted_sub_flow_id: Arc::clone(&minted_sub_flow_id),
+            release: Arc::clone(&release),
+            execution_ids: Arc::clone(&execution_ids),
+        };
+
+        // Node 1: dispatched remotely (the "parent" call, analogous to
+        // `open_stream`), takes node 2's range as a sub-flow parameter.
+        let mut remote_node = node(
+            1,
+            "remote::open_stream",
+            vec![thunk_param(100, "on_message", 2)],
+            None,
+        );
+        remote_node.definition_source = Some("action.svc".to_string());
+
+        // Node 2: the sub-flow's own body -- itself dispatched remotely,
+        // exactly the scenario in question: a remote call made *from
+        // within* a sub-flow's node range while the parent call is open.
+        let mut sub_flow_target = node(
+            2,
+            "remote::callback",
+            vec![literal_param(200, "value", int_value(5))],
+            None,
+        );
+        sub_flow_target.definition_source = Some("action.svc".to_string());
+
+        let flow = ExecutionFlow {
+            flow_id: 1,
+            project_id: 1,
+            starting_node_id: 1,
+            node_functions: vec![remote_node, sub_flow_target],
+            input_value: None,
+        };
+
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let report = engine.execute_flow_report("parent-id", flow, Some(&remote), false);
+                assert_eq!(report.exit_reason, ExitReason::Success);
+            });
+
+            // Wait for the parent's remote call to mint and capture the
+            // sub-flow id, proving the parent call is genuinely still
+            // outstanding at this point.
+            let sub_flow_execution_id = loop {
+                if let Some(id) = minted_sub_flow_id
+                    .lock()
+                    .expect("mint recorder should not be poisoned")
+                    .clone()
+                {
+                    break id;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            };
+
+            // Drive the sub-flow's node range while node 1's own call
+            // (execution_identifier = "parent-id") is still blocked on
+            // `release` -- node 2 being remote means this issues a second,
+            // concurrently-outstanding `ActionExecutionRequest`.
+            let sub_report = futures_lite::future::block_on(engine.execute_sub_flow(
+                &sub_flow_execution_id,
+                vec![int_value(7)],
+                Some(&remote),
+                false,
+            ))
+            .expect("registry should still have the entry while the parent call is outstanding");
+            assert_eq!(sub_report.exit_reason, ExitReason::Success);
+
+            release.notify_one();
+        });
+
+        let ids = execution_ids
+            .lock()
+            .expect("execution id recorder should not be poisoned")
+            .clone();
+        assert_eq!(ids.len(), 2, "expected exactly one call per remote node");
+        assert_eq!(ids[0], "parent-id");
+        assert_ne!(
+            ids[1], "parent-id",
+            "the sub-flow's own remote call must not reuse the parent's execution_identifier -- \
+             doing so would collide with the parent's still-outstanding entry in aquila's \
+             PendingReplyStore"
+        );
+        assert!(
+            uuid::Uuid::parse_str(&ids[1]).is_ok(),
+            "expected a freshly minted run id, got {:?}",
+            ids[1]
+        );
+    }
+
     #[test]
     fn remote_execution_rejects_empty_action_definition_source() {
         let engine = ExecutionEngine::new();
@@ -1270,7 +1667,10 @@ mod tests {
     fn node_execution_result_tracks_actual_node_duration() {
         let mut handlers = FunctionStore::new();
         handlers.populate(&[FunctionRegistration::eager("test::sleep", sleep_handler, 0)]);
-        let engine = ExecutionEngine { handlers };
+        let engine = ExecutionEngine {
+            handlers,
+            sub_flow_registry: SubFlowRegistry::new(),
+        };
         let sleep_node = node(1, "test::sleep", vec![], None);
 
         let report = engine.execute_graph_report("test", 1, vec![sleep_node], None, None, false);

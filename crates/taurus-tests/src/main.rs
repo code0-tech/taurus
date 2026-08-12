@@ -8,21 +8,29 @@ use taurus_core::fixtures::{Case, Cases, Input, RemoteFixture, print_failure, pr
 use taurus_core::runtime::engine::ExecutionEngine;
 use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
-use tucana::aquila::action_node_value;
+use taurus_core::types::signal::Signal;
+use tucana::aquila::{ActionNodeSubFlowValue, action_node_value};
 use tucana::shared::node_execution_result::{
     Id as NodeExecutionResultId, Result as NodeExecutionOutcome,
 };
+use tucana::shared::value::Kind;
 use tucana::shared::{
-    NodeExecutionResult,
+    NodeExecutionResult, Value,
     helper::value::{from_json_value, to_json_value},
 };
 
-struct FixtureRemoteRuntime {
+struct FixtureRemoteRuntime<'a> {
     fixture: RemoteFixture,
+    // Needed to simulate an action invoking a minted `SubFlow` reference
+    // back into `ExecutionEngine::execute_sub_flow` (see `sub_flow_calls`)
+    // -- the same engine instance the flow itself is running on, so the
+    // callback resolves against the registry entry the flow's own remote
+    // call minted.
+    engine: &'a ExecutionEngine,
 }
 
 #[async_trait::async_trait]
-impl RemoteRuntime for FixtureRemoteRuntime {
+impl RemoteRuntime for FixtureRemoteRuntime<'_> {
     async fn execute_remote(
         &self,
         execution: RemoteExecution,
@@ -48,6 +56,29 @@ impl RemoteRuntime for FixtureRemoteRuntime {
             ));
         }
 
+        // A `SubFlow`-valued parameter means this request carries a minted
+        // callback reference (see `resolve_remote_args`/`SubFlowRegistry`)
+        // -- drive it via `sub_flow_calls` regardless of how many entries
+        // that list has (zero is a legitimate, real case: an empty input
+        // list means the reference is minted but never actually invoked).
+        // Only fall through to the literal-echo path below when no
+        // `SubFlow` parameter is present at all.
+        if let Some(execution_identifier) = execution
+            .request
+            .parameters
+            .iter()
+            .find_map(|parameter| match parameter.value.as_ref()? {
+                action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                    execution_identifier,
+                }) => Some(execution_identifier.clone()),
+                _ => None,
+            })
+        {
+            return self
+                .drive_sub_flow_calls(&execution, &execution_identifier)
+                .await;
+        }
+
         // Parameters are positional on the wire now (no key), so fixtures
         // with a `resultParameter` only make sense with a single remote
         // parameter — take it directly rather than looking it up by name.
@@ -65,7 +96,7 @@ impl RemoteRuntime for FixtureRemoteRuntime {
                     "T-TEST-000003",
                     "RemoteParameterMissing",
                     format!(
-                        "Remote parameter {} was not provided",
+                        "Remote parameter {:?} was not provided",
                         self.fixture.result_parameter
                     ),
                 )
@@ -79,6 +110,58 @@ impl RemoteRuntime for FixtureRemoteRuntime {
                 execution.request.function_identifier,
             )),
             result: Some(NodeExecutionOutcome::Success(value)),
+        })
+    }
+}
+
+impl FixtureRemoteRuntime<'_> {
+    /// Simulates an action driving `ActionSubFlowExecutionRequest` traffic
+    /// against `execution_identifier` (the request's minted `SubFlow`
+    /// reference): one `execute_sub_flow` call per `sub_flow_calls` entry,
+    /// in order -- exactly as `hercules`'s `for_each` implementation calls
+    /// back once per list element via `executeSubFlow`. An empty
+    /// `sub_flow_calls` is valid and drives zero calls (e.g. an empty input
+    /// list: the reference is minted but never actually invoked). Fails the
+    /// whole remote call the moment any individual sub-flow run fails,
+    /// since a real action would abort the same way. Resolves to `null`,
+    /// matching a `void`-signature consumer-driving remote function (e.g.
+    /// `for_each` itself).
+    async fn drive_sub_flow_calls(
+        &self,
+        execution: &RemoteExecution,
+        execution_identifier: &str,
+    ) -> Result<NodeExecutionResult, RuntimeError> {
+        for call in &self.fixture.sub_flow_calls {
+            let value = from_json_value(call.clone());
+            let report = self
+                .engine
+                .execute_sub_flow(&execution_identifier, vec![value], Some(self), false)
+                .await
+                .ok_or_else(|| {
+                    RuntimeError::new(
+                        "T-TEST-000005",
+                        "SubFlowNotFound",
+                        format!(
+                            "Sub flow {} was not minted (or already resolved)",
+                            execution_identifier
+                        ),
+                    )
+                })?;
+            if let Signal::Failure(err) = report.signal {
+                return Err(err);
+            }
+        }
+
+        Ok(NodeExecutionResult {
+            started_at: 0,
+            finished_at: 0,
+            parameter_results: Vec::new(),
+            id: Some(NodeExecutionResultId::FunctionIdentifier(
+                execution.request.function_identifier.clone(),
+            )),
+            result: Some(NodeExecutionOutcome::Success(Value {
+                kind: Some(Kind::NullValue(0)),
+            })),
         })
     }
 }
@@ -107,7 +190,10 @@ impl Testable for Case {
         let remote = self
             .remote
             .clone()
-            .map(|fixture| FixtureRemoteRuntime { fixture });
+            .map(|fixture| FixtureRemoteRuntime {
+                fixture,
+                engine: &engine,
+            });
 
         for input in self.inputs.clone() {
             let flow_input = input.clone().input.map(from_json_value);

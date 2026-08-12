@@ -827,11 +827,12 @@ mod tests {
     /// keyed here against the node/parameter that minted the sub-flow
     /// reference in the first place (node `caller_node_id`'s parameter at
     /// `caller_parameter_index`).
-    fn first_input_type_param(
+    fn input_type_param(
         database_id: i64,
         runtime_parameter_id: &str,
         caller_node_id: i64,
         caller_parameter_index: i64,
+        input_index: i64,
     ) -> NodeParameter {
         NodeParameter {
             database_id,
@@ -843,7 +844,7 @@ mod tests {
                             tucana::shared::InputType {
                                 node_id: caller_node_id,
                                 parameter_index: caller_parameter_index,
-                                input_index: 0,
+                                input_index,
                             },
                         )),
                         paths: vec![],
@@ -852,6 +853,21 @@ mod tests {
             }),
             cast: None,
         }
+    }
+
+    fn first_input_type_param(
+        database_id: i64,
+        runtime_parameter_id: &str,
+        caller_node_id: i64,
+        caller_parameter_index: i64,
+    ) -> NodeParameter {
+        input_type_param(
+            database_id,
+            runtime_parameter_id,
+            caller_node_id,
+            caller_parameter_index,
+            0,
+        )
     }
 
     /// Captures the minted sub-flow UUID from the outgoing remote request's
@@ -1004,6 +1020,83 @@ mod tests {
                 other
             ),
         }
+    }
+
+    /// A sub-flow's action-supplied parameters are seeded one `InputType`
+    /// slot per positional value (`input_index` 0, 1, ...), not just the
+    /// first. Drives a two-argument call and reads both slots back through
+    /// `std::number::add`, so a regression that only seeds `input_index: 0`
+    /// (as a naive port of the single-argument `for_each` case might) would
+    /// fail this by treating the second argument as missing.
+    #[tokio::test]
+    async fn sub_flow_execution_seeds_every_positional_input_index_independently() {
+        let engine = Arc::new(ExecutionEngine::new());
+        let minted_id = Arc::new(StdMutex::new(None));
+        let release = Arc::new(Notify::new());
+        let remote = BlockingMintCapturingRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(tucana::shared::node_execution_result::Id::NodeId(1)),
+                result: Some(tucana::shared::node_execution_result::Result::Success(
+                    int_value(1),
+                )),
+            },
+            minted_id: Arc::clone(&minted_id),
+            release: Arc::clone(&release),
+        };
+
+        let remote_node = node(
+            1,
+            "remote::open_stream",
+            vec![sub_flow_param(100, "on_message", 2)],
+            None,
+            Some("action.svc"),
+        );
+        // Reads both action-supplied arguments back independently via their
+        // own `input_index`, so the assertion below proves neither slot
+        // leaked into or overwrote the other.
+        let sub_flow_target = node(
+            2,
+            "std::number::add",
+            vec![
+                input_type_param(200, "first", 1, 0, 0),
+                input_type_param(201, "second", 1, 0, 1),
+            ],
+            None,
+            None,
+        );
+
+        let flow = ExecutionFlow {
+            flow_id: 1,
+            project_id: 7,
+            starting_node_id: 1,
+            node_functions: vec![remote_node, sub_flow_target],
+            input_value: None,
+        };
+
+        let parent_engine = Arc::clone(&engine);
+        let parent = tokio::spawn(async move {
+            parent_engine
+                .execute_flow_report_async("parent-1", flow, Some(&remote), false)
+                .await
+        });
+
+        let execution_identifier = wait_for_minted_id(&minted_id).await;
+
+        let request = ActionSubFlowExecutionRequest {
+            execution_identifier: execution_identifier.clone(),
+            parameters: vec![int_value(3), int_value(4)],
+        };
+        let result = build_sub_flow_execution_result(request, &engine, None, false).await;
+        match result.result {
+            Some(execution_result::Result::Success(value)) => assert_eq!(value, int_value(7)),
+            other => panic!("expected success result, got {:?}", other),
+        }
+
+        release.notify_one();
+        parent.await.expect("parent task should not panic");
     }
 
     #[tokio::test]

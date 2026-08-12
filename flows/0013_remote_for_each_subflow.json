@@ -1,0 +1,98 @@
+{
+	"name": "0013_remote_for_each_subflow",
+	"description": "This flow validates that a remotely-dispatched for_each node's SubFlow{startingNodeId} consumer is minted as a callback reference (not eagerly executed) and that each simulated action-driven execute_sub_flow call is seeded with the correct per-element InputType value, exactly the scenario that regressed with a ReferenceValueNotFound on the sub-flow's InputType lookup",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": null
+		}
+	],
+	"remote": {
+		"targetService": "websocket-action",
+		"functionIdentifier": "for_each",
+		"subFlowCalls": [1, 2, 3]
+	},
+	"flow": {
+		"flowId": "1",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"databaseId": "1",
+				"runtimeFunctionId": "for_each",
+				"parameters": [
+					{
+						"databaseId": "1",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"listValue": {
+									"values": [
+										{"numberValue": {"integer": "1"}},
+										{"numberValue": {"integer": "2"}},
+										{"numberValue": {"integer": "3"}}
+									]
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "consumer",
+						"value": {
+							"subFlow": {
+								"startingNodeId": "3"
+							}
+						}
+					}
+				],
+				"definitionSource": "action.websocket-action"
+			},
+			{
+				"databaseId": "3",
+				"runtimeFunctionId": "std::number::add",
+				"parameters": [
+					{
+						"databaseId": "3",
+						"runtimeParameterId": "first",
+						"value": {
+							"literalValue": {
+								"numberValue": {"integer": "1"}
+							}
+						}
+					},
+					{
+						"databaseId": "4",
+						"runtimeParameterId": "second",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "1",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "2",
+				"definitionSource": "taurus"
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::number::as_text",
+				"parameters": [
+					{
+						"databaseId": "5",
+						"runtimeParameterId": "number",
+						"value": {
+							"referenceValue": {
+								"nodeId": "3"
+							}
+						}
+					}
+				],
+				"definitionSource": "taurus"
+			}
+		]
+	}
+}

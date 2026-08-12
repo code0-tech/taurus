@@ -1,0 +1,83 @@
+{
+	"name": "0015_remote_for_each_subflow_error_propagates",
+	"description": "This flow validates that when one of several simulated action-driven execute_sub_flow calls fails, the failure aborts the remaining calls and propagates as the parent remote node's own failure -- exactly how a real action failing mid-loop would surface",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"name": "DivisionByZero",
+				"message": "You cannot divide by zero"
+			}
+		}
+	],
+	"remote": {
+		"targetService": "websocket-action",
+		"functionIdentifier": "for_each",
+		"subFlowCalls": [10, 0]
+	},
+	"flow": {
+		"flowId": "1",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"databaseId": "1",
+				"runtimeFunctionId": "for_each",
+				"parameters": [
+					{
+						"databaseId": "1",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"listValue": {
+									"values": [
+										{"numberValue": {"integer": "10"}},
+										{"numberValue": {"integer": "0"}}
+									]
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "consumer",
+						"value": {
+							"subFlow": {
+								"startingNodeId": "2"
+							}
+						}
+					}
+				],
+				"definitionSource": "action.websocket-action"
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::number::divide",
+				"parameters": [
+					{
+						"databaseId": "3",
+						"runtimeParameterId": "first",
+						"value": {
+							"literalValue": {
+								"numberValue": {"integer": "10"}
+							}
+						}
+					},
+					{
+						"databaseId": "4",
+						"runtimeParameterId": "second",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "1",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					}
+				],
+				"definitionSource": "taurus"
+			}
+		]
+	}
+}

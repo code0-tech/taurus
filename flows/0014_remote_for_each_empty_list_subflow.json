@@ -1,0 +1,68 @@
+{
+	"name": "0014_remote_for_each_empty_list_subflow",
+	"description": "This flow validates that a remotely-dispatched for_each over an empty list still mints and immediately resolves cleanly, with the consumer's SubFlow reference never invoked at all -- zero execute_sub_flow calls should still let the parent remote call resolve successfully",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": null
+		}
+	],
+	"remote": {
+		"targetService": "websocket-action",
+		"functionIdentifier": "for_each",
+		"subFlowCalls": []
+	},
+	"flow": {
+		"flowId": "1",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"databaseId": "1",
+				"runtimeFunctionId": "for_each",
+				"parameters": [
+					{
+						"databaseId": "1",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"listValue": {
+									"values": []
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "consumer",
+						"value": {
+							"subFlow": {
+								"startingNodeId": "2"
+							}
+						}
+					}
+				],
+				"definitionSource": "action.websocket-action"
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::number::as_text",
+				"parameters": [
+					{
+						"databaseId": "5",
+						"runtimeParameterId": "number",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "1",
+									"parameterIndex": "1"
+								}
+							}
+						}
+					}
+				],
+				"definitionSource": "taurus"
+			}
+		]
+	}
+}

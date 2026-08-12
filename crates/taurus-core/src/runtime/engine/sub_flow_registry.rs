@@ -153,13 +153,18 @@ mod tests {
         let flow = flow_with_node(7);
         let activity = Arc::new(Notify::new());
 
+        // caller_node_id and caller_parameter_index are deliberately distinct
+        // (3, 5) so a field mix-up in `mint`/`PendingSubFlow` would be
+        // caught by the assertions below instead of accidentally matching.
         let id = registry
-            .mint(&flow, 7, "parent-1", activity, 1, 1)
+            .mint(&flow, 7, "parent-1", activity, 3, 5)
             .expect("node 7 exists in flow");
 
         let pending = registry.get(&id).expect("entry should exist after mint");
         assert_eq!(pending.start_idx, 0);
         assert_eq!(pending.parent_execution_id, "parent-1");
+        assert_eq!(pending.caller_node_id, 3);
+        assert_eq!(pending.caller_parameter_index, 5);
 
         // Looking up again does not remove the entry.
         assert!(registry.get(&id).is_some());

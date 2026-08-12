@@ -32,7 +32,7 @@ taurus_macros::data_type! {
     display_message(en_US = "File"),
     alias(en_US = "file;document;blob;attachment;binary"),
     generic_keys = ["M extends TEXT"],
-    type_string = "{ contentType: M; valueType: 'base64'; value: string }",
+    type_string = "{ contentType: M; fileName: string; valueType: 'base64'; value: string }",
     linked_data_type_identifiers = ["TEXT"],
 }
 

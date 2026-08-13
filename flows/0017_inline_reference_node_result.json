@@ -1,0 +1,88 @@
+{
+	"name": "0017_inline_reference_node_result",
+	"description": "An inline reference (${signature}) resolves against another node's execution result, not just a nested literal -- exercises the same node-execution + reference-resolution path a plain referenceValue parameter would",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"computed": 5,
+				"message": "The sum is 5!"
+			}
+		}
+	],
+	"flow": {
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definition_source": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::number::add",
+				"parameters": [
+					{
+						"databaseId": "11",
+						"runtimeParameterId": "first",
+						"value": {
+							"literalValue": {
+								"value": {
+									"numberValue": {
+										"integer": "2"
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "12",
+						"runtimeParameterId": "second",
+						"value": {
+							"literalValue": {
+								"value": {
+									"numberValue": {
+										"integer": "3"
+									}
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"databaseId": "2",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "21",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"value": {
+									"structValue": {
+										"fields": {
+											"computed": {
+												"stringValue": "${sum}"
+											},
+											"message": {
+												"stringValue": "The sum is ${sum}!"
+											}
+										}
+									}
+								},
+								"references": [
+									{
+										"signature": "sum",
+										"value": {
+											"referenceValue": {
+												"nodeId": "1"
+											}
+										}
+									}
+								]
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

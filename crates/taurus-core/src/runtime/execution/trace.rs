@@ -35,6 +35,9 @@ pub enum ArgKind {
         eager: bool,
         executed: bool,
     },
+    Template {
+        references: usize,
+    },
 }
 
 /// Reference source kind for argument tracing.

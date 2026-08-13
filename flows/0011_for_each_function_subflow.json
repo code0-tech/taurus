@@ -21,7 +21,9 @@
 						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
-								"stringValue": "20"
+								"value": {
+									"stringValue": "20"
+								}
 							}
 						}
 					}
@@ -37,24 +39,26 @@
 						"runtimeParameterId": "list",
 						"value": {
 							"literalValue": {
-								"listValue": {
-									"values": [
-										{
-											"numberValue": {
-												"integer": "1"
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "2"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "3"
+												}
 											}
-										},
-										{
-											"numberValue": {
-												"integer": "2"
-											}
-										},
-										{
-											"numberValue": {
-												"integer": "3"
-											}
-										}
-									]
+										]
+									}
 								}
 							}
 						}

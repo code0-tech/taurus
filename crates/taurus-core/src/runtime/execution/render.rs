@@ -152,6 +152,7 @@ fn render_frame(
     for arg in &frame.args {
         let arg_kind = match &arg.kind {
             ArgKind::Literal => "literal".to_string(),
+            ArgKind::Template { references } => format!("template({} refs)", references),
             ArgKind::Reference { reference, hit } => {
                 let hit_state = if *hit { "hit" } else { "miss" };
                 format!("reference {:?} ({})", reference, hit_state)

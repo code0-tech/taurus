@@ -1,20 +1,11 @@
 //! Runtime engine execution loop for compiled flow plans.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use futures_lite::future::block_on;
-use tokio::sync::Notify;
-use tucana::aquila::{
-    ActionExecutionRequest, ActionNodeSubFlowValue, ActionNodeValue, action_node_value,
+use crate::handler::argument::{
+    Argument, FunctionThunk, ParameterNode, TemplateArgument, TemplateReferenceArgument, Thunk,
 };
-use tucana::shared::node_execution_result::Result as TucanaNodeResult;
-use tucana::shared::reference_value::Target;
-use tucana::shared::value::Kind;
-use tucana::shared::{
-    InputType, NodeExecutionResult as TucanaNodeExecutionResult, NodeParameterNodeExecutionResult,
-    ReferenceValue, SubFlowSetting, Value,
-};
-use crate::handler::argument::{Argument, FunctionThunk, ParameterNode, Thunk};
 use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
 use crate::runtime::engine::model::{
     CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget,
@@ -29,6 +20,19 @@ use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
 use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
+use futures_lite::future::block_on;
+use tokio::sync::Notify;
+use tucana::aquila::{
+    ActionExecutionRequest, ActionInlineReferenceValue, ActionLiteralValue, ActionNodeSubFlowValue,
+    ActionNodeValue, action_node_value,
+};
+use tucana::shared::node_execution_result::Result as TucanaNodeResult;
+use tucana::shared::reference_value::Target;
+use tucana::shared::value::Kind;
+use tucana::shared::{
+    InputType, ListValue, NodeExecutionResult as TucanaNodeExecutionResult,
+    NodeParameterNodeExecutionResult, ReferenceValue, Struct, SubFlowSetting, Value,
+};
 
 /// Executes a compiled flow plan starting at `start_idx` -- used both by a
 /// normal top-level run (`start_idx == flow.start_idx`) and by the
@@ -203,7 +207,7 @@ impl<'a> EngineExecutor<'a> {
 
     fn execute_thunk(&self, thunk: &Thunk, value_store: &mut ValueStore) -> ExecutionResult {
         match thunk {
-            Thunk::Node(node_id) => self.execute_from_node_id(*node_id, value_store),
+            Thunk::Node { node_id, .. } => self.execute_from_node_id(*node_id, value_store),
             Thunk::Function(function) => self.execute_function_thunk(function, value_store),
         }
     }
@@ -502,6 +506,13 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
+        if let Err(err) = self.resolve_local_templates(&mut args, value_store, frame_id) {
+            return ExecutedNode {
+                signal: Signal::Failure(err),
+                parameter_results: Vec::new(),
+            };
+        }
+
         if let Some(signal) = self.force_eager_args(entry, &mut args, value_store, frame_id) {
             return ExecutedNode {
                 signal,
@@ -789,6 +800,20 @@ impl<'a> EngineExecutor<'a> {
                     );
                     args.push(Argument::Thunk(thunk));
                 }
+                CompiledArg::Template(template) => {
+                    let argument = self.compiled_arg_to_argument(&parameter.arg, value_store)?;
+                    self.trace_record_arg(
+                        frame_id,
+                        ArgTrace {
+                            index,
+                            kind: ArgKind::Template {
+                                references: template.references.len(),
+                            },
+                            preview: format!("template({} refs)", template.references.len()),
+                        },
+                    );
+                    args.push(argument);
+                }
             }
         }
 
@@ -827,6 +852,113 @@ impl<'a> EngineExecutor<'a> {
         }
 
         Ok(args)
+    }
+
+    /// Converts one compiled parameter expression into a runtime `Argument`,
+    /// recursing into `CompiledTemplate` references. Unlike `build_args`
+    /// this performs no tracing -- it's used both for the top-level
+    /// `CompiledArg::Template` case and for each nested reference inside it.
+    fn compiled_arg_to_argument(
+        &self,
+        arg: &CompiledArg,
+        value_store: &mut ValueStore,
+    ) -> Result<Argument, RuntimeError> {
+        match arg {
+            CompiledArg::Literal(value) => Ok(Argument::Eval(value.clone())),
+            CompiledArg::Reference(reference) => match value_store.get(reference) {
+                ValueStoreResult::Success(value) => Ok(Argument::Eval(value)),
+                ValueStoreResult::Error(err) => Err(err),
+                ValueStoreResult::NotFound => Err(RuntimeError::new(
+                    "T-CORE-000004",
+                    "ReferenceValueNotFound",
+                    "Reference not found in execution value store",
+                )),
+            },
+            CompiledArg::Deferred(thunk) => Ok(Argument::Thunk(compiled_thunk_to_argument(thunk))),
+            CompiledArg::Template(template) => {
+                let mut references = Vec::with_capacity(template.references.len());
+                for reference in &template.references {
+                    let arg = self.compiled_arg_to_argument(&reference.arg, value_store)?;
+                    references.push(TemplateReferenceArgument {
+                        signature: reference.signature.clone(),
+                        arg: Box::new(arg),
+                    });
+                }
+                Ok(Argument::Template(TemplateArgument {
+                    value: template.value.clone(),
+                    references,
+                }))
+            }
+        }
+    }
+
+    /// Collapses every `Argument::Template` in `args` into `Argument::Eval`
+    /// by substituting `${signature}` placeholders with their resolved
+    /// values. Local handlers only understand `Eval`/`Thunk`, so this must
+    /// run before a local node's handler is invoked -- unlike the remote
+    /// path, which forwards the template structure as-is (see
+    /// `resolve_remote_args`) so the action can interpolate on its own
+    /// schedule and decide when (or whether) to run any nested sub flow.
+    fn resolve_local_templates(
+        &self,
+        args: &mut [Argument],
+        value_store: &mut ValueStore,
+        frame_id: Option<u64>,
+    ) -> Result<(), RuntimeError> {
+        for argument in args.iter_mut() {
+            if let Argument::Template(template) = argument {
+                let value = self.resolve_template_value(template, value_store, frame_id)?;
+                *argument = Argument::Eval(value);
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_template_value(
+        &self,
+        template: &TemplateArgument,
+        value_store: &mut ValueStore,
+        frame_id: Option<u64>,
+    ) -> Result<Value, RuntimeError> {
+        let mut resolved = HashMap::with_capacity(template.references.len());
+        for reference in &template.references {
+            let value = self.resolve_argument_value(&reference.arg, value_store, frame_id)?;
+            resolved.insert(reference.signature.clone(), value);
+        }
+        Ok(substitute_template(&template.value, &resolved))
+    }
+
+    /// Resolves one inline reference to a concrete value, running a deferred
+    /// sub-flow thunk synchronously since the interpolated result is needed
+    /// immediately.
+    fn resolve_argument_value(
+        &self,
+        argument: &Argument,
+        value_store: &mut ValueStore,
+        frame_id: Option<u64>,
+    ) -> Result<Value, RuntimeError> {
+        match argument {
+            Argument::Eval(value) => Ok(value.clone()),
+            Argument::Thunk(thunk) => {
+                self.trace_mark_thunk_executed(frame_id, thunk);
+                match self.execute_thunk(thunk, value_store).signal {
+                    // A reference resolved via `return` inside the sub flow
+                    // it points at yields that value the same as `Success`
+                    // would -- there's no meaningful difference for the
+                    // purpose of filling in one `${signature}` slot.
+                    Signal::Success(value) | Signal::Return(value) => Ok(value),
+                    Signal::Failure(err) => Err(err),
+                    Signal::Stop => Err(RuntimeError::new(
+                        "T-CORE-000108",
+                        "TemplateReferenceStopped",
+                        "Inline reference resolution was stopped before producing a value",
+                    )),
+                }
+            }
+            Argument::Template(nested) => {
+                self.resolve_template_value(nested, value_store, frame_id)
+            }
+        }
     }
 
     fn force_eager_args(
@@ -882,75 +1014,128 @@ impl<'a> EngineExecutor<'a> {
         let mut minted_ids = Vec::new();
 
         for (index, argument) in args.iter_mut().enumerate() {
-            match argument {
-                Argument::Eval(value) => params.push(RemoteParam::Literal(value.clone())),
-                // A `CompiledThunk::Node` sub-flow reference destined for a
-                // *remote* node's parameter is not resolved here at all --
-                // unlike every other thunk in this engine (including the
-                // exact same variant reached through the local `build_args`
-                // path used by `std::control::if`/`if_else`, which stays
-                // eager and synchronous, see `control.rs`), it may need to
-                // run zero, one, or many times, driven by the action itself
-                // over `ActionSubFlowExecutionRequest` while this call is
-                // outstanding. So instead of executing it we mint a UUID
-                // and hand the action a `SubFlow` reference it can invoke
-                // on its own schedule (see `sub_flow_registry`).
-                //
-                // `CompiledThunk::Function` (the other `Deferred` variant)
-                // is unaffected and keeps executing eagerly below, exactly
-                // as before -- only a bare node reference gets this
-                // treatment.
-                Argument::Thunk(Thunk::Node(node_id)) => {
-                    // Not executed, so left exactly as `build_args` already
-                    // recorded it: `eager: false, executed: false`.
-                    match self.sub_flow_registry.mint(
-                        &self.flow,
-                        *node_id,
-                        self.execution_id,
-                        Arc::clone(activity),
-                        value_store.get_current_node_id(),
-                        index as i64,
-                    ) {
-                        Some(id) => {
-                            minted_ids.push(id.clone());
-                            params.push(RemoteParam::SubFlow(id));
-                        }
-                        None => {
-                            return Err(Signal::Failure(RuntimeError::new(
-                                "T-CORE-000001",
-                                "NodeNotFound",
-                                format!("Node {} not found", node_id),
-                            )));
-                        }
-                    }
-                }
-                Argument::Thunk(thunk @ Thunk::Function(_)) => {
-                    // Remote execution always receives materialized values for
-                    // function-thunk args -- this mirrors the pre-existing
-                    // eager-resolution behavior unchanged.
-                    self.trace_mark_thunk(frame_id, index, true, true);
-                    let child = self.execute_thunk(thunk, value_store);
-                    if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
-                        self.trace_link_child(
-                            parent,
-                            child_root,
-                            EdgeKind::EagerCall { arg_index: index },
-                        );
-                    }
-                    match child.signal {
-                        Signal::Success(value) => {
-                            *argument = Argument::Eval(value.clone());
-                            params.push(RemoteParam::Literal(value));
-                        }
-                        // Same unwind rule as local eager params: return exits this call frame only.
-                        Signal::Return(value) => return Err(Signal::Success(value)),
-                        other => return Err(other),
-                    }
-                }
-            }
+            let param = self.resolve_remote_argument(
+                argument,
+                index,
+                value_store,
+                frame_id,
+                activity,
+                &mut minted_ids,
+            )?;
+            params.push(param);
         }
 
         Ok((params, minted_ids))
+    }
+
+    /// Resolves one remote-call argument (top-level or nested inside a
+    /// `Template`'s inline references) into a `RemoteParam`, minting any
+    /// sub-flow UUID it needs into `minted_ids`.
+    fn resolve_remote_argument(
+        &self,
+        argument: &mut Argument,
+        index: usize,
+        value_store: &mut ValueStore,
+        frame_id: Option<u64>,
+        activity: &Arc<Notify>,
+        minted_ids: &mut Vec<String>,
+    ) -> Result<RemoteParam, Signal> {
+        match argument {
+            Argument::Eval(value) => Ok(RemoteParam::Literal(value.clone())),
+            // A `CompiledThunk::Node` sub-flow reference destined for a
+            // *remote* node's parameter is not resolved here at all --
+            // unlike every other thunk in this engine (including the
+            // exact same variant reached through the local `build_args`
+            // path used by `std::control::if`/`if_else`, which stays
+            // eager and synchronous, see `control.rs`), it may need to
+            // run zero, one, or many times, driven by the action itself
+            // over `ActionSubFlowExecutionRequest` while this call is
+            // outstanding. So instead of executing it we mint a UUID
+            // and hand the action a `SubFlow` reference it can invoke
+            // on its own schedule (see `sub_flow_registry`).
+            //
+            // `CompiledThunk::Function` (the other `Deferred` variant)
+            // is unaffected and keeps executing eagerly below, exactly
+            // as before -- only a bare node reference gets this
+            // treatment.
+            Argument::Thunk(Thunk::Node {
+                node_id,
+                input_schema,
+                output_schema,
+            }) => {
+                // Not executed, so left exactly as `build_args` already
+                // recorded it: `eager: false, executed: false`.
+                match self.sub_flow_registry.mint(
+                    &self.flow,
+                    *node_id,
+                    self.execution_id,
+                    Arc::clone(activity),
+                    value_store.get_current_node_id(),
+                    index as i64,
+                ) {
+                    Some(id) => {
+                        minted_ids.push(id.clone());
+                        Ok(RemoteParam::SubFlow {
+                            execution_identifier: id,
+                            input_schema: input_schema.clone(),
+                            output_schema: output_schema.clone(),
+                        })
+                    }
+                    None => Err(Signal::Failure(RuntimeError::new(
+                        "T-CORE-000001",
+                        "NodeNotFound",
+                        format!("Node {} not found", node_id),
+                    ))),
+                }
+            }
+            Argument::Thunk(thunk @ Thunk::Function(_)) => {
+                // Remote execution always receives materialized values for
+                // function-thunk args -- this mirrors the pre-existing
+                // eager-resolution behavior unchanged.
+                self.trace_mark_thunk(frame_id, index, true, true);
+                let child = self.execute_thunk(thunk, value_store);
+                if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
+                    self.trace_link_child(
+                        parent,
+                        child_root,
+                        EdgeKind::EagerCall { arg_index: index },
+                    );
+                }
+                match child.signal {
+                    Signal::Success(value) => {
+                        *argument = Argument::Eval(value.clone());
+                        Ok(RemoteParam::Literal(value))
+                    }
+                    // Same unwind rule as local eager params: return exits this call frame only.
+                    Signal::Return(value) => Err(Signal::Success(value)),
+                    other => Err(other),
+                }
+            }
+            // The template's own text is forwarded to the action as-is
+            // (see `ActionLiteralValue`/`ActionInlineReferenceValue`) -- only
+            // its references are resolved, recursively, the same way a
+            // top-level argument would be. This preserves any nested
+            // sub-flow reference as a mintable UUID instead of forcing it to
+            // run now, exactly like the top-level `Thunk::Node` case above.
+            Argument::Template(template) => {
+                let mut references = Vec::with_capacity(template.references.len());
+                for reference in &mut template.references {
+                    let param = self.resolve_remote_argument(
+                        &mut *reference.arg,
+                        index,
+                        value_store,
+                        frame_id,
+                        activity,
+                        minted_ids,
+                    )?;
+                    references.push((reference.signature.clone(), param));
+                }
+                Ok(RemoteParam::Template {
+                    value: template.value.clone(),
+                    references,
+                })
+            }
+        }
     }
 
     fn build_remote_request(
@@ -972,14 +1157,7 @@ impl<'a> EngineExecutor<'a> {
         let parameters = params
             .into_iter()
             .map(|param| ActionNodeValue {
-                value: Some(match param {
-                    RemoteParam::Literal(value) => action_node_value::Value::LiteralValue(value),
-                    RemoteParam::SubFlow(execution_identifier) => {
-                        action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
-                            execution_identifier,
-                        })
-                    }
-                }),
+                value: Some(remote_param_to_action_value(param)),
             })
             .collect();
 
@@ -1017,7 +1195,10 @@ impl<'a> EngineExecutor<'a> {
                 ));
             };
             parameters.push(ActionNodeValue {
-                value: Some(action_node_value::Value::LiteralValue(value.clone())),
+                value: Some(action_node_value::Value::LiteralValue(ActionLiteralValue {
+                    value: Some(value.clone()),
+                    references: Vec::new(),
+                })),
             });
         }
 
@@ -1229,18 +1410,62 @@ fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeParameterNodeExecut
         .map(|arg| NodeParameterNodeExecutionResult {
             value: match arg {
                 Argument::Eval(value) => Some(value.clone()),
-                Argument::Thunk(_) => None,
+                // A template not yet collapsed to `Eval` (remote path) has
+                // no single materialized value, same as an unresolved thunk.
+                Argument::Thunk(_) | Argument::Template(_) => None,
             },
         })
         .collect()
 }
 
-/// One resolved remote-call parameter slot: either a materialized literal
-/// value, or a minted sub-flow UUID standing in for a `CompiledThunk::Node`
-/// reference the action may invoke later (see `resolve_remote_args`).
+/// One resolved remote-call parameter slot: a materialized literal value, a
+/// minted sub-flow UUID standing in for a `CompiledThunk::Node` reference the
+/// action may invoke later, or a literal template forwarded to the action
+/// with its own references resolved the same way (see `resolve_remote_args`).
 enum RemoteParam {
     Literal(Value),
-    SubFlow(String),
+    SubFlow {
+        execution_identifier: String,
+        input_schema: Option<Struct>,
+        output_schema: Option<Struct>,
+    },
+    Template {
+        value: Value,
+        references: Vec<(String, RemoteParam)>,
+    },
+}
+
+fn remote_param_to_action_value(param: RemoteParam) -> action_node_value::Value {
+    match param {
+        RemoteParam::Literal(value) => action_node_value::Value::LiteralValue(ActionLiteralValue {
+            value: Some(value),
+            references: Vec::new(),
+        }),
+        RemoteParam::SubFlow {
+            execution_identifier,
+            input_schema,
+            output_schema,
+        } => action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+            execution_identifier,
+            input_schema,
+            output_schema,
+        }),
+        RemoteParam::Template { value, references } => {
+            let references = references
+                .into_iter()
+                .map(|(signature, param)| ActionInlineReferenceValue {
+                    signature,
+                    value: Some(ActionNodeValue {
+                        value: Some(remote_param_to_action_value(param)),
+                    }),
+                })
+                .collect();
+            action_node_value::Value::LiteralValue(ActionLiteralValue {
+                value: Some(value),
+                references,
+            })
+        }
+    }
 }
 
 fn parameter_results_from_remote_params(
@@ -1252,9 +1477,9 @@ fn parameter_results_from_remote_params(
             value: match param {
                 RemoteParam::Literal(value) => Some(value.clone()),
                 // No literal value was materialized for a minted sub-flow
-                // reference -- same convention as an unresolved `Argument::Thunk`
-                // in `parameter_results_from_args`.
-                RemoteParam::SubFlow(_) => None,
+                // reference or an unresolved template -- same convention as
+                // an unresolved `Argument::Thunk` in `parameter_results_from_args`.
+                RemoteParam::SubFlow { .. } | RemoteParam::Template { .. } => None,
             },
         })
         .collect()
@@ -1262,7 +1487,15 @@ fn parameter_results_from_remote_params(
 
 fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
     match thunk {
-        CompiledThunk::Node(node_id) => Thunk::Node(*node_id),
+        CompiledThunk::Node {
+            node_id,
+            input_schema,
+            output_schema,
+        } => Thunk::Node {
+            node_id: *node_id,
+            input_schema: input_schema.clone(),
+            output_schema: output_schema.clone(),
+        },
         CompiledThunk::Function {
             identifier,
             execution_target,
@@ -1347,6 +1580,90 @@ fn is_null_value(value: &Value) -> bool {
 fn null_value() -> Value {
     Value {
         kind: Some(Kind::NullValue(0)),
+    }
+}
+
+/// Substitutes every `${signature}` placeholder found in a (possibly nested)
+/// string inside `value` with its resolved value from `resolved`, per the
+/// `LiteralValue`/`ActionLiteralValue` doc comments in tucana. A string that
+/// is *exactly* one placeholder (nothing else around it) is replaced with
+/// the resolved value verbatim, preserving its type (e.g. a number reference
+/// used as a whole parameter value stays a number); a placeholder embedded
+/// in a larger string is spliced in as text (see `stringify_for_template`).
+fn substitute_template(value: &Value, resolved: &HashMap<String, Value>) -> Value {
+    match value.kind.as_ref() {
+        Some(Kind::StringValue(s)) => substitute_string_template(s, resolved),
+        Some(Kind::StructValue(struct_value)) => Value {
+            kind: Some(Kind::StructValue(Struct {
+                fields: struct_value
+                    .fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), substitute_template(value, resolved)))
+                    .collect(),
+            })),
+        },
+        Some(Kind::ListValue(list)) => Value {
+            kind: Some(Kind::ListValue(ListValue {
+                values: list
+                    .values
+                    .iter()
+                    .map(|value| substitute_template(value, resolved))
+                    .collect(),
+            })),
+        },
+        _ => value.clone(),
+    }
+}
+
+fn substitute_string_template(raw: &str, resolved: &HashMap<String, Value>) -> Value {
+    if let Some(signature) = sole_placeholder(raw) {
+        return resolved.get(signature).cloned().unwrap_or_else(null_value);
+    }
+
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(start) = rest.find("${") {
+        out.push_str(&rest[..start]);
+        let Some(end_rel) = rest[start + 2..].find('}') else {
+            out.push_str(&rest[start..]);
+            rest = "";
+            break;
+        };
+        let end = start + 2 + end_rel;
+        let signature = &rest[start + 2..end];
+        match resolved.get(signature) {
+            Some(value) => out.push_str(&stringify_for_template(value)),
+            // Unmatched placeholder -- left verbatim rather than silently dropped.
+            None => out.push_str(&rest[start..=end]),
+        }
+        rest = &rest[end + 1..];
+    }
+    out.push_str(rest);
+
+    Value {
+        kind: Some(Kind::StringValue(out)),
+    }
+}
+
+/// A string consisting of exactly one `${signature}` placeholder and
+/// nothing else -- lets a whole-value reference preserve its original type
+/// instead of being stringified (see `substitute_template`).
+fn sole_placeholder(raw: &str) -> Option<&str> {
+    let inner = raw.strip_prefix("${")?.strip_suffix('}')?;
+    if inner.contains("${") || inner.contains('}') {
+        None
+    } else {
+        Some(inner)
+    }
+}
+
+fn stringify_for_template(value: &Value) -> String {
+    match value.kind.as_ref() {
+        Some(Kind::StringValue(s)) => s.clone(),
+        Some(Kind::NumberValue(v)) => crate::value::number_to_string(v),
+        Some(Kind::BoolValue(v)) => v.to_string(),
+        Some(Kind::NullValue(_)) | None => String::new(),
+        Some(Kind::StructValue(_)) | Some(Kind::ListValue(_)) => format_value_json(value),
     }
 }
 

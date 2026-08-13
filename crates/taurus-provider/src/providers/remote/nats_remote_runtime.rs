@@ -248,8 +248,7 @@ mod tests {
     }
 
     async fn test_client() -> Client {
-        let url =
-            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
+        let url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
         async_nats::connect(url)
             .await
             .expect("connect to local NATS test server")
@@ -354,7 +353,11 @@ mod tests {
         let result = runtime.execute_remote(execution).await;
         let elapsed = started.elapsed();
 
-        assert!(result.is_err(), "expected a timeout failure, got {:?}", result);
+        assert!(
+            result.is_err(),
+            "expected a timeout failure, got {:?}",
+            result
+        );
         assert!(
             elapsed >= Duration::from_millis(200),
             "should not fail before the flat deadline, elapsed={:?}",
@@ -428,7 +431,11 @@ mod tests {
         let result = runtime.execute_remote(execution).await;
         let elapsed = started.elapsed();
 
-        assert!(result.is_err(), "expected a timeout failure, got {:?}", result);
+        assert!(
+            result.is_err(),
+            "expected a timeout failure, got {:?}",
+            result
+        );
         assert!(
             elapsed >= Duration::from_millis(200) && elapsed < Duration::from_secs(2),
             "should time out at roughly the idle window, elapsed={:?}",

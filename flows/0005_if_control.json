@@ -73,7 +73,9 @@
 						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
-								"stringValue": "Blub"
+								"value": {
+									"stringValue": "Blub"
+								}
 							}
 						}
 					}

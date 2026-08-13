@@ -63,15 +63,15 @@ impl RemoteRuntime for FixtureRemoteRuntime<'_> {
         // list means the reference is minted but never actually invoked).
         // Only fall through to the literal-echo path below when no
         // `SubFlow` parameter is present at all.
-        if let Some(execution_identifier) = execution
-            .request
-            .parameters
-            .iter()
-            .find_map(|parameter| match parameter.value.as_ref()? {
-                action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
-                    execution_identifier,
-                }) => Some(execution_identifier.clone()),
-                _ => None,
+        if let Some(execution_identifier) =
+            execution.request.parameters.iter().find_map(|parameter| {
+                match parameter.value.as_ref()? {
+                    action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                        execution_identifier,
+                        ..
+                    }) => Some(execution_identifier.clone()),
+                    _ => None,
+                }
             })
         {
             return self
@@ -88,7 +88,9 @@ impl RemoteRuntime for FixtureRemoteRuntime<'_> {
             .first()
             .and_then(|parameter| parameter.value.as_ref())
             .and_then(|value| match value {
-                action_node_value::Value::LiteralValue(value) => Some(value.clone()),
+                // Fixtures never exercise `${signature}` templating, so the
+                // literal's `value` is always already the concrete result.
+                action_node_value::Value::LiteralValue(literal) => literal.value.clone(),
                 action_node_value::Value::SubFlow(_) => None,
             })
             .ok_or_else(|| {
@@ -187,13 +189,10 @@ fn run_tests(cases: Cases) {
 impl Testable for Case {
     fn run(&self) -> CaseResult {
         let engine = ExecutionEngine::new();
-        let remote = self
-            .remote
-            .clone()
-            .map(|fixture| FixtureRemoteRuntime {
-                fixture,
-                engine: &engine,
-            });
+        let remote = self.remote.clone().map(|fixture| FixtureRemoteRuntime {
+            fixture,
+            engine: &engine,
+        });
 
         for input in self.inputs.clone() {
             let flow_input = input.clone().input.map(from_json_value);

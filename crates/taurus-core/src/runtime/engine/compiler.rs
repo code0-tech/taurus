@@ -6,8 +6,8 @@ use tucana::shared::{NodeFunction, node_value, sub_flow};
 
 use crate::{
     runtime::engine::model::{
-        CompiledArg, CompiledFlow, CompiledNode, CompiledParameter, CompiledThunk,
-        NodeExecutionTarget,
+        CompiledArg, CompiledFlow, CompiledNode, CompiledParameter, CompiledTemplate,
+        CompiledTemplateReference, CompiledThunk, NodeExecutionTarget,
     },
     types::errors::runtime_error::RuntimeError,
 };
@@ -167,34 +167,7 @@ pub fn compile_flow(
                 });
             };
 
-            let arg = match value {
-                node_value::Value::LiteralValue(v) => CompiledArg::Literal(v.clone()),
-                node_value::Value::ReferenceValue(r) => CompiledArg::Reference(r.clone()),
-                node_value::Value::SubFlow(sub_flow) => {
-                    match sub_flow.execution_reference.as_ref() {
-                        Some(sub_flow::ExecutionReference::StartingNodeId(node_id)) => {
-                            CompiledArg::Deferred(CompiledThunk::Node(*node_id))
-                        }
-                        Some(sub_flow::ExecutionReference::Function(function)) => {
-                            CompiledArg::Deferred(CompiledThunk::Function {
-                                identifier: function.function_identifier.clone(),
-                                execution_target: execution_target_for_source(
-                                    node_id,
-                                    function.definition_source.as_deref(),
-                                )?,
-                                parameter_index: parameter_index as i64,
-                                settings: sub_flow.settings.clone(),
-                            })
-                        }
-                        None => {
-                            return Err(CompileError::SubFlowExecutionReferenceMissing {
-                                node_id,
-                                parameter_index,
-                            });
-                        }
-                    }
-                }
-            };
+            let arg = compile_node_value(node_id, parameter_index, value)?;
 
             parameters.push(CompiledParameter {
                 runtime_parameter_id: parameter.runtime_parameter_id.clone(),
@@ -217,6 +190,72 @@ pub fn compile_flow(
         nodes: compiled_nodes,
         node_idx_by_id,
     })
+}
+
+/// Compiles one `NodeValue` oneof variant into a `CompiledArg`. Recurses for
+/// each inline reference of a `LiteralValue` -- a reference's own value is
+/// itself a full `NodeValue`, so it can be another literal (nested
+/// `${signature}` templating), a plain reference, or a sub flow.
+fn compile_node_value(
+    node_id: i64,
+    parameter_index: usize,
+    value: &node_value::Value,
+) -> Result<CompiledArg, CompileError> {
+    match value {
+        node_value::Value::LiteralValue(literal) => {
+            if literal.references.is_empty() {
+                Ok(CompiledArg::Literal(
+                    literal.value.clone().unwrap_or_default(),
+                ))
+            } else {
+                let mut references = Vec::with_capacity(literal.references.len());
+                for reference in &literal.references {
+                    let inner = reference
+                        .value
+                        .as_ref()
+                        .and_then(|node_value| node_value.value.as_ref())
+                        .ok_or(CompileError::ParameterValueMissing {
+                            node_id,
+                            parameter_index,
+                        })?;
+                    let arg = compile_node_value(node_id, parameter_index, inner)?;
+                    references.push(CompiledTemplateReference {
+                        signature: reference.signature.clone(),
+                        arg: Box::new(arg),
+                    });
+                }
+                Ok(CompiledArg::Template(CompiledTemplate {
+                    value: literal.value.clone().unwrap_or_default(),
+                    references,
+                }))
+            }
+        }
+        node_value::Value::ReferenceValue(r) => Ok(CompiledArg::Reference(r.clone())),
+        node_value::Value::SubFlow(sub_flow) => match sub_flow.execution_reference.as_ref() {
+            Some(sub_flow::ExecutionReference::StartingNodeId(referenced_node_id)) => {
+                Ok(CompiledArg::Deferred(CompiledThunk::Node {
+                    node_id: *referenced_node_id,
+                    input_schema: sub_flow.input_schema.clone(),
+                    output_schema: sub_flow.output_schema.clone(),
+                }))
+            }
+            Some(sub_flow::ExecutionReference::Function(function)) => {
+                Ok(CompiledArg::Deferred(CompiledThunk::Function {
+                    identifier: function.function_identifier.clone(),
+                    execution_target: execution_target_for_source(
+                        node_id,
+                        function.definition_source.as_deref(),
+                    )?,
+                    parameter_index: parameter_index as i64,
+                    settings: sub_flow.settings.clone(),
+                }))
+            }
+            None => Err(CompileError::SubFlowExecutionReferenceMissing {
+                node_id,
+                parameter_index,
+            }),
+        },
+    }
 }
 
 fn execution_target_for(

@@ -20,39 +20,41 @@
 						"runtimeParameterId": "list",
 						"value": {
 							"literalValue": {
-								"listValue": {
-									"values": [
-										{
-											"numberValue": {
-												"integer": "1"
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "2"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "3"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "4"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "5"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "6"
+												}
 											}
-										},
-										{
-											"numberValue": {
-												"integer": "2"
-											}
-										},
-										{
-											"numberValue": {
-												"integer": "3"
-											}
-										},
-										{
-											"numberValue": {
-												"integer": "4"
-											}
-										},
-										{
-											"numberValue": {
-												"integer": "5"
-											}
-										},
-										{
-											"numberValue": {
-												"integer": "6"
-											}
-										}
-									]
+										]
+									}
 								}
 							}
 						}
@@ -92,8 +94,10 @@
 						"runtimeParameterId": "second",
 						"value": {
 							"literalValue": {
-								"numberValue": {
-									"integer": "2"
+								"value": {
+									"numberValue": {
+										"integer": "2"
+									}
 								}
 							}
 						}

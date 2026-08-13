@@ -447,9 +447,9 @@ dependencies = [
 
 [[package]]
 name = "code0-flow"
-version = "0.0.43"
+version = "0.0.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d70b4b6dcaa6f87f3968234d063edcdc38b27972e886dfd6089acc18a4172476"
+checksum = "27a26457988a6dbf1622d66deafabd766550db3b34c406d9016ac126210c85c8"
 dependencies = [
  "async-nats",
  "dotenv",
@@ -467,7 +467,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "tucana",
+ "tucana 0.0.81",
  "walkdir",
 ]
 
@@ -1588,7 +1588,7 @@ checksum = "5d89b00d79184ae937ba982f41371629cb9816bad44881c02f8bd32c97d7f0e8"
 dependencies = [
  "jsonschema",
  "serde_json",
- "tucana",
+ "tucana 0.0.80",
 ]
 
 [[package]]
@@ -2847,7 +2847,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana",
+ "tucana 0.0.80",
  "uuid",
 ]
 
@@ -2858,7 +2858,7 @@ dependencies = [
  "criterion",
  "prost",
  "taurus-core",
- "tucana",
+ "tucana 0.0.80",
 ]
 
 [[package]]
@@ -2877,7 +2877,7 @@ dependencies = [
  "serde_json",
  "taurus-macros",
  "tokio",
- "tucana",
+ "tucana 0.0.80",
  "ureq",
  "uuid",
 ]
@@ -2905,7 +2905,7 @@ dependencies = [
  "taurus-provider",
  "tokio",
  "tonic",
- "tucana",
+ "tucana 0.0.80",
 ]
 
 [[package]]
@@ -2919,7 +2919,7 @@ dependencies = [
  "taurus-core",
  "tokio",
  "tonic",
- "tucana",
+ "tucana 0.0.80",
 ]
 
 [[package]]
@@ -2931,7 +2931,7 @@ dependencies = [
  "log",
  "serde_json",
  "taurus-core",
- "tucana",
+ "tucana 0.0.80",
 ]
 
 [[package]]
@@ -3350,6 +3350,26 @@ name = "tucana"
 version = "0.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0cfe93386a4f88e5ea97e6ce64b72b975a8bb5464062cb66aad12e46544b959"
+dependencies = [
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "tucana"
+version = "0.0.81"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "041738b90451ef20bb67484813d3bc4a58f396ce48cc0616821b609cc40fc335"
 dependencies = [
  "pbjson",
  "pbjson-build",

@@ -1,0 +1,69 @@
+{
+	"name": "0016_inline_reference_literal",
+	"description": "Resolves ${signature} inline references inside a literal value -- a placeholder embedded in a larger string is spliced in as text, while a string that is exactly one placeholder preserves the referenced value's original type",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"greeting": "Hello World!",
+				"count": 3
+			}
+		}
+	],
+	"flow": {
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definition_source": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "2",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"value": {
+									"structValue": {
+										"fields": {
+											"greeting": {
+												"stringValue": "Hello ${name}!"
+											},
+											"count": {
+												"stringValue": "${total}"
+											}
+										}
+									}
+								},
+								"references": [
+									{
+										"signature": "name",
+										"value": {
+											"literalValue": {
+												"value": {
+													"stringValue": "World"
+												}
+											}
+										}
+									},
+									{
+										"signature": "total",
+										"value": {
+											"literalValue": {
+												"value": {
+													"numberValue": {
+														"integer": "3"
+													}
+												}
+											}
+										}
+									}
+								]
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

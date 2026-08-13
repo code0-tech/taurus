@@ -21,7 +21,9 @@
 						"runtimeParameterId": "object",
 						"value": {
 							"literalValue": {
-								"stringValue": "Test"
+								"value": {
+									"stringValue": "Test"
+								}
 							}
 						}
 					}
@@ -37,7 +39,9 @@
 						"runtimeParameterId": "object",
 						"value": {
 							"literalValue": {
-								"nullValue": "NULL_VALUE"
+								"value": {
+									"nullValue": "NULL_VALUE"
+								}
 							}
 						}
 					}

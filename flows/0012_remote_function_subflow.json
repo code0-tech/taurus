@@ -30,19 +30,21 @@
 						"runtimeParameterId": "list",
 						"value": {
 							"literalValue": {
-								"listValue": {
-									"values": [
-										{
-											"numberValue": {
-												"integer": "1"
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "2"
+												}
 											}
-										},
-										{
-											"numberValue": {
-												"integer": "2"
-											}
-										}
-									]
+										]
+									}
 								}
 							}
 						}

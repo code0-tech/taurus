@@ -117,7 +117,9 @@
 						"runtimeParameterId": "second",
 						"value": {
 							"literalValue": {
-								"stringValue": "username"
+								"value": {
+									"stringValue": "username"
+								}
 							}
 						}
 					}
@@ -178,7 +180,9 @@
 						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
-								"nullValue": "NULL_VALUE"
+								"value": {
+									"nullValue": "NULL_VALUE"
+								}
 							}
 						}
 					}

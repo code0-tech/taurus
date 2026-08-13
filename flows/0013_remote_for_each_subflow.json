@@ -10,7 +10,11 @@
 	"remote": {
 		"targetService": "websocket-action",
 		"functionIdentifier": "for_each",
-		"subFlowCalls": [1, 2, 3]
+		"subFlowCalls": [
+			1,
+			2,
+			3
+		]
 	},
 	"flow": {
 		"flowId": "1",
@@ -26,12 +30,26 @@
 						"runtimeParameterId": "list",
 						"value": {
 							"literalValue": {
-								"listValue": {
-									"values": [
-										{"numberValue": {"integer": "1"}},
-										{"numberValue": {"integer": "2"}},
-										{"numberValue": {"integer": "3"}}
-									]
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "2"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "3"
+												}
+											}
+										]
+									}
 								}
 							}
 						}
@@ -57,7 +75,11 @@
 						"runtimeParameterId": "first",
 						"value": {
 							"literalValue": {
-								"numberValue": {"integer": "1"}
+								"value": {
+									"numberValue": {
+										"integer": "1"
+									}
+								}
 							}
 						}
 					},

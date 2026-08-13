@@ -23,8 +23,10 @@
 						"runtimeParameterId": "number",
 						"value": {
 							"literalValue": {
-								"numberValue": {
-									"integer": "10"
+								"value": {
+									"numberValue": {
+										"integer": "10"
+									}
 								}
 							}
 						}

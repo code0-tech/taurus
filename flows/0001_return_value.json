@@ -20,7 +20,9 @@
 						"runtimeParameterId": "value",
 						"value": {
 							"literalValue": {
-								"stringValue": "Hello World"
+								"value": {
+									"stringValue": "Hello World"
+								}
 							}
 						}
 					}

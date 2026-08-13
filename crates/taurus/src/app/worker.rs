@@ -329,7 +329,12 @@ async fn build_sub_flow_execution_result(
     let started_at = now_unix_micros();
 
     match engine
-        .execute_sub_flow(&execution_identifier, request.parameters, remote, with_trace)
+        .execute_sub_flow(
+            &execution_identifier,
+            request.parameters,
+            remote,
+            with_trace,
+        )
         .await
     {
         Some(report) => build_execution_result(
@@ -378,7 +383,10 @@ async fn publish_sub_flow_execution_result(
     }
 }
 
-fn build_sub_flow_not_found_result(execution_identifier: String, started_at: i64) -> ExecutionResult {
+fn build_sub_flow_not_found_result(
+    execution_identifier: String,
+    started_at: i64,
+) -> ExecutionResult {
     let now = now_unix_micros();
     let runtime_error = RuntimeError::new(
         "T-TAURUS-000002",
@@ -603,12 +611,12 @@ fn build_decode_error_result(execution_id: ExecutionId) -> ExecutionResult {
 mod tests {
     use super::*;
 
-    use tonic::async_trait;
     use serde::Deserialize;
     use std::sync::Mutex as StdMutex;
     use taurus_core::runtime::engine::ExecutionEngine;
     use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
     use taurus_core::types::exit_reason::ExitReason;
+    use tonic::async_trait;
     use tucana::aquila::{ActionNodeSubFlowValue, action_node_value};
     use tucana::shared::{
         NodeFunction, NodeParameter, ValidationFlow, execution_result,
@@ -892,12 +900,14 @@ mod tests {
             if let Some(parameter) = execution.request.parameters.first()
                 && let Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
                     execution_identifier,
+                    ..
                 })) = &parameter.value
             {
                 *self
                     .minted_id
                     .lock()
-                    .expect("mint recorder should not be poisoned") = Some(execution_identifier.clone());
+                    .expect("mint recorder should not be poisoned") =
+                    Some(execution_identifier.clone());
             }
             self.release.notified().await;
             Ok(self.result.clone())
@@ -978,6 +988,7 @@ mod tests {
         let first_request = ActionSubFlowExecutionRequest {
             execution_identifier: execution_identifier.clone(),
             parameters: vec![int_value(41)],
+            correlation_identifier: uuid::Uuid::new_v4().to_string(),
         };
         let first_result =
             build_sub_flow_execution_result(first_request, &engine, None, false).await;
@@ -992,12 +1003,16 @@ mod tests {
         let second_request = ActionSubFlowExecutionRequest {
             execution_identifier: execution_identifier.clone(),
             parameters: vec![int_value(99)],
+            correlation_identifier: uuid::Uuid::new_v4().to_string(),
         };
         let second_result =
             build_sub_flow_execution_result(second_request, &engine, None, false).await;
         match second_result.result {
             Some(execution_result::Result::Success(value)) => assert_eq!(value, int_value(99)),
-            other => panic!("expected success result on repeated invocation, got {:?}", other),
+            other => panic!(
+                "expected success result on repeated invocation, got {:?}",
+                other
+            ),
         }
 
         // Letting the parent call resolve removes the entry it minted.
@@ -1008,6 +1023,7 @@ mod tests {
         let after_parent_completion = ActionSubFlowExecutionRequest {
             execution_identifier: execution_identifier.clone(),
             parameters: Vec::new(),
+            correlation_identifier: uuid::Uuid::new_v4().to_string(),
         };
         let after_result =
             build_sub_flow_execution_result(after_parent_completion, &engine, None, false).await;
@@ -1088,6 +1104,7 @@ mod tests {
         let request = ActionSubFlowExecutionRequest {
             execution_identifier: execution_identifier.clone(),
             parameters: vec![int_value(3), int_value(4)],
+            correlation_identifier: uuid::Uuid::new_v4().to_string(),
         };
         let result = build_sub_flow_execution_result(request, &engine, None, false).await;
         match result.result {
@@ -1105,6 +1122,7 @@ mod tests {
         let request = ActionSubFlowExecutionRequest {
             execution_identifier: "does-not-exist".to_string(),
             parameters: Vec::new(),
+            correlation_identifier: uuid::Uuid::new_v4().to_string(),
         };
 
         let result = build_sub_flow_execution_result(request, &engine, None, false).await;

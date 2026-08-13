@@ -5,7 +5,9 @@
 
 use std::collections::HashMap;
 use taurus_core::runtime::engine::ExecutionEngine;
-use tucana::shared::{NodeFunction, NodeParameter, NodeValue, ReferenceValue, node_value};
+use tucana::shared::{
+    LiteralValue, NodeFunction, NodeParameter, NodeValue, ReferenceValue, node_value,
+};
 
 fn int_value(value: i64) -> tucana::shared::Value {
     taurus_core::value::value_from_i64(value)
@@ -16,7 +18,10 @@ fn literal_param(runtime_parameter_id: &str, value: tucana::shared::Value) -> No
         database_id: 0,
         runtime_parameter_id: runtime_parameter_id.to_string(),
         value: Some(NodeValue {
-            value: Some(node_value::Value::LiteralValue(value)),
+            value: Some(node_value::Value::LiteralValue(LiteralValue {
+                value: Some(value),
+                references: Vec::new(),
+            })),
         }),
         cast: None,
     }
@@ -85,7 +90,8 @@ fn main() {
 
     let mut total = HashMap::new();
     for i in 0..iterations {
-        let (signal, _reason) = engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace);
+        let (signal, _reason) =
+            engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace);
         total.insert(i, signal.exit_reason());
     }
     // Prevent the compiler from optimizing the loop away.

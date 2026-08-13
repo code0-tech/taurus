@@ -1480,7 +1480,11 @@ mod tests {
         Argument::Eval(v)
     }
     fn a_thunk(id: i64) -> Argument {
-        Argument::Thunk(crate::handler::argument::Thunk::Node(id))
+        Argument::Thunk(crate::handler::argument::Thunk::Node {
+            node_id: id,
+            input_schema: None,
+            output_schema: None,
+        })
     }
     fn v_num(n: f64) -> Value {
         value_from_f64(n)

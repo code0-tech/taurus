@@ -32,14 +32,18 @@ impl fmt::Debug for FunctionThunk {
 
 #[derive(Clone)]
 pub enum Thunk {
-    Node(i64),
+    Node {
+        node_id: i64,
+        input_schema: Option<Struct>,
+        output_schema: Option<Struct>,
+    },
     Function(FunctionThunk),
 }
 
 impl fmt::Debug for Thunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Thunk::Node(node_id) => write!(f, "{}", node_id),
+            Thunk::Node { node_id, .. } => write!(f, "{}", node_id),
             Thunk::Function(function) => function.fmt(f),
         }
     }
@@ -48,10 +52,25 @@ impl fmt::Debug for Thunk {
 impl Thunk {
     pub fn trace_target(&self) -> String {
         match self {
-            Thunk::Node(node_id) => format!("node={}", node_id),
+            Thunk::Node { node_id, .. } => format!("node={}", node_id),
             Thunk::Function(function) => format!("function={}", function.identifier),
         }
     }
+}
+
+/// A literal value template plus its named inline references (`${signature}`),
+/// mirrored from `CompiledTemplate` at argument-build time so each reference
+/// can be resolved (or, on the remote path, minted/forwarded) independently.
+#[derive(Clone, Debug)]
+pub struct TemplateArgument {
+    pub value: Value,
+    pub references: Vec<TemplateReferenceArgument>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TemplateReferenceArgument {
+    pub signature: String,
+    pub arg: Box<Argument>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,6 +79,12 @@ pub enum Argument {
     Eval(Value),
     /// Deferred execution handle, evaluated by calling `run(thunk)`.
     Thunk(Thunk),
+    /// A literal with unresolved `${signature}` placeholders. Always
+    /// collapsed to `Eval` before a local handler runs (see
+    /// `EngineExecutor::resolve_local_templates`); preserved as-is on the
+    /// remote path so an action can interpolate itself (see
+    /// `EngineExecutor::resolve_remote_args`).
+    Template(TemplateArgument),
 }
 
 #[derive(Clone, Copy, Debug)]

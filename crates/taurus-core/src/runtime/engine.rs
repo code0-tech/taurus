@@ -305,12 +305,13 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
-    use tucana::aquila::{ActionExecutionRequest, ActionNodeSubFlowValue, action_node_value};
+    use tucana::aquila::{
+        ActionExecutionRequest, ActionLiteralValue, ActionNodeSubFlowValue, action_node_value,
+    };
     use tucana::shared::{
-        InputType, ListValue, NodeExecutionResult, NodeParameter, NodeValue, ReferenceValue,
-        Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value, node_execution_result,
-        node_value, reference_value,
-        sub_flow::ExecutionReference,
+        InputType, ListValue, LiteralValue, NodeExecutionResult, NodeParameter, NodeValue,
+        ReferenceValue, Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value,
+        node_execution_result, node_value, reference_value, sub_flow::ExecutionReference,
         value::Kind,
     };
 
@@ -319,7 +320,10 @@ mod tests {
             database_id,
             runtime_parameter_id: runtime_parameter_id.to_string(),
             value: Some(NodeValue {
-                value: Some(node_value::Value::LiteralValue(value)),
+                value: Some(node_value::Value::LiteralValue(LiteralValue {
+                    value: Some(value),
+                    references: Vec::new(),
+                })),
             }),
             cast: None,
         }
@@ -816,11 +820,17 @@ mod tests {
         assert_eq!(first_parameters.len(), 2);
         assert_eq!(
             first_parameters[0].value,
-            Some(action_node_value::Value::LiteralValue(int_value(1)))
+            Some(action_node_value::Value::LiteralValue(ActionLiteralValue {
+                value: Some(int_value(1)),
+                references: Vec::new(),
+            }))
         );
         assert_eq!(
             first_parameters[1].value,
-            Some(action_node_value::Value::LiteralValue(int_value(2)))
+            Some(action_node_value::Value::LiteralValue(ActionLiteralValue {
+                value: Some(int_value(2)),
+                references: Vec::new(),
+            }))
         );
 
         let function_results: Vec<_> = report
@@ -925,7 +935,8 @@ mod tests {
             None,
         );
 
-        let (signal, reason) = engine.execute_graph("test", 1, vec![filter_node], None, None, false);
+        let (signal, reason) =
+            engine.execute_graph("test", 1, vec![filter_node], None, None, false);
 
         assert_eq!(reason, ExitReason::Success);
         assert_eq!(
@@ -1218,7 +1229,8 @@ mod tests {
             None,
         );
 
-        let report = engine.execute_graph_report("test", 1, vec![value_node, add_node], None, None, false);
+        let report =
+            engine.execute_graph_report("test", 1, vec![value_node, add_node], None, None, false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 2);
@@ -1260,7 +1272,8 @@ mod tests {
         );
         remote_node.definition_source = Some("remote-service".to_string());
 
-        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
+        let report =
+            engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Failure);
         match report.signal {
@@ -1306,7 +1319,8 @@ mod tests {
         );
         remote_node.definition_source = Some("action.example".to_string());
 
-        let report = engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
+        let report =
+            engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(
@@ -1380,6 +1394,8 @@ mod tests {
         {
             if let Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
                 execution_identifier,
+                input_schema: _,
+                output_schema: _,
             })) = &execution.request.parameters[0].value
             {
                 *self
@@ -1462,6 +1478,8 @@ mod tests {
         let execution_identifier = match &parameters[0].value {
             Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
                 execution_identifier,
+                input_schema: _,
+                output_schema: _,
             })) => {
                 assert!(
                     uuid::Uuid::parse_str(execution_identifier).is_ok(),
@@ -1480,7 +1498,10 @@ mod tests {
         // The parent node's own remote call has resolved (successfully), so
         // the registry entry it minted must already have been cleaned up.
         assert!(
-            engine.sub_flow_registry.get(&execution_identifier).is_none(),
+            engine
+                .sub_flow_registry
+                .get(&execution_identifier)
+                .is_none(),
             "registry entry should be removed once the parent call resolves"
         );
     }
@@ -1513,6 +1534,8 @@ mod tests {
 
             if let Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
                 execution_identifier,
+                input_schema: _,
+                output_schema: _,
             })) = execution
                 .request
                 .parameters
@@ -1711,8 +1734,14 @@ mod tests {
             None,
         );
 
-        let report =
-            engine.execute_graph_report("test", 1, vec![for_each_node, callback_node], None, None, false);
+        let report = engine.execute_graph_report(
+            "test",
+            1,
+            vec![for_each_node, callback_node],
+            None,
+            None,
+            false,
+        );
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(report.node_execution_results.len(), 4);
@@ -1796,8 +1825,14 @@ mod tests {
         );
         for_each_node.definition_source = Some("draco-draco-cron".to_string());
 
-        let report =
-            engine.execute_graph_report("test", 2, vec![value_node, for_each_node], None, None, false);
+        let report = engine.execute_graph_report(
+            "test",
+            2,
+            vec![value_node, for_each_node],
+            None,
+            None,
+            false,
+        );
 
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(expect_success(report.signal), response_value);

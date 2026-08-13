@@ -12,9 +12,9 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::collections::HashMap;
 use taurus_core::runtime::engine::ExecutionEngine;
 use tucana::shared::{
-    ListValue, NodeFunction, NodeParameter, NodeValue, ReferenceValue, Struct, SubFlow, Value,
-    node_value, reference_value, reference_value::Target, sub_flow::ExecutionReference,
-    value::Kind,
+    ListValue, LiteralValue, NodeFunction, NodeParameter, NodeValue, ReferenceValue, Struct,
+    SubFlow, Value, node_value, reference_value, reference_value::Target,
+    sub_flow::ExecutionReference, value::Kind,
 };
 
 fn int_value(value: i64) -> Value {
@@ -26,7 +26,10 @@ fn literal_param(runtime_parameter_id: &str, value: Value) -> NodeParameter {
         database_id: 0,
         runtime_parameter_id: runtime_parameter_id.to_string(),
         value: Some(NodeValue {
-            value: Some(node_value::Value::LiteralValue(value)),
+            value: Some(node_value::Value::LiteralValue(LiteralValue {
+                value: Some(value),
+                references: Vec::new(),
+            })),
         }),
         cast: None,
     }
@@ -150,7 +153,9 @@ fn bench_chain(c: &mut Criterion) {
                 &size,
                 |b, _| {
                     let engine = ExecutionEngine::new();
-                    b.iter(|| engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace));
+                    b.iter(|| {
+                        engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace)
+                    });
                 },
             );
         }
@@ -168,7 +173,9 @@ fn bench_array_map(c: &mut Criterion) {
                 &size,
                 |b, _| {
                     let engine = ExecutionEngine::new();
-                    b.iter(|| engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace));
+                    b.iter(|| {
+                        engine.execute_graph("bench", start, nodes.clone(), None, None, with_trace)
+                    });
                 },
             );
         }

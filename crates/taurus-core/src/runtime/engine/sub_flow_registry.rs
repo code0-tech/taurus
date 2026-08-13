@@ -179,7 +179,11 @@ mod tests {
         let flow = flow_with_node(7);
         let activity = Arc::new(Notify::new());
 
-        assert!(registry.mint(&flow, 999, "parent-1", activity, 1, 1).is_none());
+        assert!(
+            registry
+                .mint(&flow, 999, "parent-1", activity, 1, 1)
+                .is_none()
+        );
         assert_eq!(registry.len(), 0);
     }
 

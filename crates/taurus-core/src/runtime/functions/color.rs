@@ -34,7 +34,7 @@ use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::{number_to_f64, value_from_f64};
-use tucana::shared::{Struct, Value, value::Kind};
+use tucana::shared::{value::Kind, Struct, Value};
 
 fn fail(message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new(
@@ -506,77 +506,12 @@ fn as_hsl(
     })
 }
 
-#[taurus_macros::runtime_function(
-    identifier = "std::color::is_equal",
-    module = "taurus-color",
-    signature = "(first: COLOR, second: COLOR): BOOLEAN",
-    name(en_US = "Is Equal"),
-    description(
-        en_US = "Compares two colors for equality. Returns true if all HSLA components are the same, false otherwise."
-    ),
-    display_message(en_US = "${first} Equals ${second}"),
-    alias(en_US = "equal;equals;same;color;colour;std;is"),
-    display_icon = "tabler:palette",
-    linked_data_type_identifiers = ["COLOR", "BOOLEAN"],
-)]
-#[parameter(
-    runtime_name = "first",
-    name(en_US = "First"),
-    description(en_US = "The first color to compare.")
-)]
-#[parameter(
-    runtime_name = "second",
-    name(en_US = "Second"),
-    description(en_US = "The second color to compare.")
-)]
-fn is_equal(
-    args: &[Argument],
-    _ctx: &mut ValueStore,
-    _run: &mut crate::handler::registry::ThunkRunner<'_>,
-) -> Signal {
-    args!(args => first: Struct, second: Struct);
-
-    for key in ["hue", "saturation", "lightness"] {
-        let lhs = match field_f64(&first, key) {
-            Ok(v) => v,
-            Err(sig) => return sig,
-        };
-        let rhs = match field_f64(&second, key) {
-            Ok(v) => v,
-            Err(sig) => return sig,
-        };
-        if lhs != rhs {
-            return Signal::Success(Value {
-                kind: Some(Kind::BoolValue(false)),
-            });
-        }
-    }
-
-    let lhs_alpha = match field_f64_or(&first, "alpha", 1.0) {
-        Ok(v) => v,
-        Err(sig) => return sig,
-    };
-    let rhs_alpha = match field_f64_or(&second, "alpha", 1.0) {
-        Ok(v) => v,
-        Err(sig) => return sig,
-    };
-    if lhs_alpha != rhs_alpha {
-        return Signal::Success(Value {
-            kind: Some(Kind::BoolValue(false)),
-        });
-    }
-
-    Signal::Success(Value {
-        kind: Some(Kind::BoolValue(true)),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::runtime::execution::value_store::ValueStore;
     use crate::value::value_from_f64;
-    use tucana::shared::{Struct as TcStruct, Value, value::Kind};
+    use tucana::shared::{value::Kind, Struct as TcStruct, Value};
 
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {
@@ -625,14 +560,6 @@ mod tests {
                 kind: Some(Kind::StructValue(s)),
             }) => s,
             other => panic!("Expected StructValue, got {:?}", other),
-        }
-    }
-    fn expect_bool(sig: Signal) -> bool {
-        match sig {
-            Signal::Success(Value {
-                kind: Some(Kind::BoolValue(b)),
-            }) => b,
-            other => panic!("Expected BoolValue, got {:?}", other),
         }
     }
     fn field(s: &TcStruct, key: &str) -> f64 {
@@ -854,51 +781,5 @@ mod tests {
             &mut run,
         ));
         assert!((field(&hsl, "alpha") - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_is_equal_missing_alpha_treated_as_opaque() {
-        let mut ctx = ValueStore::default();
-        let mut run = dummy_run;
-
-        assert!(expect_bool(is_equal(
-            &[
-                a_color_no_alpha(10.0, 20.0, 30.0),
-                a_color(10.0, 20.0, 30.0, 1.0)
-            ],
-            &mut ctx,
-            &mut run
-        )));
-        assert!(!expect_bool(is_equal(
-            &[
-                a_color_no_alpha(10.0, 20.0, 30.0),
-                a_color(10.0, 20.0, 30.0, 0.5)
-            ],
-            &mut ctx,
-            &mut run
-        )));
-    }
-
-    #[test]
-    fn test_is_equal() {
-        let mut ctx = ValueStore::default();
-        let mut run = dummy_run;
-
-        assert!(expect_bool(is_equal(
-            &[
-                a_color(10.0, 20.0, 30.0, 1.0),
-                a_color(10.0, 20.0, 30.0, 1.0)
-            ],
-            &mut ctx,
-            &mut run
-        )));
-        assert!(!expect_bool(is_equal(
-            &[
-                a_color(10.0, 20.0, 30.0, 1.0),
-                a_color(10.0, 20.0, 30.0, 0.5)
-            ],
-            &mut ctx,
-            &mut run
-        )));
     }
 }

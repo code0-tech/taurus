@@ -364,6 +364,111 @@ fn as_rgb(
 }
 
 #[taurus_macros::runtime_function(
+    identifier = "std::color::from_hsl",
+    module = "taurus-color",
+    signature = "(hue: NUMBER, saturation: NUMBER, lightness: NUMBER, alpha: NUMBER): COLOR",
+    name(en_US = "Color from HSL"),
+    description(
+        en_US = "Builds a color from hue (0-360), saturation and lightness (0-100) and an alpha channel (0-1)."
+    ),
+    display_message(en_US = "Color from ${hue}, ${saturation}, ${lightness}, ${alpha}"),
+    alias(en_US = "from hsl;build;convert;color;colour;std;from"),
+    display_icon = "tabler:palette",
+    linked_data_type_identifiers = ["NUMBER", "COLOR"],
+)]
+#[parameter(
+    runtime_name = "hue",
+    name(en_US = "Hue"),
+    description(en_US = "The hue, from 0 to 360.")
+)]
+#[parameter(
+    runtime_name = "saturation",
+    name(en_US = "Saturation"),
+    description(en_US = "The saturation, from 0 to 100.")
+)]
+#[parameter(
+    runtime_name = "lightness",
+    name(en_US = "Lightness"),
+    description(en_US = "The lightness, from 0 to 100.")
+)]
+#[parameter(
+    runtime_name = "alpha",
+    name(en_US = "Alpha"),
+    description(en_US = "The opacity, from 0 to 1.")
+)]
+fn from_hsl(
+    args: &[Argument],
+    _ctx: &mut ValueStore,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
+) -> Signal {
+    args!(args => hue: f64, saturation: f64, lightness: f64, alpha: f64);
+
+    if !(0.0..=360.0).contains(&hue) {
+        return fail("Hue must be between 0 and 360");
+    }
+    if !(0.0..=100.0).contains(&saturation) || !(0.0..=100.0).contains(&lightness) {
+        return fail("Saturation and lightness must be between 0 and 100");
+    }
+    if !(0.0..=1.0).contains(&alpha) {
+        return fail("Alpha must be between 0 and 1");
+    }
+
+    Signal::Success(color_from_hsla(hue, saturation, lightness, alpha))
+}
+
+#[taurus_macros::runtime_function(
+    identifier = "std::color::as_hsl",
+    module = "taurus-color",
+    signature = "(value: COLOR): { hue: number; saturation: number; lightness: number; alpha: number }",
+    name(en_US = "Color as HSL"),
+    description(
+        en_US = "Converts a color to its hue (0-360), saturation and lightness (0-100) and alpha (0-1) channels."
+    ),
+    display_message(en_US = "HSL of ${value}"),
+    alias(en_US = "to hsl;convert;color;colour;std;as"),
+    display_icon = "tabler:palette",
+    linked_data_type_identifiers = ["COLOR", "OBJECT"],
+)]
+#[parameter(
+    runtime_name = "value",
+    name(en_US = "Value"),
+    description(en_US = "The color to convert to HSL.")
+)]
+fn as_hsl(
+    args: &[Argument],
+    _ctx: &mut ValueStore,
+    _run: &mut crate::handler::registry::ThunkRunner<'_>,
+) -> Signal {
+    args!(args => value: Struct);
+    let hue = match field_f64(&value, "hue") {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
+    let saturation = match field_f64(&value, "saturation") {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
+    let lightness = match field_f64(&value, "lightness") {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
+    let alpha = match field_f64(&value, "alpha") {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
+
+    let mut fields = HashMap::new();
+    fields.insert("hue".to_string(), value_from_f64(hue));
+    fields.insert("saturation".to_string(), value_from_f64(saturation));
+    fields.insert("lightness".to_string(), value_from_f64(lightness));
+    fields.insert("alpha".to_string(), value_from_f64(alpha));
+
+    Signal::Success(Value {
+        kind: Some(Kind::StructValue(Struct { fields })),
+    })
+}
+
+#[taurus_macros::runtime_function(
     identifier = "std::color::is_equal",
     module = "taurus-color",
     signature = "(first: COLOR, second: COLOR): BOOLEAN",
@@ -570,6 +675,60 @@ mod tests {
             s => panic!("Expected Failure, got {:?}", s),
         }
         match from_rgb(
+            &[a_num(0.0), a_num(0.0), a_num(0.0), a_num(2.0)],
+            &mut ctx,
+            &mut run,
+        ) {
+            Signal::Failure(_) => {}
+            s => panic!("Expected Failure, got {:?}", s),
+        }
+    }
+
+    #[test]
+    fn test_from_hsl_and_as_hsl_roundtrip() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+
+        let color = expect_struct(from_hsl(
+            &[a_num(120.0), a_num(50.0), a_num(40.0), a_num(0.8)],
+            &mut ctx,
+            &mut run,
+        ));
+        let hsl = expect_struct(as_hsl(
+            &[Argument::Eval(Value {
+                kind: Some(Kind::StructValue(color)),
+            })],
+            &mut ctx,
+            &mut run,
+        ));
+
+        assert!((field(&hsl, "hue") - 120.0).abs() < 1e-6);
+        assert!((field(&hsl, "saturation") - 50.0).abs() < 1e-6);
+        assert!((field(&hsl, "lightness") - 40.0).abs() < 1e-6);
+        assert!((field(&hsl, "alpha") - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_from_hsl_out_of_range() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+        match from_hsl(
+            &[a_num(400.0), a_num(0.0), a_num(0.0), a_num(1.0)],
+            &mut ctx,
+            &mut run,
+        ) {
+            Signal::Failure(_) => {}
+            s => panic!("Expected Failure, got {:?}", s),
+        }
+        match from_hsl(
+            &[a_num(0.0), a_num(150.0), a_num(0.0), a_num(1.0)],
+            &mut ctx,
+            &mut run,
+        ) {
+            Signal::Failure(_) => {}
+            s => panic!("Expected Failure, got {:?}", s),
+        }
+        match from_hsl(
             &[a_num(0.0), a_num(0.0), a_num(0.0), a_num(2.0)],
             &mut ctx,
             &mut run,

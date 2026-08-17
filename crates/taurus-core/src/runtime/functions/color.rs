@@ -23,7 +23,7 @@ taurus_macros::data_type! {
     name(en_US = "Color"),
     display_message(en_US = "Color"),
     alias(en_US = "color;colour;grb;hsv;hsl;hex"),
-    type_string = "{ hue: number; saturation: number; lightness: number; alpha: number }",
+    type_string = "{ hue: number; saturation: number; lightness: number; alpha?: number }",
 }
 
 use std::collections::HashMap;
@@ -34,7 +34,7 @@ use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::{number_to_f64, value_from_f64};
-use tucana::shared::{Struct, Value, value::Kind};
+use tucana::shared::{value::Kind, Struct, Value};
 
 fn fail(message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new(
@@ -53,6 +53,32 @@ fn field_f64(fields: &Struct, key: &str) -> Result<f64, Signal> {
     }
 }
 
+/// Reads an optional numeric field, falling back to `default` when the field is absent or null.
+fn field_f64_or(fields: &Struct, key: &str, default: f64) -> Result<f64, Signal> {
+    match fields.fields.get(key).and_then(|v| v.kind.as_ref()) {
+        Some(Kind::NumberValue(n)) => {
+            number_to_f64(n).ok_or_else(|| fail(format!("Field '{key}' is not a valid number")))
+        }
+        Some(Kind::NullValue(_)) | None => Ok(default),
+        _ => Err(fail(format!("Field '{key}' is not a valid number"))),
+    }
+}
+
+/// Reads an optional alpha argument, defaulting to fully opaque (1.0) when omitted.
+fn alpha_from_value(value: &Value) -> Result<f64, Signal> {
+    let alpha = match value.kind.as_ref() {
+        Some(Kind::NumberValue(n)) => {
+            number_to_f64(n).ok_or_else(|| fail("Alpha is not a valid number"))?
+        }
+        Some(Kind::NullValue(_)) | None => return Ok(1.0),
+        _ => return Err(fail("Alpha must be a number or undefined")),
+    };
+    if !(0.0..=1.0).contains(&alpha) {
+        return Err(fail("Alpha must be between 0 and 1"));
+    }
+    Ok(alpha)
+}
+
 fn color_from_hsla(hue: f64, saturation: f64, lightness: f64, alpha: f64) -> Value {
     let mut fields = HashMap::new();
     fields.insert("hue".to_string(), value_from_f64(hue));
@@ -64,8 +90,10 @@ fn color_from_hsla(hue: f64, saturation: f64, lightness: f64, alpha: f64) -> Val
     }
 }
 
-/// Converts RGB (0..=255) + alpha (0..=1) into HSLA (hue 0..360, saturation/lightness 0..100, alpha 0..1).
-fn rgb_to_hsl(red: f64, green: f64, blue: f64) -> (f64, f64, f64) {
+/// Converts RGB (0..=255) + optional alpha (0..=1, defaults to 1.0 when omitted) into HSLA
+/// (hue 0..360, saturation/lightness 0..100, alpha 0..1).
+fn rgb_to_hsl(red: f64, green: f64, blue: f64, alpha: Option<f64>) -> (f64, f64, f64, f64) {
+    let alpha = alpha.unwrap_or(1.0);
     let r = red / 255.0;
     let g = green / 255.0;
     let b = blue / 255.0;
@@ -77,7 +105,7 @@ fn rgb_to_hsl(red: f64, green: f64, blue: f64) -> (f64, f64, f64) {
     let lightness = (max + min) / 2.0;
 
     if delta == 0.0 {
-        return (0.0, 0.0, lightness * 100.0);
+        return (0.0, 0.0, lightness * 100.0, alpha);
     }
 
     let saturation = if lightness <= 0.5 {
@@ -98,17 +126,24 @@ fn rgb_to_hsl(red: f64, green: f64, blue: f64) -> (f64, f64, f64) {
         hue += 360.0;
     }
 
-    (hue, saturation * 100.0, lightness * 100.0)
+    (hue, saturation * 100.0, lightness * 100.0, alpha)
 }
 
-/// Converts HSLA (hue 0..360, saturation/lightness 0..100) into RGB (0..=255).
-fn hsl_to_rgb(hue: f64, saturation: f64, lightness: f64) -> (f64, f64, f64) {
+/// Converts HSLA (hue 0..360, saturation/lightness 0..100) + optional alpha (0..=1, defaults to
+/// 1.0 when omitted) into RGBA (0..=255, alpha 0..=1).
+fn hsl_to_rgb(
+    hue: f64,
+    saturation: f64,
+    lightness: f64,
+    alpha: Option<f64>,
+) -> (f64, f64, f64, f64) {
+    let alpha = alpha.unwrap_or(1.0);
     let s = saturation / 100.0;
     let l = lightness / 100.0;
 
     if s == 0.0 {
         let v = l * 255.0;
-        return (v, v, v);
+        return (v, v, v, alpha);
     }
 
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
@@ -130,7 +165,7 @@ fn hsl_to_rgb(hue: f64, saturation: f64, lightness: f64) -> (f64, f64, f64) {
         (c, 0.0, x)
     };
 
-    ((r1 + m) * 255.0, (g1 + m) * 255.0, (b1 + m) * 255.0)
+    ((r1 + m) * 255.0, (g1 + m) * 255.0, (b1 + m) * 255.0, alpha)
 }
 
 fn parse_hex_byte(hex: &str, at: usize) -> Result<u8, Signal> {
@@ -190,7 +225,8 @@ fn from_hex(
         1.0
     };
 
-    let (hue, saturation, lightness) = rgb_to_hsl(red as f64, green as f64, blue as f64);
+    let (hue, saturation, lightness, alpha) =
+        rgb_to_hsl(red as f64, green as f64, blue as f64, Some(alpha));
     Signal::Success(color_from_hsla(hue, saturation, lightness, alpha))
 }
 
@@ -230,12 +266,12 @@ fn as_hex(
         Ok(v) => v,
         Err(sig) => return sig,
     };
-    let alpha = match field_f64(&value, "alpha") {
+    let alpha = match field_f64_or(&value, "alpha", 1.0) {
         Ok(v) => v,
         Err(sig) => return sig,
     };
 
-    let (red, green, blue) = hsl_to_rgb(hue, saturation, lightness);
+    let (red, green, blue, alpha) = hsl_to_rgb(hue, saturation, lightness, Some(alpha));
     let hex = if alpha >= 1.0 {
         format!(
             "#{:02X}{:02X}{:02X}",
@@ -261,7 +297,7 @@ fn as_hex(
 #[taurus_macros::runtime_function(
     identifier = "std::color::from_rgb",
     module = "taurus-color",
-    signature = "(red: NUMBER, green: NUMBER, blue: NUMBER, alpha: NUMBER): COLOR",
+    signature = "(red: NUMBER, green: NUMBER, blue: NUMBER, alpha?: NUMBER): COLOR",
     name(en_US = "Color from RGB"),
     description(
         en_US = "Builds a color from red, green and blue channels (0-255) and an alpha channel (0-1)."
@@ -289,23 +325,24 @@ fn as_hex(
 #[parameter(
     runtime_name = "alpha",
     name(en_US = "Alpha"),
-    description(en_US = "The opacity, from 0 to 1.")
+    description(en_US = "The opacity, from 0 to 1. Defaults to 1 (fully opaque) when omitted.")
 )]
 fn from_rgb(
     args: &[Argument],
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => red: f64, green: f64, blue: f64, alpha: f64);
+    args!(args => red: f64, green: f64, blue: f64, alpha: Value);
+    let alpha = match alpha_from_value(&alpha) {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
 
     if ![red, green, blue].iter().all(|c| (0.0..=255.0).contains(c)) {
         return fail("Red, green and blue must be between 0 and 255");
     }
-    if !(0.0..=1.0).contains(&alpha) {
-        return fail("Alpha must be between 0 and 1");
-    }
 
-    let (hue, saturation, lightness) = rgb_to_hsl(red, green, blue);
+    let (hue, saturation, lightness, alpha) = rgb_to_hsl(red, green, blue, Some(alpha));
     Signal::Success(color_from_hsla(hue, saturation, lightness, alpha))
 }
 
@@ -345,12 +382,12 @@ fn as_rgb(
         Ok(v) => v,
         Err(sig) => return sig,
     };
-    let alpha = match field_f64(&value, "alpha") {
+    let alpha = match field_f64_or(&value, "alpha", 1.0) {
         Ok(v) => v,
         Err(sig) => return sig,
     };
 
-    let (red, green, blue) = hsl_to_rgb(hue, saturation, lightness);
+    let (red, green, blue, alpha) = hsl_to_rgb(hue, saturation, lightness, Some(alpha));
 
     let mut fields = HashMap::new();
     fields.insert("red".to_string(), value_from_f64(red.round()));
@@ -366,7 +403,7 @@ fn as_rgb(
 #[taurus_macros::runtime_function(
     identifier = "std::color::from_hsl",
     module = "taurus-color",
-    signature = "(hue: NUMBER, saturation: NUMBER, lightness: NUMBER, alpha: NUMBER): COLOR",
+    signature = "(hue: NUMBER, saturation: NUMBER, lightness: NUMBER, alpha?: NUMBER): COLOR",
     name(en_US = "Color from HSL"),
     description(
         en_US = "Builds a color from hue (0-360), saturation and lightness (0-100) and an alpha channel (0-1)."
@@ -394,23 +431,24 @@ fn as_rgb(
 #[parameter(
     runtime_name = "alpha",
     name(en_US = "Alpha"),
-    description(en_US = "The opacity, from 0 to 1.")
+    description(en_US = "The opacity, from 0 to 1. Defaults to 1 (fully opaque) when omitted.")
 )]
 fn from_hsl(
     args: &[Argument],
     _ctx: &mut ValueStore,
     _run: &mut crate::handler::registry::ThunkRunner<'_>,
 ) -> Signal {
-    args!(args => hue: f64, saturation: f64, lightness: f64, alpha: f64);
+    args!(args => hue: f64, saturation: f64, lightness: f64, alpha: Value);
+    let alpha = match alpha_from_value(&alpha) {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
 
     if !(0.0..=360.0).contains(&hue) {
         return fail("Hue must be between 0 and 360");
     }
     if !(0.0..=100.0).contains(&saturation) || !(0.0..=100.0).contains(&lightness) {
         return fail("Saturation and lightness must be between 0 and 100");
-    }
-    if !(0.0..=1.0).contains(&alpha) {
-        return fail("Alpha must be between 0 and 1");
     }
 
     Signal::Success(color_from_hsla(hue, saturation, lightness, alpha))
@@ -452,7 +490,7 @@ fn as_hsl(
         Ok(v) => v,
         Err(sig) => return sig,
     };
-    let alpha = match field_f64(&value, "alpha") {
+    let alpha = match field_f64_or(&value, "alpha", 1.0) {
         Ok(v) => v,
         Err(sig) => return sig,
     };
@@ -498,7 +536,7 @@ fn is_equal(
 ) -> Signal {
     args!(args => first: Struct, second: Struct);
 
-    for key in ["hue", "saturation", "lightness", "alpha"] {
+    for key in ["hue", "saturation", "lightness"] {
         let lhs = match field_f64(&first, key) {
             Ok(v) => v,
             Err(sig) => return sig,
@@ -514,6 +552,20 @@ fn is_equal(
         }
     }
 
+    let lhs_alpha = match field_f64_or(&first, "alpha", 1.0) {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
+    let rhs_alpha = match field_f64_or(&second, "alpha", 1.0) {
+        Ok(v) => v,
+        Err(sig) => return sig,
+    };
+    if lhs_alpha != rhs_alpha {
+        return Signal::Success(Value {
+            kind: Some(Kind::BoolValue(false)),
+        });
+    }
+
     Signal::Success(Value {
         kind: Some(Kind::BoolValue(true)),
     })
@@ -524,7 +576,7 @@ mod tests {
     use super::*;
     use crate::runtime::execution::value_store::ValueStore;
     use crate::value::value_from_f64;
-    use tucana::shared::{Struct as TcStruct, Value, value::Kind};
+    use tucana::shared::{value::Kind, Struct as TcStruct, Value};
 
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {
@@ -533,6 +585,20 @@ mod tests {
     }
     fn a_num(n: f64) -> Argument {
         Argument::Eval(value_from_f64(n))
+    }
+    fn a_null() -> Argument {
+        Argument::Eval(Value {
+            kind: Some(Kind::NullValue(0)),
+        })
+    }
+    fn a_color_no_alpha(h: f64, s: f64, l: f64) -> Argument {
+        let mut fields = HashMap::new();
+        fields.insert("hue".to_string(), value_from_f64(h));
+        fields.insert("saturation".to_string(), value_from_f64(s));
+        fields.insert("lightness".to_string(), value_from_f64(l));
+        Argument::Eval(Value {
+            kind: Some(Kind::StructValue(TcStruct { fields })),
+        })
     }
     fn a_color(h: f64, s: f64, l: f64, a: f64) -> Argument {
         let mut fields = HashMap::new();
@@ -685,6 +751,32 @@ mod tests {
     }
 
     #[test]
+    fn test_from_rgb_alpha_defaults_to_opaque() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+
+        let color = expect_struct(from_rgb(
+            &[a_num(0.0), a_num(255.0), a_num(0.0), a_null()],
+            &mut ctx,
+            &mut run,
+        ));
+        assert!((field(&color, "alpha") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_as_rgb_missing_alpha_defaults_to_opaque() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+
+        let rgb = expect_struct(as_rgb(
+            &[a_color_no_alpha(120.0, 100.0, 50.0)],
+            &mut ctx,
+            &mut run,
+        ));
+        assert!((field(&rgb, "alpha") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
     fn test_from_hsl_and_as_hsl_roundtrip() {
         let mut ctx = ValueStore::default();
         let mut run = dummy_run;
@@ -736,6 +828,55 @@ mod tests {
             Signal::Failure(_) => {}
             s => panic!("Expected Failure, got {:?}", s),
         }
+    }
+
+    #[test]
+    fn test_from_hsl_alpha_defaults_to_opaque() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+
+        let color = expect_struct(from_hsl(
+            &[a_num(120.0), a_num(50.0), a_num(40.0), a_null()],
+            &mut ctx,
+            &mut run,
+        ));
+        assert!((field(&color, "alpha") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_as_hsl_missing_alpha_defaults_to_opaque() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+
+        let hsl = expect_struct(as_hsl(
+            &[a_color_no_alpha(120.0, 50.0, 40.0)],
+            &mut ctx,
+            &mut run,
+        ));
+        assert!((field(&hsl, "alpha") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_is_equal_missing_alpha_treated_as_opaque() {
+        let mut ctx = ValueStore::default();
+        let mut run = dummy_run;
+
+        assert!(expect_bool(is_equal(
+            &[
+                a_color_no_alpha(10.0, 20.0, 30.0),
+                a_color(10.0, 20.0, 30.0, 1.0)
+            ],
+            &mut ctx,
+            &mut run
+        )));
+        assert!(!expect_bool(is_equal(
+            &[
+                a_color_no_alpha(10.0, 20.0, 30.0),
+                a_color(10.0, 20.0, 30.0, 0.5)
+            ],
+            &mut ctx,
+            &mut run
+        )));
     }
 
     #[test]

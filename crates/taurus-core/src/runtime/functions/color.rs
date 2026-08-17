@@ -34,7 +34,7 @@ use crate::runtime::execution::value_store::ValueStore;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::{number_to_f64, value_from_f64};
-use tucana::shared::{value::Kind, Struct, Value};
+use tucana::shared::{Struct, Value, value::Kind};
 
 fn fail(message: impl Into<String>) -> Signal {
     Signal::Failure(RuntimeError::new(
@@ -576,7 +576,7 @@ mod tests {
     use super::*;
     use crate::runtime::execution::value_store::ValueStore;
     use crate::value::value_from_f64;
-    use tucana::shared::{value::Kind, Struct as TcStruct, Value};
+    use tucana::shared::{Struct as TcStruct, Value, value::Kind};
 
     fn a_str(s: &str) -> Argument {
         Argument::Eval(Value {

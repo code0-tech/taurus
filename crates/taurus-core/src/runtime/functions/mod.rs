@@ -7,6 +7,7 @@
 
 mod array;
 mod boolean;
+mod color;
 mod control;
 mod date;
 mod file;

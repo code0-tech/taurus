@@ -12,6 +12,7 @@
 //! entry it constructs.
 
 mod data_type;
+mod flow_type;
 mod module;
 mod parse;
 mod runtime_function;
@@ -51,6 +52,12 @@ pub fn runtime_function(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn data_type(input: TokenStream) -> TokenStream {
     run_fnlike(data_type::expand, input)
+}
+
+/// Declares a flow type (was `flow_types/*.json`).
+#[proc_macro]
+pub fn flow_type(input: TokenStream) -> TokenStream {
+    run_fnlike(flow_type::expand, input)
 }
 
 /// Declares a module (was `module.json`). Exactly one per feature file.

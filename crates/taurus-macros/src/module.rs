@@ -17,6 +17,7 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let author = args.required_string("author")?;
     let icon = args.required_string("icon")?;
     let version = args.required_string("version")?;
+    let dev_only = args.flag("dev_only");
 
     let meta_fn_ident = format_ident!(
         "__taurus_module_meta_{}",
@@ -36,6 +37,7 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
                 author: #author,
                 icon: #icon,
                 version: #version,
+                dev_only: #dev_only,
             }
         }
 

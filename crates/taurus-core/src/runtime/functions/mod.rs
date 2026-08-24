@@ -10,6 +10,7 @@ mod boolean;
 mod color;
 mod control;
 mod date;
+mod dev;
 mod file;
 mod http;
 mod number;

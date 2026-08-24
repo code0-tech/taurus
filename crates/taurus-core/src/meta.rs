@@ -54,6 +54,26 @@ pub struct ModuleMeta {
     pub author: &'static str,
     pub icon: &'static str,
     pub version: &'static str,
+    /// Only built by [`crate::registry::build_modules`] while Taurus is
+    /// running with `ENVIRONMENT=development` (the default) -- lets a module
+    /// still under development self-register without shipping to staging or
+    /// production.
+    pub dev_only: bool,
+}
+
+pub struct FlowTypeMeta {
+    pub identifier: &'static str,
+    /// Identifier of the [`ModuleMeta`] this flow type belongs to.
+    pub module: &'static str,
+    pub name: Vec<Translation>,
+    pub description: Vec<Translation>,
+    pub documentation: Vec<Translation>,
+    pub display_message: Vec<Translation>,
+    pub alias: Vec<Translation>,
+    pub editable: bool,
+    pub display_icon: Option<&'static str>,
+    pub linked_data_type_identifiers: Vec<&'static str>,
+    pub signature: &'static str,
 }
 
 pub struct MetaRegistration(pub fn() -> RuntimeFunctionMeta);
@@ -61,6 +81,9 @@ inventory::collect!(MetaRegistration);
 
 pub struct DataTypeRegistration(pub fn() -> DataTypeMeta);
 inventory::collect!(DataTypeRegistration);
+
+pub struct FlowTypeRegistration(pub fn() -> FlowTypeMeta);
+inventory::collect!(FlowTypeRegistration);
 
 pub struct ModuleRegistration(pub fn() -> ModuleMeta);
 inventory::collect!(ModuleRegistration);

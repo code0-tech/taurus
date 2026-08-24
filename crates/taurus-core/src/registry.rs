@@ -4,27 +4,51 @@
 //! the result anywhere (Aquila, a file, ...) is a transport concern that
 //! belongs to the caller.
 
+use std::collections::HashSet;
+
+use code0_flow::flow_config::env_with_default;
+use code0_flow::flow_config::environment::Environment;
+
 use crate::meta::{
-    DataTypeMeta, DataTypeRegistration, MetaRegistration, ModuleMeta, ModuleRegistration,
-    RuntimeFunctionMeta,
+    DataTypeMeta, DataTypeRegistration, FlowTypeMeta, FlowTypeRegistration, MetaRegistration,
+    ModuleMeta, ModuleRegistration, RuntimeFunctionMeta,
 };
 use tucana::shared::{
-    DefinitionDataType, FunctionDefinition, Module, ParameterDefinition, RuntimeFunctionDefinition,
-    RuntimeParameterDefinition,
+    DefinitionDataType, FlowType, FunctionDefinition, Module, ParameterDefinition,
+    RuntimeFlowType, RuntimeFunctionDefinition, RuntimeParameterDefinition,
 };
 
-/// Builds every registered module, complete with its function and data-type
-/// definitions. Panics if a function or data type declares a `module` that
+/// Builds every registered module, complete with its function, data-type and
+/// flow-type definitions. Skips modules declared `dev_only` unless Taurus is
+/// running with `ENVIRONMENT=development` (the default), along with anything
+/// that declares one of those modules as its owner.
+///
+/// Panics if a function, data type, or flow type declares a `module` that
 /// has no matching `taurus_macros::module!` registration -- a broken link
 /// between a handler and its owning module is a programming error, not a
-/// runtime condition to recover from.
+/// runtime condition to recover from. This does not apply to modules that
+/// were themselves excluded for being `dev_only`.
 pub fn build_modules() -> Vec<Module> {
+    let is_dev = env_with_default("ENVIRONMENT", Environment::Development) == Environment::Development;
+
+    let mut excluded: HashSet<&'static str> = HashSet::new();
     let mut modules: Vec<Module> = inventory::iter::<ModuleRegistration>()
-        .map(|reg| module_from_meta((reg.0)()))
+        .map(|reg| (reg.0)())
+        .filter_map(|meta| {
+            if meta.dev_only && !is_dev {
+                excluded.insert(meta.identifier);
+                None
+            } else {
+                Some(module_from_meta(meta))
+            }
+        })
         .collect();
 
     for reg in inventory::iter::<MetaRegistration>() {
         let meta = (reg.0)();
+        if excluded.contains(meta.module) {
+            continue;
+        }
         let module = find_module(&mut modules, meta.module, meta.identifier);
         let version = module.version.clone();
         module
@@ -37,11 +61,27 @@ pub fn build_modules() -> Vec<Module> {
 
     for reg in inventory::iter::<DataTypeRegistration>() {
         let meta = (reg.0)();
+        if excluded.contains(meta.module) {
+            continue;
+        }
         let module = find_module(&mut modules, meta.module, meta.identifier);
         let version = module.version.clone();
         module
             .definition_data_types
             .push(data_type_definition(&meta, version));
+    }
+
+    for reg in inventory::iter::<FlowTypeRegistration>() {
+        let meta = (reg.0)();
+        if excluded.contains(meta.module) {
+            continue;
+        }
+        let module = find_module(&mut modules, meta.module, meta.identifier);
+        let version = module.version.clone();
+        module
+            .runtime_flow_types
+            .push(runtime_flow_type_definition(&meta, version.clone()));
+        module.flow_types.push(flow_type_definition(&meta, version));
     }
 
     modules
@@ -145,6 +185,51 @@ fn function_definition(meta: &RuntimeFunctionMeta, version: String) -> FunctionD
         definition_source: String::new(),
         runtime_definition_name: meta.identifier.to_string(),
         design: None,
+    }
+}
+
+fn flow_type_definition(meta: &FlowTypeMeta, version: String) -> FlowType {
+    FlowType {
+        identifier: meta.identifier.to_string(),
+        settings: Vec::new(),
+        editable: meta.editable,
+        name: meta.name.clone(),
+        description: meta.description.clone(),
+        documentation: meta.documentation.clone(),
+        display_message: meta.display_message.clone(),
+        alias: meta.alias.clone(),
+        version,
+        display_icon: meta.display_icon.unwrap_or_default().to_string(),
+        definition_source: None,
+        linked_data_type_identifiers: meta
+            .linked_data_type_identifiers
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        signature: meta.signature.to_string(),
+        runtime_identifier: meta.identifier.to_string(),
+    }
+}
+
+fn runtime_flow_type_definition(meta: &FlowTypeMeta, version: String) -> RuntimeFlowType {
+    RuntimeFlowType {
+        identifier: meta.identifier.to_string(),
+        runtime_settings: Vec::new(),
+        editable: meta.editable,
+        name: meta.name.clone(),
+        description: meta.description.clone(),
+        documentation: meta.documentation.clone(),
+        display_message: meta.display_message.clone(),
+        alias: meta.alias.clone(),
+        version,
+        display_icon: meta.display_icon.unwrap_or_default().to_string(),
+        definition_source: None,
+        linked_data_type_identifiers: meta
+            .linked_data_type_identifiers
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        signature: meta.signature.to_string(),
     }
 }
 

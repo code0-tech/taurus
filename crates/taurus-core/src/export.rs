@@ -32,6 +32,14 @@ fn write(module: &Module, dir: &Path) -> io::Result<()> {
         &module.definition_data_types,
         |dt| &dt.identifier,
     )?;
+    write_each(&dir.join("flow_types"), &module.flow_types, |ft| {
+        &ft.identifier
+    })?;
+    write_each(
+        &dir.join("runtime_flow_types"),
+        &module.runtime_flow_types,
+        |ft| &ft.identifier,
+    )?;
     write_each(&dir.join("functions"), &module.function_definitions, |f| {
         &f.runtime_name
     })?;

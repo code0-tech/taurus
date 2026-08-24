@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 tucana = { workspace = true }
+code0-flow = { workspace = true, features = ["flow_config"] }
 base64 = { workspace = true }
 rand = { workspace = true }
 log = { workspace = true }

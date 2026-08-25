@@ -208,7 +208,7 @@ fn r#if(
     documentation(
         en_US = "Evaluates a boolean condition. If true, executes the Runnable. Otherwise executes the Else Runnable."
     ),
-    display_message(en_US = "If ${condition} is True do ${then_runnable} else ${else_runnable}"),
+    display_message(en_US = "If ${condition} is True do ${runnable} else ${else_runnable}"),
     alias(en_US = "if_else;control;std;if;else"),
     display_icon = "tabler:arrow-ramp-right",
     linked_data_type_identifiers = ["BOOLEAN", "RUNNABLE"],

@@ -33,8 +33,24 @@ use sub_flow_registry::SubFlowRegistry;
 pub type ExecutionId = uuid::Uuid;
 
 /// Number of distinct compiled flows kept warm by default; see
-/// [`ExecutionEngine::with_compiled_flow_cache_capacity`].
+/// [`ExecutionEngine::with_compiled_flow_cache_limits`].
 pub const DEFAULT_COMPILED_FLOW_CACHE_CAPACITY: usize = 512;
+
+/// Default total memory budget for the compiled-flow cache. A flow's raw
+/// protobuf size is a lower bound on its compiled footprint, not an
+/// estimate of it -- see `COMPILED_SIZE_WEIGHT_MULTIPLIER` -- so this caps
+/// *estimated* compiled bytes, not wire bytes.
+pub const DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES: usize = 256 * 1024 * 1024;
+
+/// `CompiledFlow` re-derives a graph of owned `String`s (handler ids,
+/// parameter ids, template signatures, remote service names), a `Vec` per
+/// node, a secondary `HashMap<i64, usize>` index alongside the node list,
+/// and boxed nested args for templates -- all heap allocations the raw
+/// encoded protobuf bytes don't pay for. There's no exact measurement of
+/// this in the codebase; 3x is a middle-of-the-road estimate for "many
+/// small strings and nested collections" workloads (plausible range 2-5x)
+/// used only to size the cache's byte budget conservatively.
+const COMPILED_SIZE_WEIGHT_MULTIPLIER: usize = 3;
 
 /// `(project_id, start_node_id, content_hash_of_node_functions)`.
 ///
@@ -45,19 +61,92 @@ pub const DEFAULT_COMPILED_FLOW_CACHE_CAPACITY: usize = 512;
 /// encoded bytes and therefore the key, forcing a recompile.
 type CompiledFlowCacheKey = (i64, i64, u64);
 
-fn compiled_flow_cache_key(
+/// Cache key plus an estimated in-memory weight (see
+/// `COMPILED_SIZE_WEIGHT_MULTIPLIER`), both derived from a single pass over
+/// the encoded node bytes.
+fn compiled_flow_cache_key_and_weight(
     project_id: i64,
     start_node_id: i64,
     nodes: &[NodeFunction],
-) -> CompiledFlowCacheKey {
+) -> (CompiledFlowCacheKey, usize) {
     let mut buf = Vec::new();
     for node in nodes {
         node.encode(&mut buf)
             .expect("Vec<u8> buffer writes are infallible");
     }
+    let weight_bytes = buf.len().saturating_mul(COMPILED_SIZE_WEIGHT_MULTIPLIER);
     let mut hasher = DefaultHasher::new();
     buf.hash(&mut hasher);
-    (project_id, start_node_id, hasher.finish())
+    ((project_id, start_node_id, hasher.finish()), weight_bytes)
+}
+
+#[cfg(test)]
+fn compiled_flow_cache_key(
+    project_id: i64,
+    start_node_id: i64,
+    nodes: &[NodeFunction],
+) -> CompiledFlowCacheKey {
+    compiled_flow_cache_key_and_weight(project_id, start_node_id, nodes).0
+}
+
+struct CachedCompiledFlow {
+    plan: Arc<CompiledFlow>,
+    weight_bytes: usize,
+}
+
+/// LRU cache of compiled flows, bounded by both entry count and an
+/// estimated total byte weight -- whichever limit is hit first evicts the
+/// least-recently-used entry. In-process only, not shared across replicas
+/// or persisted across restarts: a network hop would cost more than the
+/// compile it's avoiding (see `ExecutionEngine::with_compiled_flow_cache_limits`).
+struct CompiledFlowCache {
+    entries: LruCache<CompiledFlowCacheKey, CachedCompiledFlow>,
+    total_bytes: usize,
+    max_bytes: usize,
+}
+
+impl CompiledFlowCache {
+    fn new(capacity: NonZeroUsize, max_bytes: usize) -> Self {
+        Self {
+            entries: LruCache::new(capacity),
+            total_bytes: 0,
+            max_bytes,
+        }
+    }
+
+    fn get(&mut self, key: &CompiledFlowCacheKey) -> Option<Arc<CompiledFlow>> {
+        self.entries.get(key).map(|entry| Arc::clone(&entry.plan))
+    }
+
+    /// No-op if `weight_bytes` alone exceeds the whole budget -- caching a
+    /// single flow that big would just immediately evict everything else
+    /// (including itself, next insert), so it's simplest to skip caching it
+    /// and let it recompile every time instead.
+    fn insert(&mut self, key: CompiledFlowCacheKey, plan: Arc<CompiledFlow>, weight_bytes: usize) {
+        if weight_bytes > self.max_bytes {
+            return;
+        }
+        if let Some((_, evicted)) = self.entries.push(key, CachedCompiledFlow { plan, weight_bytes }) {
+            self.total_bytes -= evicted.weight_bytes;
+        }
+        self.total_bytes += weight_bytes;
+        while self.total_bytes > self.max_bytes {
+            match self.entries.pop_lru() {
+                Some((_, evicted)) => self.total_bytes -= evicted.weight_bytes,
+                None => break,
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn peek(&self, key: &CompiledFlowCacheKey) -> Option<Arc<CompiledFlow>> {
+        self.entries.peek(key).map(|entry| Arc::clone(&entry.plan))
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
 }
 
 /// Runtime engine entrypoint used by runtime binaries and CLI tools.
@@ -68,11 +157,9 @@ pub struct ExecutionEngine {
     /// the `sub_flow_execution.*` NATS subscriber (via `execute_sub_flow`,
     /// to look up and run). See `sub_flow_registry` for the full rationale.
     sub_flow_registry: SubFlowRegistry,
-    /// LRU cache of compiled flows, keyed by `compiled_flow_cache_key`.
-    /// `None` entry means the cache is disabled (capacity 0). In-process
-    /// only -- not shared across replicas or persisted across restarts,
-    /// since a network hop would cost more than the compile it's avoiding.
-    compiled_flow_cache: Mutex<Option<LruCache<CompiledFlowCacheKey, Arc<CompiledFlow>>>>,
+    /// `None` means the cache is disabled (zero entry capacity or zero byte
+    /// budget) -- every execution recompiles, matching pre-cache behavior.
+    compiled_flow_cache: Mutex<Option<CompiledFlowCache>>,
 }
 
 /// Full result of one engine execution, including per-node results for reporting.
@@ -91,20 +178,39 @@ impl Default for ExecutionEngine {
 
 impl ExecutionEngine {
     /// Build a new execution engine with default handler registry and a
-    /// compiled-flow cache holding up to [`DEFAULT_COMPILED_FLOW_CACHE_CAPACITY`]
-    /// entries.
+    /// compiled-flow cache bounded by both
+    /// [`DEFAULT_COMPILED_FLOW_CACHE_CAPACITY`] entries and
+    /// [`DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES`] estimated bytes.
     pub fn new() -> Self {
-        Self::with_compiled_flow_cache_capacity(DEFAULT_COMPILED_FLOW_CACHE_CAPACITY)
+        Self::with_compiled_flow_cache_limits(
+            DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
+            DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES,
+        )
     }
 
     /// Build a new execution engine with a compiled-flow cache bounded to
-    /// `cache_capacity` entries (LRU-evicted once full). Pass `0` to disable
-    /// the cache and recompile every execution, as before.
+    /// `cache_capacity` entries, using the default byte budget
+    /// ([`DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES`]). Pass `0` to disable the
+    /// cache and recompile every execution, as before.
     pub fn with_compiled_flow_cache_capacity(cache_capacity: usize) -> Self {
+        Self::with_compiled_flow_cache_limits(cache_capacity, DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES)
+    }
+
+    /// Build a new execution engine with a compiled-flow cache bounded by
+    /// *both* `cache_capacity` entries and `cache_max_bytes` estimated
+    /// total bytes (see `COMPILED_SIZE_WEIGHT_MULTIPLIER`) -- whichever
+    /// limit is hit first evicts the least-recently-used entry. Pass `0`
+    /// for either to disable the cache and recompile every execution.
+    pub fn with_compiled_flow_cache_limits(cache_capacity: usize, cache_max_bytes: usize) -> Self {
+        let cache = if cache_max_bytes == 0 {
+            None
+        } else {
+            NonZeroUsize::new(cache_capacity).map(|cap| CompiledFlowCache::new(cap, cache_max_bytes))
+        };
         Self {
             handlers: FunctionStore::default(),
             sub_flow_registry: SubFlowRegistry::new(),
-            compiled_flow_cache: Mutex::new(NonZeroUsize::new(cache_capacity).map(LruCache::new)),
+            compiled_flow_cache: Mutex::new(cache),
         }
     }
 
@@ -201,13 +307,14 @@ impl ExecutionEngine {
     ) -> EngineExecutionReport {
         let mut value_store = ValueStore::new(flow_input.unwrap_or_default(), with_trace);
 
-        let cache_key = compiled_flow_cache_key(project_id, start_node_id, &node_functions);
+        let (cache_key, cache_weight) =
+            compiled_flow_cache_key_and_weight(project_id, start_node_id, &node_functions);
         let cached = self
             .compiled_flow_cache
             .lock()
             .unwrap()
             .as_mut()
-            .and_then(|cache| cache.get(&cache_key).cloned());
+            .and_then(|cache| cache.get(&cache_key));
 
         // Wrapped in `Arc` here (whether freshly compiled or cloned from
         // cache), so that minting a sub-flow registry entry is a cheap
@@ -229,7 +336,7 @@ impl ExecutionEngine {
                     }
                 };
                 if let Some(cache) = self.compiled_flow_cache.lock().unwrap().as_mut() {
-                    cache.put(cache_key, Arc::clone(&plan));
+                    cache.insert(cache_key, Arc::clone(&plan), cache_weight);
                 }
                 plan
             }
@@ -1198,9 +1305,9 @@ mod tests {
         let engine = ExecutionEngine {
             handlers,
             sub_flow_registry: SubFlowRegistry::new(),
-            compiled_flow_cache: Mutex::new(NonZeroUsize::new(
-                DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
-            ).map(LruCache::new)),
+            compiled_flow_cache: Mutex::new(NonZeroUsize::new(DEFAULT_COMPILED_FLOW_CACHE_CAPACITY).map(
+                |cap| CompiledFlowCache::new(cap, DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES),
+            )),
         };
 
         let add_node = node(
@@ -1763,9 +1870,9 @@ mod tests {
         let engine = ExecutionEngine {
             handlers,
             sub_flow_registry: SubFlowRegistry::new(),
-            compiled_flow_cache: Mutex::new(NonZeroUsize::new(
-                DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
-            ).map(LruCache::new)),
+            compiled_flow_cache: Mutex::new(NonZeroUsize::new(DEFAULT_COMPILED_FLOW_CACHE_CAPACITY).map(
+                |cap| CompiledFlowCache::new(cap, DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES),
+            )),
         };
         let sleep_node = node(1, "test::sleep", vec![], None);
 
@@ -1989,7 +2096,6 @@ mod tests {
             .unwrap()
             .as_ref()
             .and_then(|cache| cache.peek(&key))
-            .cloned()
             .expect("flow should be cached after first execution");
 
         let (signal, reason) = engine.execute_graph("run-2", 1, nodes, None, None, false);
@@ -2001,7 +2107,6 @@ mod tests {
             .unwrap()
             .as_ref()
             .and_then(|cache| cache.peek(&key))
-            .cloned()
             .expect("flow should still be cached after second execution");
 
         assert!(
@@ -2062,6 +2167,104 @@ mod tests {
         assert!(
             engine.compiled_flow_cache.lock().unwrap().is_none(),
             "capacity 0 should leave the cache disabled (None), never populated"
+        );
+    }
+
+    /// A byte budget too small for every flow must evict the
+    /// least-recently-used entry, not just refuse new inserts -- proves the
+    /// cache is self-bounding by size, not only by entry count (the entry
+    /// count alone can't prevent unbounded memory growth if individual
+    /// flows are multi-MB).
+    #[test]
+    fn compiled_flow_cache_evicts_lru_entry_when_byte_budget_exceeded() {
+        fn add_node(b: i64) -> NodeFunction {
+            node(
+                1,
+                "std::number::add",
+                vec![
+                    literal_param(0, "a", int_value(1)),
+                    literal_param(0, "b", int_value(b)),
+                ],
+                None,
+            )
+        }
+
+        let flow_a = vec![add_node(2)];
+        let flow_b = vec![add_node(3)];
+        let flow_c = vec![add_node(4)];
+
+        let (key_a, weight_a) = compiled_flow_cache_key_and_weight(0, 1, &flow_a);
+        let (key_b, weight_b) = compiled_flow_cache_key_and_weight(0, 1, &flow_b);
+        let (key_c, weight_c) = compiled_flow_cache_key_and_weight(0, 1, &flow_c);
+        assert_eq!(
+            weight_a, weight_b,
+            "structurally identical flows should weigh the same"
+        );
+        assert_eq!(
+            weight_a, weight_c,
+            "structurally identical flows should weigh the same"
+        );
+
+        // Room for exactly two entries; a generous entry-count cap so only
+        // the byte budget is actually under test here.
+        let max_bytes = weight_a + weight_b;
+        let engine = ExecutionEngine::with_compiled_flow_cache_limits(100, max_bytes);
+
+        let _ = engine.execute_graph("a", 1, flow_a, None, None, false);
+        let _ = engine.execute_graph("b", 1, flow_b, None, None, false);
+        {
+            let cache = engine.compiled_flow_cache.lock().unwrap();
+            assert_eq!(cache.as_ref().unwrap().len(), 2);
+        }
+
+        // A third distinct flow pushes total weight past the budget. `a`
+        // is the least-recently-used entry (never touched since its own
+        // insert) and should be the one evicted, not `b`.
+        let _ = engine.execute_graph("c", 1, flow_c, None, None, false);
+
+        let cache = engine.compiled_flow_cache.lock().unwrap();
+        let cache = cache.as_ref().unwrap();
+        assert!(
+            cache.peek(&key_a).is_none(),
+            "least-recently-used entry should have been evicted"
+        );
+        assert!(
+            cache.peek(&key_b).is_some(),
+            "more recently used entry should survive"
+        );
+        assert!(
+            cache.peek(&key_c).is_some(),
+            "newly inserted entry should be present"
+        );
+        assert_eq!(cache.len(), 2);
+    }
+
+    /// A single flow bigger than the entire byte budget must not be cached
+    /// at all -- caching it would just evict everything else (including
+    /// itself, on the very next insert), so it's simplest to let it always
+    /// recompile instead of thrashing the cache.
+    #[test]
+    fn compiled_flow_cache_skips_a_single_flow_larger_than_the_whole_budget() {
+        let nodes = vec![node(
+            1,
+            "std::number::add",
+            vec![
+                literal_param(0, "a", int_value(1)),
+                literal_param(0, "b", int_value(2)),
+            ],
+            None,
+        )];
+        let (key, weight) = compiled_flow_cache_key_and_weight(0, 1, &nodes);
+
+        let engine = ExecutionEngine::with_compiled_flow_cache_limits(100, weight - 1);
+        let (signal, reason) = engine.execute_graph("run", 1, nodes, None, None, false);
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(expect_success(signal), int_value(3));
+
+        let cache = engine.compiled_flow_cache.lock().unwrap();
+        assert!(
+            cache.as_ref().unwrap().peek(&key).is_none(),
+            "a flow bigger than the whole budget should not be cached"
         );
     }
 }

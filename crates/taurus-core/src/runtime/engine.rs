@@ -8,9 +8,14 @@ mod executor;
 pub(crate) mod model;
 mod sub_flow_registry;
 
-use std::sync::Arc;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
 
 use futures_lite::future::block_on;
+use lru::LruCache;
+use prost::Message as _;
 use tucana::shared::value::Kind;
 use tucana::shared::{ExecutionFlow, NodeExecutionResult, NodeFunction, Value};
 
@@ -21,10 +26,39 @@ use crate::runtime::remote::RemoteRuntime;
 use crate::types::exit_reason::ExitReason;
 use crate::types::signal::Signal;
 use compiler::compile_flow;
+use model::CompiledFlow;
 use sub_flow_registry::SubFlowRegistry;
 
 /// Unique identifier for one top-level flow execution.
 pub type ExecutionId = uuid::Uuid;
+
+/// Number of distinct compiled flows kept warm by default; see
+/// [`ExecutionEngine::with_compiled_flow_cache_capacity`].
+pub const DEFAULT_COMPILED_FLOW_CACHE_CAPACITY: usize = 512;
+
+/// `(project_id, start_node_id, content_hash_of_node_functions)`.
+///
+/// `compile_flow`'s output depends only on these three inputs, so hashing
+/// the encoded `NodeFunction` bytes (rather than requiring `Hash`/`Eq` on
+/// the protobuf types, which they don't derive) gives a correctness-safe
+/// key: any edit to a node, its parameters, or the graph shape changes the
+/// encoded bytes and therefore the key, forcing a recompile.
+type CompiledFlowCacheKey = (i64, i64, u64);
+
+fn compiled_flow_cache_key(
+    project_id: i64,
+    start_node_id: i64,
+    nodes: &[NodeFunction],
+) -> CompiledFlowCacheKey {
+    let mut buf = Vec::new();
+    for node in nodes {
+        node.encode(&mut buf)
+            .expect("Vec<u8> buffer writes are infallible");
+    }
+    let mut hasher = DefaultHasher::new();
+    buf.hash(&mut hasher);
+    (project_id, start_node_id, hasher.finish())
+}
 
 /// Runtime engine entrypoint used by runtime binaries and CLI tools.
 pub struct ExecutionEngine {
@@ -34,6 +68,11 @@ pub struct ExecutionEngine {
     /// the `sub_flow_execution.*` NATS subscriber (via `execute_sub_flow`,
     /// to look up and run). See `sub_flow_registry` for the full rationale.
     sub_flow_registry: SubFlowRegistry,
+    /// LRU cache of compiled flows, keyed by `compiled_flow_cache_key`.
+    /// `None` entry means the cache is disabled (capacity 0). In-process
+    /// only -- not shared across replicas or persisted across restarts,
+    /// since a network hop would cost more than the compile it's avoiding.
+    compiled_flow_cache: Mutex<Option<LruCache<CompiledFlowCacheKey, Arc<CompiledFlow>>>>,
 }
 
 /// Full result of one engine execution, including per-node results for reporting.
@@ -51,11 +90,21 @@ impl Default for ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    /// Build a new execution engine with default handler registry.
+    /// Build a new execution engine with default handler registry and a
+    /// compiled-flow cache holding up to [`DEFAULT_COMPILED_FLOW_CACHE_CAPACITY`]
+    /// entries.
     pub fn new() -> Self {
+        Self::with_compiled_flow_cache_capacity(DEFAULT_COMPILED_FLOW_CACHE_CAPACITY)
+    }
+
+    /// Build a new execution engine with a compiled-flow cache bounded to
+    /// `cache_capacity` entries (LRU-evicted once full). Pass `0` to disable
+    /// the cache and recompile every execution, as before.
+    pub fn with_compiled_flow_cache_capacity(cache_capacity: usize) -> Self {
         Self {
             handlers: FunctionStore::default(),
             sub_flow_registry: SubFlowRegistry::new(),
+            compiled_flow_cache: Mutex::new(NonZeroUsize::new(cache_capacity).map(LruCache::new)),
         }
     }
 
@@ -152,19 +201,37 @@ impl ExecutionEngine {
     ) -> EngineExecutionReport {
         let mut value_store = ValueStore::new(flow_input.unwrap_or_default(), with_trace);
 
-        // Wrapped in `Arc` here, at the point the flow is compiled, so that
-        // minting a sub-flow registry entry is a cheap refcount bump instead
-        // of a deep clone of the node graph (see `sub_flow_registry`).
-        let compiled = match compile_flow(project_id, start_node_id, node_functions) {
-            Ok(plan) => Arc::new(plan),
-            Err(err) => {
-                let runtime_error = err.as_runtime_error();
-                let signal = Signal::Failure(runtime_error);
-                return EngineExecutionReport {
-                    signal,
-                    exit_reason: ExitReason::Failure,
-                    node_execution_results: Vec::new(),
+        let cache_key = compiled_flow_cache_key(project_id, start_node_id, &node_functions);
+        let cached = self
+            .compiled_flow_cache
+            .lock()
+            .unwrap()
+            .as_mut()
+            .and_then(|cache| cache.get(&cache_key).cloned());
+
+        // Wrapped in `Arc` here (whether freshly compiled or cloned from
+        // cache), so that minting a sub-flow registry entry is a cheap
+        // refcount bump instead of a deep clone of the node graph (see
+        // `sub_flow_registry`).
+        let compiled = match cached {
+            Some(plan) => plan,
+            None => {
+                let plan = match compile_flow(project_id, start_node_id, node_functions) {
+                    Ok(plan) => Arc::new(plan),
+                    Err(err) => {
+                        let runtime_error = err.as_runtime_error();
+                        let signal = Signal::Failure(runtime_error);
+                        return EngineExecutionReport {
+                            signal,
+                            exit_reason: ExitReason::Failure,
+                            node_execution_results: Vec::new(),
+                        };
+                    }
                 };
+                if let Some(cache) = self.compiled_flow_cache.lock().unwrap().as_mut() {
+                    cache.put(cache_key, Arc::clone(&plan));
+                }
+                plan
             }
         };
         let start_idx = compiled.start_idx;
@@ -1131,6 +1198,9 @@ mod tests {
         let engine = ExecutionEngine {
             handlers,
             sub_flow_registry: SubFlowRegistry::new(),
+            compiled_flow_cache: Mutex::new(NonZeroUsize::new(
+                DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
+            ).map(LruCache::new)),
         };
 
         let add_node = node(
@@ -1693,6 +1763,9 @@ mod tests {
         let engine = ExecutionEngine {
             handlers,
             sub_flow_registry: SubFlowRegistry::new(),
+            compiled_flow_cache: Mutex::new(NonZeroUsize::new(
+                DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
+            ).map(LruCache::new)),
         };
         let sleep_node = node(1, "test::sleep", vec![], None);
 
@@ -1883,5 +1956,112 @@ mod tests {
         );
         assert_node_result_id(&report.node_execution_results[3], 2);
         assert_node_result_id(&report.node_execution_results[4], 1);
+    }
+
+    /// Proves the compiled-flow cache actually short-circuits recompilation
+    /// (not just "still works") by asserting the second execution's cached
+    /// `Arc<CompiledFlow>` is the *same allocation* as the first, rather than
+    /// timing anything -- a wall-clock assertion here would be flaky under
+    /// CI load. Performance numbers live in `taurus-bench` (criterion),
+    /// where noise is handled statistically instead of by a hand assertion.
+    #[test]
+    fn compiled_flow_cache_reuses_arc_across_executions_of_the_same_flow() {
+        let engine = ExecutionEngine::new();
+        let add_node = node(
+            1,
+            "std::number::add",
+            vec![
+                literal_param(0, "a", int_value(1)),
+                literal_param(0, "b", int_value(2)),
+            ],
+            None,
+        );
+        let nodes = vec![add_node];
+        let key = compiled_flow_cache_key(0, 1, &nodes);
+
+        let (signal, reason) =
+            engine.execute_graph("run-1", 1, nodes.clone(), None, None, false);
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(expect_success(signal), int_value(3));
+        let first = engine
+            .compiled_flow_cache
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|cache| cache.peek(&key))
+            .cloned()
+            .expect("flow should be cached after first execution");
+
+        let (signal, reason) = engine.execute_graph("run-2", 1, nodes, None, None, false);
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(expect_success(signal), int_value(3));
+        let second = engine
+            .compiled_flow_cache
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|cache| cache.peek(&key))
+            .cloned()
+            .expect("flow should still be cached after second execution");
+
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "second execution should reuse the cached Arc<CompiledFlow>, not recompile"
+        );
+    }
+
+    /// A structurally different flow (different node id / handler) must not
+    /// collide with an unrelated cached entry.
+    #[test]
+    fn compiled_flow_cache_key_differs_for_different_flows() {
+        let nodes_a = vec![node(
+            1,
+            "std::number::add",
+            vec![
+                literal_param(0, "a", int_value(1)),
+                literal_param(0, "b", int_value(2)),
+            ],
+            None,
+        )];
+        let nodes_b = vec![node(
+            1,
+            "std::number::add",
+            vec![
+                literal_param(0, "a", int_value(1)),
+                literal_param(0, "b", int_value(99)),
+            ],
+            None,
+        )];
+
+        assert_ne!(
+            compiled_flow_cache_key(0, 1, &nodes_a),
+            compiled_flow_cache_key(0, 1, &nodes_b)
+        );
+    }
+
+    /// Capacity 0 must disable the cache: nothing is ever stored, so every
+    /// execution recompiles, matching pre-cache behavior exactly.
+    #[test]
+    fn compiled_flow_cache_capacity_zero_disables_caching() {
+        let engine = ExecutionEngine::with_compiled_flow_cache_capacity(0);
+        let nodes = vec![node(
+            1,
+            "std::number::add",
+            vec![
+                literal_param(0, "a", int_value(1)),
+                literal_param(0, "b", int_value(2)),
+            ],
+            None,
+        )];
+
+        let (signal, reason) =
+            engine.execute_graph("run-1", 1, nodes.clone(), None, None, false);
+        assert_eq!(reason, ExitReason::Success);
+        assert_eq!(expect_success(signal), int_value(3));
+
+        assert!(
+            engine.compiled_flow_cache.lock().unwrap().is_none(),
+            "capacity 0 should leave the cache disabled (None), never populated"
+        );
     }
 }

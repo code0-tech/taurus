@@ -58,6 +58,14 @@ pub struct Config {
     /// Set to 0 to disable the cache and recompile every execution.
     pub compiled_flow_cache_capacity: usize,
 
+    /// Estimated total bytes the compiled-flow cache may hold before
+    /// evicting the least-recently-used entry, independent of
+    /// `compiled_flow_cache_capacity` -- whichever limit is hit first wins.
+    /// Bounds worst-case memory when individual flows are large (nothing
+    /// in this service caps flow/message size upstream). Set to 0 to
+    /// disable the cache and recompile every execution.
+    pub compiled_flow_cache_max_bytes: usize,
+
     /// OpenTelemetry exporter configuration.
     pub opentelemetry: OpenTelemetry,
 }
@@ -99,6 +107,10 @@ impl Config {
             compiled_flow_cache_capacity: env_with_default(
                 "COMPILED_FLOW_CACHE_CAPACITY",
                 taurus_core::runtime::engine::DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
+            ),
+            compiled_flow_cache_max_bytes: env_with_default(
+                "COMPILED_FLOW_CACHE_MAX_BYTES",
+                taurus_core::runtime::engine::DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES,
             ),
             opentelemetry: OpenTelemetry {
                 enabled: env_with_default("OPENTELEMETRY_ENABLED", false),

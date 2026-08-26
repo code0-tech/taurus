@@ -75,6 +75,14 @@ impl RemoteRuntime for NATSRemoteRuntime {
                 ));
             }
         };
+        // No explicit `.flush()` here -- matches `async-nats`'s own default
+        // `Client::request()`, which enqueues the publish and starts
+        // waiting without flushing first (see `lib.rs`'s `Command::Request`
+        // handling: it calls `enqueue_write_op` only, same as an ordinary
+        // publish). The connection task's normal write cadence sends this
+        // well within any realistic `execution_result_timeout` (seconds),
+        // so the flush bought negligible correctness margin while costing
+        // a real, measured amount of latency on every remote call.
         if let Err(err) = self
             .client
             .publish_with_reply(topic, inbox, payload.into())
@@ -89,31 +97,6 @@ impl RemoteRuntime for NATSRemoteRuntime {
                 "RemoteRuntimeException",
                 "Failed to receive any response messages from a remote runtime.",
             ));
-        }
-        match tokio::time::timeout(self.execution_result_timeout, self.client.flush()).await {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => {
-                log::error!(
-                    "RemoteRuntimeException: failed to flush NATS request: {}",
-                    err
-                );
-                return Err(RuntimeError::new(
-                    "T-PROV-000001",
-                    "RemoteRuntimeException",
-                    "Failed to receive any response messages from a remote runtime.",
-                ));
-            }
-            Err(err) => {
-                log::error!(
-                    "RemoteRuntimeException: failed to flush NATS request before timeout: {}",
-                    err
-                );
-                return Err(RuntimeError::new(
-                    "T-PROV-000001",
-                    "RemoteRuntimeException",
-                    "Failed to receive any response messages from a remote runtime.",
-                ));
-            }
         }
 
         let message = match wait_for_reply(
@@ -441,5 +424,39 @@ mod tests {
             "should time out at roughly the idle window, elapsed={:?}",
             elapsed
         );
+    }
+
+    /// Guards the removal of the explicit `.flush()` that used to sit
+    /// between `publish_with_reply` and waiting for the response: an
+    /// ordinary call with no delay and no sub-flow activity must still
+    /// reliably reach the responder and get its reply back well within
+    /// the timeout, relying only on the connection task's normal write
+    /// cadence (same as `async-nats`'s own default `Client::request()`,
+    /// which never flushes either).
+    #[tokio::test]
+    #[ignore = "requires a real NATS server, see module docs"]
+    async fn ordinary_call_succeeds_without_explicit_flush() {
+        let client = test_client().await;
+        let runtime = NATSRemoteRuntime::with_execution_result_timeout(
+            client.clone(),
+            Duration::from_secs(5),
+        );
+        let execution_identifier = unique_id();
+        spawn_delayed_responder(client, "svc", &execution_identifier, Duration::ZERO).await;
+        let execution = build_execution("svc", &execution_identifier, None);
+
+        let result = runtime.execute_remote(execution).await;
+
+        match result {
+            Ok(node_result) => assert_eq!(
+                node_result.result,
+                Some(node_execution_result::Result::Success(
+                    tucana::shared::Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    }
+                ))
+            ),
+            Err(err) => panic!("expected a successful round trip, got {:?}", err),
+        }
     }
 }

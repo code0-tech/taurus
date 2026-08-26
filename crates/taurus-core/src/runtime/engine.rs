@@ -2393,4 +2393,105 @@ mod tests {
         assert_eq!(report.exit_reason, ExitReason::Success);
         assert_eq!(expect_success(report.signal), int_value(7));
     }
+
+    /// `stop` used to vanish entirely from `node_execution_results`
+    /// (`commit_result`'s `other => other` branch skipped recording any
+    /// non-Success/Failure signal). It's now recorded as `Success(null)`
+    /// -- while execution still halts exactly as before, proven here by
+    /// asserting node 2 never runs.
+    #[test]
+    fn stop_node_is_recorded_as_success_and_still_halts_execution() {
+        let engine = ExecutionEngine::new();
+        let stop_node = node(1, "std::control::stop", vec![], Some(2));
+        let unreachable_node = node(
+            2,
+            "std::control::value",
+            vec![literal_param(100, "value", int_value(99))],
+            None,
+        );
+
+        let report = engine.execute_graph_report(
+            "test",
+            1,
+            vec![stop_node, unreachable_node],
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(report.exit_reason, ExitReason::Stop);
+        assert_eq!(report.node_execution_results.len(), 1);
+        assert_eq!(
+            report.node_execution_results[0].id,
+            Some(node_execution_result::Id::NodeId(1))
+        );
+        assert_eq!(
+            report.node_execution_results[0].result,
+            Some(node_execution_result::Result::Success(Value {
+                kind: Some(Kind::NullValue(0)),
+            }))
+        );
+    }
+
+    /// Same root cause, one level up: `if`'s handler tail-returns whatever
+    /// its branch returns, so a branch calling `stop` used to make `if`'s
+    /// *own* node result vanish too (it was committing the same
+    /// unconverted `Signal::Stop`). Both `if` and `stop` must now show up.
+    #[test]
+    fn if_wrapping_stop_records_both_if_and_stop_nodes() {
+        let engine = ExecutionEngine::new();
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                thunk_param(101, "runnable", 2),
+            ],
+            Some(3),
+        );
+        let stop_node = node(2, "std::control::stop", vec![], None);
+        let unreachable_node = node(
+            3,
+            "std::control::value",
+            vec![literal_param(300, "value", int_value(99))],
+            None,
+        );
+
+        let report = engine.execute_graph_report(
+            "test",
+            1,
+            vec![if_node, stop_node, unreachable_node],
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(report.exit_reason, ExitReason::Stop);
+        let recorded_ids: Vec<_> = report
+            .node_execution_results
+            .iter()
+            .map(|result| result.id.clone())
+            .collect();
+        assert_eq!(
+            recorded_ids,
+            vec![
+                Some(node_execution_result::Id::NodeId(2)),
+                Some(node_execution_result::Id::NodeId(1)),
+            ]
+        );
+        for result in &report.node_execution_results {
+            assert_eq!(
+                result.result,
+                Some(node_execution_result::Result::Success(Value {
+                    kind: Some(Kind::NullValue(0)),
+                }))
+            );
+        }
+    }
 }

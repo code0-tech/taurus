@@ -1239,7 +1239,33 @@ impl<'a> EngineExecutor<'a> {
                 );
                 Signal::Failure(err)
             }
-            // Control signals are transient and should not be cached as node outputs.
+            // `Stop` carries no value and the `NodeExecutionResult` schema
+            // (tucana) has no dedicated variant for it, so it's recorded as
+            // a `Success(null)` -- the node still gets an entry in the
+            // report instead of silently vanishing, including every node
+            // that merely relayed a nested `Stop` upward (e.g. `if`/`if_else`
+            // wrapping a branch that called `stop`). The *returned* signal
+            // stays `Signal::Stop`, unconverted -- only the recorded value
+            // is Success-shaped; execution still halts exactly as before.
+            Signal::Stop => {
+                value_store.insert_success_with_timing(
+                    node_id,
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    },
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Stop
+            }
+            // `Return` is left transient/unrecorded for now -- scoped out
+            // of this fix. It's often converted to `Success` before
+            // reaching here (e.g. inside an eager-argument thunk, see
+            // `force_eager_args`), but a top-level node whose own handler
+            // is `std::control::return` hits this same `other` branch and
+            // would have the identical missing-entry symptom as `Stop` did.
+            // Not addressed here since it wasn't part of what was reported.
             other => other,
         }
     }
@@ -1273,6 +1299,21 @@ impl<'a> EngineExecutor<'a> {
                     finished_at,
                 );
                 Signal::Failure(err)
+            }
+            // See `commit_result` -- same rationale, recorded as
+            // `Success(null)` while still returning `Signal::Stop`
+            // unconverted so control flow halts exactly as before.
+            Signal::Stop => {
+                value_store.insert_function_success_with_timing(
+                    function_id.to_string(),
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    },
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Stop
             }
             other => other,
         }

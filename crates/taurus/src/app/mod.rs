@@ -32,7 +32,9 @@ pub async fn run() {
     let config = Config::new();
     let telemetry = init_telemetry(&config);
     install_panic_logging();
-    let engine = ExecutionEngine::new();
+    let engine = ExecutionEngine::with_compiled_flow_cache_capacity(
+        config.compiled_flow_cache_capacity,
+    );
     let client = connect_nats(&config).await;
 
     let mut health_task = spawn_health_task(&config);

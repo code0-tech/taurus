@@ -53,6 +53,11 @@ pub struct Config {
     /// as a starting point -- tune via env for your actual workload).
     pub max_concurrent_executions: usize,
 
+    /// Number of distinct compiled flows kept warm in the in-process LRU
+    /// cache, avoiding a recompile on every execution of the same flow.
+    /// Set to 0 to disable the cache and recompile every execution.
+    pub compiled_flow_cache_capacity: usize,
+
     /// OpenTelemetry exporter configuration.
     pub opentelemetry: OpenTelemetry,
 }
@@ -91,6 +96,10 @@ impl Config {
             ),
             remote_runtime_timeout_secs: env_with_default("REMOTE_RUNTIME_TIMEOUT_SECS", 30_u64),
             max_concurrent_executions,
+            compiled_flow_cache_capacity: env_with_default(
+                "COMPILED_FLOW_CACHE_CAPACITY",
+                taurus_core::runtime::engine::DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
+            ),
             opentelemetry: OpenTelemetry {
                 enabled: env_with_default("OPENTELEMETRY_ENABLED", false),
                 service_name: env_with_default(

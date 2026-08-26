@@ -217,9 +217,38 @@ criterion_group!(
     bench_chain,
     bench_array_map,
     bench_value_store_get,
-    bench_compile_vs_encode
+    bench_compile_vs_encode,
+    bench_compiled_flow_cache
 );
 criterion_main!(benches);
+
+/// Verifies the compiled-flow cache's real-world win: repeatedly executing
+/// the *same* flow (as a long-running `taurus` worker does across many NATS
+/// messages) with the cache enabled (default capacity) vs. disabled
+/// (capacity 0, i.e. today's pre-cache behavior). This is the number that
+/// should improve if the cache is doing its job -- `compile_vs_encode`
+/// above only checks that hashing is cheap relative to compiling, not that
+/// the cache actually pays off end to end.
+fn bench_compiled_flow_cache(c: &mut Criterion) {
+    let (start, nodes) = build_chain_flow(200);
+    let mut group = c.benchmark_group("compiled_flow_cache");
+
+    group.bench_function("cache_disabled/200", |b| {
+        let engine = ExecutionEngine::with_compiled_flow_cache_capacity(0);
+        b.iter(|| engine.execute_graph("bench", start, nodes.clone(), None, None, false));
+    });
+
+    group.bench_function("cache_enabled/200", |b| {
+        let engine = ExecutionEngine::with_compiled_flow_cache_capacity(
+            taurus_core::runtime::engine::DEFAULT_COMPILED_FLOW_CACHE_CAPACITY,
+        );
+        // Warm the cache before measuring steady-state cache-hit cost.
+        let _ = engine.execute_graph("warmup", start, nodes.clone(), None, None, false);
+        b.iter(|| engine.execute_graph("bench", start, nodes.clone(), None, None, false));
+    });
+
+    group.finish();
+}
 
 /// Gate-check for compiled-flow caching: is a correctness-safe cache key
 /// even cheap? `NodeFunction`/`Value` only derive `PartialEq`, not `Hash`,

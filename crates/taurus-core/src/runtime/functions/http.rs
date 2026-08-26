@@ -138,14 +138,19 @@ fn fail(category: &str, message: impl Into<String>) -> Signal {
 
 /// Runs a blocking call via `block_in_place` when inside a Tokio
 /// multi-thread runtime, so it doesn't stall a shared async worker thread;
-/// calls it directly otherwise (`taurus-tests`/`taurus-manual --offline`
-/// run the engine with no Tokio runtime at all, where `block_in_place`
-/// would panic).
+/// calls it directly otherwise. `block_in_place` panics ("can't
+/// block_in_place from a current_thread runtime") on anything other than a
+/// multi-thread runtime, so a bare `Handle::try_current().is_ok()` check
+/// isn't enough -- it only tells you *a* runtime exists, not which flavor.
+/// `taurus-tests`/`taurus-manual --offline` run the engine with no Tokio
+/// runtime at all, and a `current_thread` runtime (e.g. default-flavor
+/// `#[tokio::test]`) is possible too; both fall back to calling directly.
 fn run_blocking<R>(f: impl FnOnce() -> R) -> R {
-    if tokio::runtime::Handle::try_current().is_ok() {
-        tokio::task::block_in_place(f)
-    } else {
-        f()
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(f)
+        }
+        _ => f(),
     }
 }
 
@@ -1173,5 +1178,32 @@ mod tests {
         if let Err(err) = server.join() {
             panic!("server thread join failed: {:?}", err);
         }
+    }
+
+    #[test]
+    fn run_blocking_calls_directly_when_no_tokio_runtime_is_present() {
+        // No runtime at all -- `taurus-tests`/`taurus-manual --offline`
+        // shape. `block_in_place` would panic here; falling through to a
+        // direct call must not.
+        assert_eq!(run_blocking(|| 1 + 1), 2);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn run_blocking_calls_directly_under_a_current_thread_runtime() {
+        // Before the runtime-flavor check, this used to unconditionally
+        // take the `block_in_place` branch (since a runtime *is* present)
+        // and panic with "can't block_in_place from a current_thread
+        // runtime". It must now fall back to a direct call instead.
+        assert_eq!(run_blocking(|| 1 + 1), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn run_blocking_uses_block_in_place_under_a_multi_thread_runtime() {
+        // On a multi-thread runtime, block_in_place is used so the
+        // (potentially long) blocking call doesn't stall a shared async
+        // worker thread. block_in_place panics if called on a runtime
+        // that isn't multi-thread, so this succeeding at all is itself
+        // proof the multi-thread branch was taken, not the direct-call one.
+        assert_eq!(run_blocking(|| 1 + 1), 2);
     }
 }

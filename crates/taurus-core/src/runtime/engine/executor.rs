@@ -454,20 +454,19 @@ impl<'a> EngineExecutor<'a> {
                 );
                 NodeResult { signal, frame_id }
             }
-            NodeExecutionTarget::Remote { .. } => {
-                let started_at = now_unix_micros();
-                let signal = self.commit_result(
-                    node.id,
-                    Signal::Failure(RuntimeError::new(
-                        "T-CORE-000004",
-                        "RemoteRuntimeRequiresAsyncExecution",
-                        "Remote runtime nodes cannot be executed from a synchronous thunk callback",
-                    )),
-                    Vec::new(),
-                    started_at,
-                    now_unix_micros(),
-                    value_store,
-                );
+            NodeExecutionTarget::Remote { service } => {
+                // Branch bodies (`if`/`if_else`) and other lazy-arg
+                // callbacks re-enter the executor synchronously (see
+                // `execute_from_index_sync`), so a `Remote` node reached
+                // this way has no `.await` point to hang off of. Bridge it
+                // the same way `execute_remote_function_thunk` already
+                // bridges a local-function-thunk's remote call: block only
+                // this flow invocation's thread while the one genuine
+                // `.await` inside `execute_remote_node` (the actual remote
+                // request) completes. Safe to nest under the multi-thread
+                // runtime this service always runs under -- other worker
+                // threads keep servicing the reactor.
+                let signal = block_on(self.execute_remote_node(node, service, value_store, frame_id));
                 NodeResult { signal, frame_id }
             }
         };
@@ -1240,7 +1239,33 @@ impl<'a> EngineExecutor<'a> {
                 );
                 Signal::Failure(err)
             }
-            // Control signals are transient and should not be cached as node outputs.
+            // `Stop` carries no value and the `NodeExecutionResult` schema
+            // (tucana) has no dedicated variant for it, so it's recorded as
+            // a `Success(null)` -- the node still gets an entry in the
+            // report instead of silently vanishing, including every node
+            // that merely relayed a nested `Stop` upward (e.g. `if`/`if_else`
+            // wrapping a branch that called `stop`). The *returned* signal
+            // stays `Signal::Stop`, unconverted -- only the recorded value
+            // is Success-shaped; execution still halts exactly as before.
+            Signal::Stop => {
+                value_store.insert_success_with_timing(
+                    node_id,
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    },
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Stop
+            }
+            // `Return` is left transient/unrecorded for now -- scoped out
+            // of this fix. It's often converted to `Success` before
+            // reaching here (e.g. inside an eager-argument thunk, see
+            // `force_eager_args`), but a top-level node whose own handler
+            // is `std::control::return` hits this same `other` branch and
+            // would have the identical missing-entry symptom as `Stop` did.
+            // Not addressed here since it wasn't part of what was reported.
             other => other,
         }
     }
@@ -1274,6 +1299,21 @@ impl<'a> EngineExecutor<'a> {
                     finished_at,
                 );
                 Signal::Failure(err)
+            }
+            // See `commit_result` -- same rationale, recorded as
+            // `Success(null)` while still returning `Signal::Stop`
+            // unconverted so control flow halts exactly as before.
+            Signal::Stop => {
+                value_store.insert_function_success_with_timing(
+                    function_id.to_string(),
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    },
+                    parameter_results,
+                    started_at,
+                    finished_at,
+                );
+                Signal::Stop
             }
             other => other,
         }

@@ -26,5 +26,9 @@ jobs:
         run: cargo test -p taurus test_execution_request -- --ignored --nocapture
         env:
           NATS_URL: nats://127.0.0.1:4222
+      - name: Run NATS remote runtime tests
+        run: cargo test -p taurus-provider -- --ignored --nocapture
+        env:
+          NATS_URL: nats://127.0.0.1:4222
       - name: Run tests package flow suite
         run: cargo run --package taurus-tests

@@ -20,3 +20,5 @@ tokio = { workspace = true }
 chrono = { workspace = true }
 inventory = { workspace = true }
 taurus-macros = { workspace = true }
+lru = { workspace = true }
+prost = { workspace = true }

@@ -2267,4 +2267,130 @@ mod tests {
             "a flow bigger than the whole budget should not be cached"
         );
     }
+
+    /// `if`'s `runnable` branch re-enters the executor through the
+    /// synchronous thunk path (`execute_from_index_sync`). A `Remote`
+    /// node inside that branch used to hard-fail with
+    /// `RemoteRuntimeRequiresAsyncExecution` -- it now bridges through
+    /// `block_on`, the same pattern already used for a local
+    /// function-thunk's remote call.
+    #[test]
+    fn if_branch_can_execute_a_remote_node() {
+        let engine = ExecutionEngine::new();
+        let target_services = Arc::new(Mutex::new(Vec::new()));
+        let remote = StubRemoteRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(2)),
+                result: Some(node_execution_result::Result::Success(int_value(42))),
+            },
+            target_services: Some(Arc::clone(&target_services)),
+            project_ids: None,
+            requests: None,
+        };
+
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                thunk_param(101, "runnable", 2),
+            ],
+            None,
+        );
+        let mut remote_branch_node = node(
+            2,
+            "remote::branch_add",
+            vec![literal_param(200, "payload", int_value(1))],
+            None,
+        );
+        remote_branch_node.definition_source = Some("action.example".to_string());
+
+        let report = engine.execute_graph_report(
+            "test",
+            1,
+            vec![if_node, remote_branch_node],
+            None,
+            Some(&remote),
+            false,
+        );
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(expect_success(report.signal), int_value(42));
+        assert_eq!(
+            *target_services
+                .lock()
+                .expect("target service recorder should not be poisoned"),
+            vec!["example".to_string()]
+        );
+    }
+
+    /// Same as above but for `if_else`'s `else_runnable` branch, to prove
+    /// the fix isn't `if`-specific (both share the same sync thunk path).
+    #[test]
+    fn if_else_branch_can_execute_a_remote_node() {
+        let engine = ExecutionEngine::new();
+        let remote = StubRemoteRuntime {
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(3)),
+                result: Some(node_execution_result::Result::Success(int_value(7))),
+            },
+            target_services: None,
+            project_ids: None,
+            requests: None,
+        };
+
+        let if_else_node = node(
+            1,
+            "std::control::if_else",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(false)),
+                    },
+                ),
+                thunk_param(101, "runnable", 2),
+                thunk_param(102, "else_runnable", 3),
+            ],
+            None,
+        );
+        let then_branch_node = node(
+            2,
+            "std::control::value",
+            vec![literal_param(200, "value", int_value(999))],
+            None,
+        );
+        let mut else_branch_node = node(
+            3,
+            "remote::branch_add",
+            vec![literal_param(300, "payload", int_value(1))],
+            None,
+        );
+        else_branch_node.definition_source = Some("action.example".to_string());
+
+        let report = engine.execute_graph_report(
+            "test",
+            1,
+            vec![if_else_node, then_branch_node, else_branch_node],
+            None,
+            Some(&remote),
+            false,
+        );
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(expect_success(report.signal), int_value(7));
+    }
 }

@@ -454,20 +454,19 @@ impl<'a> EngineExecutor<'a> {
                 );
                 NodeResult { signal, frame_id }
             }
-            NodeExecutionTarget::Remote { .. } => {
-                let started_at = now_unix_micros();
-                let signal = self.commit_result(
-                    node.id,
-                    Signal::Failure(RuntimeError::new(
-                        "T-CORE-000004",
-                        "RemoteRuntimeRequiresAsyncExecution",
-                        "Remote runtime nodes cannot be executed from a synchronous thunk callback",
-                    )),
-                    Vec::new(),
-                    started_at,
-                    now_unix_micros(),
-                    value_store,
-                );
+            NodeExecutionTarget::Remote { service } => {
+                // Branch bodies (`if`/`if_else`) and other lazy-arg
+                // callbacks re-enter the executor synchronously (see
+                // `execute_from_index_sync`), so a `Remote` node reached
+                // this way has no `.await` point to hang off of. Bridge it
+                // the same way `execute_remote_function_thunk` already
+                // bridges a local-function-thunk's remote call: block only
+                // this flow invocation's thread while the one genuine
+                // `.await` inside `execute_remote_node` (the actual remote
+                // request) completes. Safe to nest under the multi-thread
+                // runtime this service always runs under -- other worker
+                // threads keep servicing the reactor.
+                let signal = block_on(self.execute_remote_node(node, service, value_store, frame_id));
                 NodeResult { signal, frame_id }
             }
         };

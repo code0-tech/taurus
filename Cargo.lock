@@ -1596,13 +1596,13 @@ dependencies = [
 
 [[package]]
 name = "lupus"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5491b06cc08e8ec80798f31c9e12892dc48cf79d7b851f30a0b4dcffa8ff4e3c"
+checksum = "d63a56c98f5a06e1d00b5ab768b62302641450d70da6fdb79573584e3f582371"
 dependencies = [
  "jsonschema",
  "serde_json",
- "tucana 0.0.81",
+ "tucana 0.0.82",
 ]
 
 [[package]]
@@ -2958,7 +2958,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

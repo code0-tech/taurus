@@ -447,9 +447,9 @@ dependencies = [
 
 [[package]]
 name = "code0-flow"
-version = "0.0.44"
+version = "0.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27a26457988a6dbf1622d66deafabd766550db3b34c406d9016ac126210c85c8"
+checksum = "93cd6b6d108b2e788c26bba0b07f1f2a52bded801e6d681cb3c8fc3cb2f3f326"
 dependencies = [
  "async-nats",
  "dotenv",
@@ -467,7 +467,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "tucana 0.0.81",
+ "tucana",
  "walkdir",
 ]
 
@@ -1602,7 +1602,7 @@ checksum = "d63a56c98f5a06e1d00b5ab768b62302641450d70da6fdb79573584e3f582371"
 dependencies = [
  "jsonschema",
  "serde_json",
- "tucana 0.0.82",
+ "tucana",
 ]
 
 [[package]]
@@ -2861,7 +2861,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana 0.0.82",
+ "tucana",
  "uuid",
 ]
 
@@ -2872,7 +2872,7 @@ dependencies = [
  "criterion",
  "prost",
  "taurus-core",
- "tucana 0.0.82",
+ "tucana",
 ]
 
 [[package]]
@@ -2894,7 +2894,7 @@ dependencies = [
  "serde_json",
  "taurus-macros",
  "tokio",
- "tucana 0.0.82",
+ "tucana",
  "ureq",
  "uuid",
 ]
@@ -2922,7 +2922,7 @@ dependencies = [
  "taurus-provider",
  "tokio",
  "tonic",
- "tucana 0.0.82",
+ "tucana",
 ]
 
 [[package]]
@@ -2936,7 +2936,7 @@ dependencies = [
  "taurus-core",
  "tokio",
  "tonic",
- "tucana 0.0.82",
+ "tucana",
 ]
 
 [[package]]
@@ -2948,7 +2948,7 @@ dependencies = [
  "log",
  "serde_json",
  "taurus-core",
- "tucana 0.0.82",
+ "tucana",
 ]
 
 [[package]]
@@ -3360,26 +3360,6 @@ checksum = "9fe58ebd5edd976e0fe0f8a14d2a04b7c81ef153ea9a54eebc42e67c2c23b4e5"
 dependencies = [
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tucana"
-version = "0.0.81"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "041738b90451ef20bb67484813d3bc4a58f396ce48cc0616821b609cc40fc335"
-dependencies = [
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost",
- "prost-build",
- "prost-types",
- "serde",
- "serde_json",
- "tonic",
- "tonic-build",
- "tonic-prost",
- "tonic-prost-build",
 ]
 
 [[package]]

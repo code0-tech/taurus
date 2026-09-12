@@ -15,6 +15,7 @@ use tucana::{
     shared::{ModuleStatus, module_status::StatusVariant},
 };
 
+use crate::auth::aquila_jwt;
 use crate::telemetry::errors;
 
 pub struct TaurusRuntimeStatusService {
@@ -51,7 +52,7 @@ impl TaurusRuntimeStatusService {
 
         for request in build_runtime_status_requests(&self.identifiers, status, timestamp) {
             let request = Request::from_parts(
-                get_authorization_metadata(&self.aquila_token),
+                get_authorization_metadata(&aquila_jwt(&self.aquila_token)),
                 Extensions::new(),
                 request,
             );

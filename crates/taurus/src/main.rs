@@ -7,6 +7,7 @@
 //! for the environment-driven `Config` every other module reads from.
 
 mod app;
+mod auth;
 mod client;
 mod config;
 mod telemetry;

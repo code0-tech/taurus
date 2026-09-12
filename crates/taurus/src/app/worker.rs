@@ -169,6 +169,16 @@ pub fn spawn_worker(
                     sub_flow_execution_closed = true;
                     log::info!("NATS worker received shutdown signal");
                 }
+                // Reclaim finished tasks as they complete. Without this arm
+                // `in_flight` only drains after the loop exits (shutdown),
+                // so every completed execution's `JoinSet` entry would sit
+                // unreclaimed for the process's entire lifetime -- memory
+                // climbing with every execution and never coming back down.
+                Some(result) = in_flight.join_next(), if !in_flight.is_empty() => {
+                    if let Err(err) = result {
+                        log::error!("In-flight execution task panicked or was cancelled: {:?}", err);
+                    }
+                }
             }
         }
 

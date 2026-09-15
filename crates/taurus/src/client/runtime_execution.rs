@@ -15,6 +15,7 @@ use tucana::{
     shared::{ExecutionResult, execution_result},
 };
 
+use crate::auth::aquila_jwt;
 use crate::telemetry::errors;
 
 // tonic clients over `Channel` are cheap to clone (the channel itself is a
@@ -55,7 +56,7 @@ impl TaurusRuntimeExecutionService {
         normalize_execution_result(&mut runtime_execution);
 
         let request = Request::from_parts(
-            get_authorization_metadata(&self.aquila_token),
+            get_authorization_metadata(&aquila_jwt(&self.aquila_token)),
             Extensions::new(),
             ExecutionRequest {
                 execution_result: Some(runtime_execution),

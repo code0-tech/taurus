@@ -14,6 +14,7 @@ use tonic::{Extensions, Request};
 use tucana::aquila::{ModuleUpdateRequest, module_service_client::ModuleServiceClient};
 use tucana::shared::Module;
 
+use crate::auth::aquila_jwt;
 use crate::config::Config;
 use crate::telemetry::errors;
 
@@ -71,7 +72,9 @@ pub async fn push_definitions_until_success(config: &Config) {
     let mut retry_count = 1;
     loop {
         let request = Request::from_parts(
-            code0_flow::flow_service::auth::get_authorization_metadata(&config.aquila_token),
+            code0_flow::flow_service::auth::get_authorization_metadata(&aquila_jwt(
+                &config.aquila_token,
+            )),
             Extensions::new(),
             ModuleUpdateRequest {
                 modules: modules.clone(),

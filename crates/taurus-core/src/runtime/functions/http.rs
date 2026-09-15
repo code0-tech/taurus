@@ -85,8 +85,8 @@ taurus_macros::data_type! {
     display_message(en_US = "HTTP Request"),
     alias(en_US = "http;request"),
     generic_keys = ["T"],
-    type_string = "{ http_method: HTTP_METHOD, url: HTTP_URL, payload: T, headers: OBJECT<{}> }",
-    linked_data_type_identifiers = ["HTTP_METHOD", "HTTP_URL", "OBJECT"],
+    type_string = "{ http_method: HTTP_METHOD, url: HTTP_URL, payload: T, headers: OBJECT<{ [key: TEXT]: TEXT }> }",
+    linked_data_type_identifiers = ["HTTP_METHOD", "HTTP_URL", "OBJECT", "TEXT"],
 }
 
 taurus_macros::data_type! {
@@ -96,8 +96,8 @@ taurus_macros::data_type! {
     display_message(en_US = "HTTP Response"),
     alias(en_US = "http;response;object"),
     generic_keys = ["T"],
-    type_string = "{ payload: T, headers: OBJECT<{}>, http_status_code: HTTP_STATUS_CODE }",
-    linked_data_type_identifiers = ["HTTP_STATUS_CODE", "OBJECT"],
+    type_string = "{ payload: T, headers: OBJECT<{ [key: TEXT]: TEXT }>, http_status_code: HTTP_STATUS_CODE }",
+    linked_data_type_identifiers = ["HTTP_STATUS_CODE", "OBJECT", "TEXT"],
 }
 
 taurus_macros::data_type! {
@@ -245,7 +245,7 @@ fn headers_from_value(value: &Value) -> Result<Struct, Signal> {
 #[taurus_macros::runtime_function(
     identifier = "http::request::send",
     module = "taurus-http",
-    signature = "<A extends HTTP_AUTH_TYPE, S extends HTTP_SCHEMA>(http_method: HTTP_METHOD, url: HTTP_URL, http_auth: A, http_auth_value: HTTP_AUTH_VALUE<A>, http_auth_place: HTTP_AUTH_PLACE<A>, http_schema: S, payload: HTTP_PAYLOAD<S>, headers?: OBJECT<{}>): HTTP_RESPONSE<any>",
+    signature = "<A extends HTTP_AUTH_TYPE, S extends HTTP_SCHEMA>(http_method: HTTP_METHOD, url: HTTP_URL, http_auth: A, http_auth_value: HTTP_AUTH_VALUE<A>, http_auth_place: HTTP_AUTH_PLACE<A>, http_schema: S, payload: HTTP_PAYLOAD<S>, headers?: OBJECT<{ [key: TEXT]: TEXT }>): HTTP_RESPONSE<any>",
     name(en_US = "Send HTTP request"),
     description(
         en_US = "Sends a request to the specified url with the given method, headers and payload, and returns the response as an HTTP_RESPONSE object. This function initiates an HTTP request to a specified endpoint, allowing you to interact with web services or APIs by sending data and receiving responses."
@@ -255,7 +255,7 @@ fn headers_from_value(value: &Value) -> Result<Struct, Signal> {
     display_icon = "tabler:world-www",
     linked_data_type_identifiers = [
         "HTTP_METHOD", "HTTP_URL", "HTTP_AUTH_TYPE", "HTTP_AUTH_VALUE", "HTTP_AUTH_PLACE",
-        "HTTP_SCHEMA", "HTTP_PAYLOAD", "OBJECT", "HTTP_RESPONSE",
+        "HTTP_SCHEMA", "HTTP_PAYLOAD", "OBJECT", "HTTP_RESPONSE", "TEXT",
     ],
     throws_error,
 )]

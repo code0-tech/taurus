@@ -35,12 +35,11 @@ taurus_macros::data_type! {
     identifier = "TYPE",
     module = "taurus-object",
     name(en_US = "Type"),
-    display_message(en_US = "Type of ${T}"),
+    display_message(en_US = "Type"),
     alias(
         en_US = "type;data type;data-type;datatype;type definition;type-definition;type-def;typedef"
     ),
-    generic_keys = ["T"],
-    type_string = "T",
+    type_string = "any",
 }
 
 #[taurus_macros::runtime_function(

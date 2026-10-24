@@ -48,21 +48,21 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [
+								"parameters": [
 									{
-										"identifier": "lhs",
-										"optional": false,
-										"hidden": false
+										"identifier": "lhs"
 									},
 									{
 										"identifier": "rhs",
-										"defaultValue": {
-											"numberValue": {
-												"integer": "2"
+										"value": {
+											"literalValue": {
+												"value": {
+													"numberValue": {
+														"integer": "2"
+													}
+												}
 											}
-										},
-										"optional": false,
-										"hidden": true
+										}
 									}
 								],
 								"function": {

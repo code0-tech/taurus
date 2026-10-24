@@ -109,3 +109,8 @@ Set `MODE=dynamic` when the IDE is required/needed.
 | `AQUILA_GRPC_CONNECT_TIMEOUT_SECS` | Timeout in seconds for establishing Aquila gRPC channels. | `2s` |
 | `AQUILA_GRPC_REQUEST_TIMEOUT_SECS` | Timeout in seconds for Aquila gRPC requests. | `10s` |
 | `REMOTE_RUNTIME_TIMEOUT_SECS` | Timeout in seconds for remote runtime NATS flush and response waits. | `30s` |
+| `EXECUTION_RESULT_SAMPLE_RATE` | Probability (`0.0`-`1.0`) that an execution reports its full result (input and node results) to Sagittarius. Test executions always report in full. | `1.0` |
+| `RUNTIME_USAGE_STREAM` | NATS JetStream work-queue stream (and subject) the runtime usage of every execution is published to. Must match Aquila's configuration. | `runtime_usage` |
+| `RUNTIME_USAGE_BATCH_SIZE` | Maximum number of runtime usages published as one NATS message. | `1000` |
+| `RUNTIME_USAGE_FLUSH_INTERVAL_MS` | Maximum time in milliseconds a runtime usage waits before its batch is published. | `1000ms` |
+| `RUNTIME_USAGE_BUFFER_CAPACITY` | Maximum number of runtime usages buffered in memory; further usages are dropped while it is full. | `100000` |

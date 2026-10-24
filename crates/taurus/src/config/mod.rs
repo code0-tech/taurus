@@ -58,6 +58,29 @@ pub struct Config {
     /// Set to 0 to disable the cache and recompile every execution.
     pub compiled_flow_cache_capacity: usize,
 
+    /// Probability (0.0..=1.0) that a flow execution's full result --
+    /// input and per-node results -- is reported to Aquila and forwarded to
+    /// Sagittarius. Every execution still reports its outcome to Aquila
+    /// (actions and test executions wait on it); executions Aquila marks as
+    /// sampled (Sagittarius test executions) always report in full.
+    pub execution_result_sample_rate: f64,
+
+    /// JetStream work-queue stream (and subject) every execution's runtime
+    /// usage is group-committed to; Aquila drains it and forwards the
+    /// usages to Sagittarius.
+    pub runtime_usage_stream: String,
+
+    /// Maximum number of runtime usages published as one NATS message.
+    pub runtime_usage_batch_size: usize,
+
+    /// Maximum time in milliseconds a recorded runtime usage waits before
+    /// its batch is published.
+    pub runtime_usage_flush_interval_ms: u64,
+
+    /// Maximum number of runtime usages buffered in memory while waiting to
+    /// be published; further usages are dropped while the buffer is full.
+    pub runtime_usage_buffer_capacity: usize,
+
     /// Estimated total bytes the compiled-flow cache may hold before
     /// evicting the least-recently-used entry, independent of
     /// `compiled_flow_cache_capacity` -- whichever limit is hit first wins.
@@ -112,6 +135,23 @@ impl Config {
                 "COMPILED_FLOW_CACHE_MAX_BYTES",
                 taurus_core::runtime::engine::DEFAULT_COMPILED_FLOW_CACHE_MAX_BYTES,
             ),
+            execution_result_sample_rate: sample_rate(env_with_default(
+                "EXECUTION_RESULT_SAMPLE_RATE",
+                1.0_f64,
+            )),
+            runtime_usage_stream: env_with_default(
+                "RUNTIME_USAGE_STREAM",
+                String::from("runtime_usage"),
+            ),
+            runtime_usage_batch_size: env_with_default("RUNTIME_USAGE_BATCH_SIZE", 1000_usize),
+            runtime_usage_flush_interval_ms: env_with_default(
+                "RUNTIME_USAGE_FLUSH_INTERVAL_MS",
+                1000_u64,
+            ),
+            runtime_usage_buffer_capacity: env_with_default(
+                "RUNTIME_USAGE_BUFFER_CAPACITY",
+                100_000_usize,
+            ),
             opentelemetry: OpenTelemetry {
                 enabled: env_with_default("OPENTELEMETRY_ENABLED", false),
                 service_name: env_with_default(
@@ -131,6 +171,16 @@ fn default_max_concurrent_executions() -> usize {
         .map(|n| n.get())
         .unwrap_or(4)
         .saturating_mul(4)
+}
+
+/// Clamps a configured sample rate into `0.0..=1.0`; anything that isn't a
+/// number falls back to reporting every result.
+fn sample_rate(rate: f64) -> f64 {
+    if rate.is_nan() {
+        1.0
+    } else {
+        rate.clamp(0.0, 1.0)
+    }
 }
 
 fn optional_env(key: &str) -> Option<String> {

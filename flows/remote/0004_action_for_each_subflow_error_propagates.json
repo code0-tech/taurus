@@ -1,21 +1,15 @@
 {
-	"name": "0013_remote_for_each_subflow",
-	"description": "This flow validates that a remotely-dispatched for_each node's SubFlow{startingNodeId} consumer is minted as a callback reference (not eagerly executed) and that each simulated action-driven execute_sub_flow call is seeded with the correct per-element InputType value, exactly the scenario that regressed with a ReferenceValueNotFound on the sub-flow's InputType lookup",
+	"name": "0004_action_for_each_subflow_error_propagates",
+	"description": "This flow validates that when one of several simulated action-driven execute_sub_flow calls fails, the failure aborts the remaining calls and propagates as the parent remote node's own failure -- exactly how a real action failing mid-loop would surface",
 	"inputs": [
 		{
 			"input": null,
-			"expected_result": null
+			"expected_result": {
+				"name": "DivisionByZero",
+				"message": "You cannot divide by zero"
+			}
 		}
 	],
-	"remote": {
-		"targetService": "websocket-action",
-		"functionIdentifier": "for_each",
-		"subFlowCalls": [
-			1,
-			2,
-			3
-		]
-	},
 	"flow": {
 		"flowId": "1",
 		"projectId": "1",
@@ -35,17 +29,12 @@
 										"values": [
 											{
 												"numberValue": {
-													"integer": "1"
+													"integer": "10"
 												}
 											},
 											{
 												"numberValue": {
-													"integer": "2"
-												}
-											},
-											{
-												"numberValue": {
-													"integer": "3"
+													"integer": "0"
 												}
 											}
 										]
@@ -59,7 +48,7 @@
 						"runtimeParameterId": "consumer",
 						"value": {
 							"subFlow": {
-								"startingNodeId": "3"
+								"startingNodeId": "2"
 							}
 						}
 					}
@@ -67,8 +56,8 @@
 				"definitionSource": "action.websocket-action"
 			},
 			{
-				"databaseId": "3",
-				"runtimeFunctionId": "std::number::add",
+				"databaseId": "2",
+				"runtimeFunctionId": "std::number::divide",
 				"parameters": [
 					{
 						"databaseId": "3",
@@ -77,7 +66,7 @@
 							"literalValue": {
 								"value": {
 									"numberValue": {
-										"integer": "1"
+										"integer": "10"
 									}
 								}
 							}
@@ -92,23 +81,6 @@
 									"nodeId": "1",
 									"parameterIndex": "1"
 								}
-							}
-						}
-					}
-				],
-				"nextNodeId": "2",
-				"definitionSource": "taurus"
-			},
-			{
-				"databaseId": "2",
-				"runtimeFunctionId": "std::number::as_text",
-				"parameters": [
-					{
-						"databaseId": "5",
-						"runtimeParameterId": "number",
-						"value": {
-							"referenceValue": {
-								"nodeId": "3"
 							}
 						}
 					}

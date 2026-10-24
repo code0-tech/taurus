@@ -2,7 +2,9 @@
 //!
 //! `taurus-manual` and `taurus-tests` both load `ValidationFlow` fixtures
 //! from JSON files and report pass/fail results in the same format; this
-//! module is the single definition of that fixture format.
+//! module is the single definition of that fixture format. Whether a case
+//! runs against simulated actions is decided by the suite directory it lives
+//! in (see `taurus-tests`), not by the fixture itself.
 
 use std::path::Path;
 
@@ -22,29 +24,6 @@ pub struct Case {
     pub description: String,
     pub inputs: Vec<Input>,
     pub flow: ValidationFlow,
-    #[serde(default)]
-    pub remote: Option<RemoteFixture>,
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoteFixture {
-    pub target_service: String,
-    pub function_identifier: String,
-    /// Only meaningful when `sub_flow_calls` is empty: the literal-valued
-    /// parameter to echo straight back as this remote call's own result
-    /// (see `0012_remote_function_subflow.json`).
-    #[serde(default)]
-    pub result_parameter: Option<String>,
-    /// Positional values to drive one `ExecutionEngine::execute_sub_flow`
-    /// call per entry against this request's `SubFlow`-valued parameter, in
-    /// order -- simulates an action invoking a minted sub-flow reference
-    /// the same number of times a real action would (e.g. once per element
-    /// for a remotely-dispatched `for_each`'s consumer callback). When
-    /// non-empty, the remote call itself resolves to `null` once every call
-    /// has run, mirroring a `void`-signature remote function.
-    #[serde(default)]
-    pub sub_flow_calls: Vec<serde_json::Value>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -91,15 +70,17 @@ fn get_test_cases(path: &str) -> Cases {
         }
     };
 
+    let mut file_paths = Vec::new();
     for entry in dir {
-        let entry = match entry {
-            Ok(it) => it,
-            Err(err) => {
-                error!("Cannot read entry: {:?}", err);
-                continue;
-            }
-        };
-        let file_path = entry.path();
+        match entry {
+            Ok(it) => file_paths.push(it.path()),
+            Err(err) => error!("Cannot read entry: {:?}", err),
+        }
+    }
+    // Run cases in file name order so output is stable between runs.
+    file_paths.sort();
+
+    for file_path in file_paths {
         items.push(match get_test_case(&file_path) {
             Some(it) => it,
             None => {

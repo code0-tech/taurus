@@ -1,5 +1,5 @@
 {
-	"name": "0014_remote_for_each_empty_list_subflow",
+	"name": "0003_action_for_each_empty_list_subflow",
 	"description": "This flow validates that a remotely-dispatched for_each over an empty list still mints and immediately resolves cleanly, with the consumer's SubFlow reference never invoked at all -- zero execute_sub_flow calls should still let the parent remote call resolve successfully",
 	"inputs": [
 		{
@@ -7,11 +7,6 @@
 			"expected_result": null
 		}
 	],
-	"remote": {
-		"targetService": "websocket-action",
-		"functionIdentifier": "for_each",
-		"subFlowCalls": []
-	},
 	"flow": {
 		"flowId": "1",
 		"projectId": "1",

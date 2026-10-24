@@ -1,0 +1,90 @@
+{
+	"name": "0006_returned_action_subflow_consumed_locally",
+	"description": "An action returns a sub flow function that itself lives on an action (remote::double). A later local map runs it per element, so every element is dispatched to that action.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": [
+				2,
+				4
+			]
+		}
+	],
+	"flow": {
+		"flowId": "19",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::sub_flow_function",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "function_identifier",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "remote::double"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "definition_source",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "action.example"
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "2",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "2"
+												}
+											}
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "201",
+						"runtimeParameterId": "transform",
+						"value": {
+							"referenceValue": {
+								"nodeId": "1"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

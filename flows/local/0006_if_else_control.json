@@ -108,7 +108,7 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [],
+								"parameters": [],
 								"startingNodeId": "19"
 							}
 						}
@@ -119,7 +119,7 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [],
+								"parameters": [],
 								"startingNodeId": "17"
 							}
 						}

@@ -7,7 +7,7 @@ use tucana::shared::{NodeFunction, node_value, sub_flow};
 use crate::{
     runtime::engine::model::{
         CompiledArg, CompiledFlow, CompiledNode, CompiledParameter, CompiledTemplate,
-        CompiledTemplateReference, CompiledThunk, NodeExecutionTarget,
+        CompiledTemplateReference, CompiledThunk, NodeExecutionTarget, SubFlowSetting,
     },
     types::errors::runtime_error::RuntimeError,
 };
@@ -247,7 +247,11 @@ fn compile_node_value(
                         function.definition_source.as_deref(),
                     )?,
                     parameter_index: parameter_index as i64,
-                    settings: sub_flow.settings.clone(),
+                    settings: sub_flow
+                        .parameters
+                        .iter()
+                        .map(SubFlowSetting::from)
+                        .collect(),
                 }))
             }
             None => Err(CompileError::SubFlowExecutionReferenceMissing {
@@ -269,17 +273,10 @@ fn execution_target_for_source(
     node_id: i64,
     definition_source: Option<&str>,
 ) -> Result<NodeExecutionTarget, CompileError> {
-    match definition_source {
-        None | Some("") | Some("taurus") => Ok(NodeExecutionTarget::Local),
-        Some(source) if source.starts_with("draco") => Ok(NodeExecutionTarget::Local),
-        Some(service) => match service.strip_prefix("action.").unwrap_or(service) {
-            "" => Err(CompileError::EmptyRemoteService {
-                node_id,
-                definition_source: service.to_string(),
-            }),
-            service => Ok(NodeExecutionTarget::Remote {
-                service: service.to_string(),
-            }),
-        },
-    }
+    NodeExecutionTarget::for_definition_source(definition_source).ok_or_else(|| {
+        CompileError::EmptyRemoteService {
+            node_id,
+            definition_source: definition_source.unwrap_or_default().to_string(),
+        }
+    })
 }

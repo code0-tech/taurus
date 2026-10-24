@@ -5,17 +5,23 @@ use std::sync::Arc;
 
 use tucana::shared::node_execution_result::{Id as TucanaNodeResultId, Result as TucanaNodeResult};
 use tucana::shared::{
-    InputType, NodeExecutionResult, NodeValueExecutionResult, ReferenceValue, Value, value::Kind,
+    InputType, NodeExecutionResult, NodeValueExecutionResult, ReferenceValue,
+    SubFlowFunctionResult, Value, node_value_execution_result, value::Kind,
 };
 
+use crate::normalize::null_value;
 use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
 use crate::types::errors::runtime_error::RuntimeError;
-use crate::value::{node_value_result_to_value, raw_value_of, raw_value_result};
+use crate::value::{raw_value_of, raw_value_result};
 
 #[derive(Clone)]
 pub enum ValueStoreResult {
     Error(RuntimeError),
     Success(Value),
+    /// The referenced node returned a sub flow function (only remote
+    /// runtimes do). It isn't a `Value`: the consumer receives it as a sub
+    /// flow and decides whether and when to run it.
+    SubFlowFunction(Arc<SubFlowFunctionResult>),
     NotFound,
 }
 
@@ -74,6 +80,11 @@ impl ValueStore {
             return result;
         }
 
+        if let ValueStoreResult::SubFlowFunction(_) = result {
+            // A function has no fields or items to address.
+            return ValueStoreResult::NotFound;
+        }
+
         if let ValueStoreResult::Success(value) = result {
             let mut current = value;
             for path in &reference.paths {
@@ -114,9 +125,15 @@ impl ValueStore {
     fn get_result(&mut self, id: i64) -> ValueStoreResult {
         match self.latest_results.get(&id) {
             Some(result) => match &result.result {
-                Some(TucanaNodeResult::Success(value)) => match node_value_result_to_value(value) {
-                    Ok(value) => ValueStoreResult::Success(value),
-                    Err(err) => ValueStoreResult::Error(err),
+                Some(TucanaNodeResult::Success(value)) => match &value.value {
+                    Some(node_value_execution_result::Value::RawValue(value)) => {
+                        ValueStoreResult::Success(value.clone())
+                    }
+                    Some(node_value_execution_result::Value::SubFlowFunctionResult(function)) => {
+                        ValueStoreResult::SubFlowFunction(Arc::new(function.clone()))
+                    }
+                    // An unset value reads as null, like any unset proto3 field.
+                    None => ValueStoreResult::Success(null_value()),
                 },
                 Some(TucanaNodeResult::Error(error)) => {
                     ValueStoreResult::Error(RuntimeError::from_tucana_error(error))
@@ -143,6 +160,23 @@ impl ValueStore {
             Some(value) => ValueStoreResult::Success(value.clone()),
             None => ValueStoreResult::NotFound,
         }
+    }
+
+    /// Every input seeded for `parameter_index` of `node_id`, in positional
+    /// order up to the first gap -- the arguments a sub flow function
+    /// without declared parameters is called with.
+    pub fn positional_inputs(&self, node_id: i64, parameter_index: i64) -> Vec<Value> {
+        (0..)
+            .map_while(|input_index| {
+                self.input_types
+                    .get(&InputType {
+                        node_id,
+                        parameter_index,
+                        input_index,
+                    })
+                    .cloned()
+            })
+            .collect()
     }
 
     pub fn clear_input_type(&mut self, input_type: InputType) {
@@ -329,5 +363,95 @@ fn preview_value(value: &Value) -> String {
             }
             format!("{{{}}}", parts.join(", "))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tucana::shared::reference_value::Target;
+    use tucana::shared::{ReferencePath, SubFlowFunction};
+
+    fn store_with_returned_function(node_id: i64) -> ValueStore {
+        let mut store = ValueStore::new(null_value(), false);
+        store.insert_node_result(
+            node_id,
+            NodeExecutionResult {
+                result: Some(TucanaNodeResult::Success(NodeValueExecutionResult {
+                    value: Some(node_value_execution_result::Value::SubFlowFunctionResult(
+                        SubFlowFunctionResult {
+                            function: Some(SubFlowFunction {
+                                function_identifier: "remote::handler".to_string(),
+                                definition_source: Some("action.example".to_string()),
+                            }),
+                            ..Default::default()
+                        },
+                    )),
+                })),
+                ..Default::default()
+            },
+        );
+        store
+    }
+
+    fn node_reference(node_id: i64, paths: Vec<ReferencePath>) -> ReferenceValue {
+        ReferenceValue {
+            target: Some(Target::NodeId(node_id)),
+            paths,
+        }
+    }
+
+    #[test]
+    fn returned_sub_flow_function_resolves_as_sub_flow() {
+        let mut store = store_with_returned_function(1);
+
+        match store.get(&node_reference(1, Vec::new())) {
+            ValueStoreResult::SubFlowFunction(function) => assert_eq!(
+                function
+                    .function
+                    .as_ref()
+                    .map(|function| function.function_identifier.as_str()),
+                Some("remote::handler")
+            ),
+            _ => panic!("expected the returned sub flow function"),
+        }
+    }
+
+    #[test]
+    fn path_into_returned_sub_flow_function_is_not_found() {
+        let mut store = store_with_returned_function(1);
+        let path = ReferencePath {
+            path: Some("field".to_string()),
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            store.get(&node_reference(1, vec![path])),
+            ValueStoreResult::NotFound
+        ));
+    }
+
+    #[test]
+    fn positional_inputs_stop_at_the_first_gap() {
+        let mut store = ValueStore::new(null_value(), false);
+        for input_index in [0, 1, 3] {
+            store.insert_input_type(
+                InputType {
+                    node_id: 5,
+                    parameter_index: 1,
+                    input_index,
+                },
+                crate::value::value_from_i64(input_index),
+            );
+        }
+
+        assert_eq!(
+            store.positional_inputs(5, 1),
+            vec![
+                crate::value::value_from_i64(0),
+                crate::value::value_from_i64(1)
+            ]
+        );
+        assert!(store.positional_inputs(5, 2).is_empty());
     }
 }

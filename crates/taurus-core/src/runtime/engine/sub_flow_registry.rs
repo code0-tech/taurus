@@ -1,4 +1,5 @@
-//! Registry of pending sub-flow node ranges.
+//! Registry of pending sub-flow node ranges -- and of sub flow functions a
+//! remote runtime returned and Taurus handed on to another remote node.
 //!
 //! `execute_compiled` holds `EngineExecutor`/`&mut ValueStore` borrowed for
 //! the entire span a remote node call is outstanding (parked on one
@@ -18,18 +19,29 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
 
+use crate::handler::argument::FunctionThunk;
 use crate::runtime::engine::model::CompiledFlow;
 
-/// Everything needed to run one sub-flow node range standalone.
+/// What a pending sub flow runs when the action invokes it.
+#[derive(Clone)]
+pub enum PendingSubFlowTarget {
+    /// A node range of `PendingSubFlow::flow`, starting at this index of
+    /// `flow.nodes`.
+    NodeRange { start_idx: usize },
+    /// A sub flow function a remote runtime returned as a node result, run
+    /// with the inputs the action passes in.
+    Function(FunctionThunk),
+}
+
+/// Everything needed to run one sub-flow standalone.
 #[derive(Clone)]
 pub struct PendingSubFlow {
-    /// The compiled flow the referenced node range lives in. `CompiledFlow`
-    /// is cheap to clone structurally, but it's wrapped in `Arc` at compile
-    /// time (see `runtime/engine.rs`) so minting never deep-clones the node
-    /// graph.
+    /// The compiled flow the sub-flow was minted from (the referenced node
+    /// range lives in it). `CompiledFlow` is cheap to clone structurally,
+    /// but it's wrapped in `Arc` at compile time (see `runtime/engine.rs`)
+    /// so minting never deep-clones the node graph.
     pub flow: Arc<CompiledFlow>,
-    /// Index of the sub-flow's entry node within `flow.nodes`.
-    pub start_idx: usize,
+    pub target: PendingSubFlowTarget,
     /// The *parent* flow execution's id -- reused as the `execution_identifier`
     /// for any remote call the sub-flow itself makes, and as the key for the
     /// idle-timeout activity marker (see `activity` below).
@@ -81,20 +93,44 @@ impl SubFlowRegistry {
         caller_parameter_index: i64,
     ) -> Option<String> {
         let start_idx = *flow.node_idx_by_id.get(&node_id)?;
-        let id = uuid::Uuid::new_v4().to_string();
-        let pending = PendingSubFlow {
+        Some(self.insert(PendingSubFlow {
             flow: Arc::clone(flow),
-            start_idx,
+            target: PendingSubFlowTarget::NodeRange { start_idx },
             parent_execution_id: parent_execution_id.to_string(),
             activity,
             caller_node_id,
             caller_parameter_index,
-        };
+        }))
+    }
+
+    /// Mint a fresh execution id for a returned sub flow function handed on
+    /// to a remote node, and register it.
+    pub fn mint_function(
+        &self,
+        flow: &Arc<CompiledFlow>,
+        function: FunctionThunk,
+        parent_execution_id: &str,
+        activity: Arc<Notify>,
+        caller_node_id: i64,
+        caller_parameter_index: i64,
+    ) -> String {
+        self.insert(PendingSubFlow {
+            flow: Arc::clone(flow),
+            target: PendingSubFlowTarget::Function(function),
+            parent_execution_id: parent_execution_id.to_string(),
+            activity,
+            caller_node_id,
+            caller_parameter_index,
+        })
+    }
+
+    fn insert(&self, pending: PendingSubFlow) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
         self.entries
             .lock()
             .expect("sub flow registry mutex should not be poisoned")
             .insert(id.clone(), pending);
-        Some(id)
+        id
     }
 
     /// Look up a pending sub-flow without removing it -- the same id can be
@@ -161,7 +197,10 @@ mod tests {
             .expect("node 7 exists in flow");
 
         let pending = registry.get(&id).expect("entry should exist after mint");
-        assert_eq!(pending.start_idx, 0);
+        assert!(matches!(
+            pending.target,
+            PendingSubFlowTarget::NodeRange { start_idx: 0 }
+        ));
         assert_eq!(pending.parent_execution_id, "parent-1");
         assert_eq!(pending.caller_node_id, 3);
         assert_eq!(pending.caller_parameter_index, 5);
@@ -215,5 +254,36 @@ mod tests {
         for id in &ids {
             assert!(registry.get(id).is_some());
         }
+    }
+
+    #[test]
+    fn mint_function_registers_the_returned_function() {
+        let registry = SubFlowRegistry::new();
+        let flow = flow_with_node(7);
+        let activity = Arc::new(Notify::new());
+        let function = FunctionThunk {
+            identifier: "remote::handler".to_string(),
+            execution_target: crate::runtime::engine::model::NodeExecutionTarget::Remote {
+                service: "example".to_string(),
+            },
+            parameter_index: 5,
+            settings: Vec::new(),
+            sub_flow_function: None,
+        };
+
+        let id = registry.mint_function(&flow, function, "parent-1", activity, 3, 5);
+
+        let pending = registry.get(&id).expect("entry should exist after mint");
+        match pending.target {
+            PendingSubFlowTarget::Function(function) => {
+                assert_eq!(function.identifier, "remote::handler");
+            }
+            PendingSubFlowTarget::NodeRange { .. } => panic!("expected a function target"),
+        }
+        assert_eq!(pending.caller_node_id, 3);
+        assert_eq!(pending.caller_parameter_index, 5);
+
+        registry.remove(&id);
+        assert!(registry.get(&id).is_none());
     }
 }

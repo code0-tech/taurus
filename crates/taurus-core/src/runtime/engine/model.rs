@@ -48,6 +48,25 @@ pub enum NodeExecutionTarget {
     Remote { service: String },
 }
 
+impl NodeExecutionTarget {
+    /// Resolves where a function with the given `definition_source` runs:
+    /// Taurus' own and Draco's functions locally, everything else on the
+    /// action named by the source (`action.<service>` or `<service>`).
+    /// Returns `None` for a source that names no service at all.
+    pub fn for_definition_source(definition_source: Option<&str>) -> Option<Self> {
+        match definition_source {
+            None | Some("") | Some("taurus") => Some(Self::Local),
+            Some(source) if source.starts_with("draco") => Some(Self::Local),
+            Some(source) => match source.strip_prefix("action.").unwrap_or(source) {
+                "" => None,
+                service => Some(Self::Remote {
+                    service: service.to_string(),
+                }),
+            },
+        }
+    }
+}
+
 /// Argument expression compiled from proto node parameter values.
 #[derive(Debug, Clone)]
 pub enum CompiledArg {

@@ -788,7 +788,7 @@ mod tests {
     #[test]
     fn build_execution_result_preserves_success_payload() {
         let execution_id = ExecutionId::new_v4();
-        let fixture = load_fixture("flows/0003_for_each.json");
+        let fixture = load_fixture("flows/local/0003_for_each.json");
         let expected_result = fixture.inputs[0].expected_result.clone();
         let flow = execution_flow_from_fixture(fixture);
         let success = from_json_value(expected_result.clone());
@@ -842,7 +842,7 @@ mod tests {
     #[tokio::test]
     async fn execute_flow_reports_microsecond_timestamps_and_duration() {
         let execution_id = ExecutionId::new_v4();
-        let fixture = load_fixture("flows/0003_for_each.json");
+        let fixture = load_fixture("flows/local/0003_for_each.json");
         let flow = execution_flow_from_fixture(fixture);
         let engine = ExecutionEngine::new();
 

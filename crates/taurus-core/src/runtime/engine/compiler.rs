@@ -273,17 +273,10 @@ fn execution_target_for_source(
     node_id: i64,
     definition_source: Option<&str>,
 ) -> Result<NodeExecutionTarget, CompileError> {
-    match definition_source {
-        None | Some("") | Some("taurus") => Ok(NodeExecutionTarget::Local),
-        Some(source) if source.starts_with("draco") => Ok(NodeExecutionTarget::Local),
-        Some(service) => match service.strip_prefix("action.").unwrap_or(service) {
-            "" => Err(CompileError::EmptyRemoteService {
-                node_id,
-                definition_source: service.to_string(),
-            }),
-            service => Ok(NodeExecutionTarget::Remote {
-                service: service.to_string(),
-            }),
-        },
-    }
+    NodeExecutionTarget::for_definition_source(definition_source).ok_or_else(|| {
+        CompileError::EmptyRemoteService {
+            node_id,
+            definition_source: definition_source.unwrap_or_default().to_string(),
+        }
+    })
 }

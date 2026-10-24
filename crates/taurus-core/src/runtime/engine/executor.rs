@@ -20,7 +20,7 @@ use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
 use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
-use crate::value::{node_value_result_to_value, raw_value_result};
+use crate::value::{node_value_result_to_value, raw_value_of, raw_value_result};
 use futures_lite::future::block_on;
 use tokio::sync::Notify;
 use tucana::aquila::{
@@ -32,7 +32,8 @@ use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{
     InputType, ListValue, NodeExecutionResult as TucanaNodeExecutionResult,
-    NodeValueExecutionResult, ReferenceValue, Struct, Value,
+    NodeValueExecutionResult, ReferenceValue, Struct, SubFlowFunctionResult, Value,
+    node_value_execution_result,
 };
 
 /// Executes a compiled flow plan starting at `start_idx` -- used both by a
@@ -62,6 +63,37 @@ pub async fn execute_compiled_from(
     };
 
     let result = executor.execute_from_index(start_idx, value_store).await;
+    let trace = tracer.and_then(|collector| collector.into_inner().ok()?.take_run());
+    (result.signal, trace)
+}
+
+/// Runs a sub flow function standalone -- the `sub_flow_execution.*`
+/// counterpart of [`execute_compiled_from`] for a function a remote runtime
+/// returned and Taurus handed on to an action, which now invokes it. The
+/// function reads its arguments from the input slots `value_store` was
+/// seeded with for its caller.
+#[allow(clippy::too_many_arguments)]
+pub fn execute_function_standalone(
+    execution_id: &str,
+    flow: &Arc<CompiledFlow>,
+    function: &FunctionThunk,
+    handlers: &FunctionStore,
+    value_store: &mut ValueStore,
+    remote: Option<&dyn RemoteRuntime>,
+    with_trace: bool,
+    sub_flow_registry: SubFlowRegistry,
+) -> (Signal, Option<TraceRun>) {
+    let tracer = with_trace.then(Mutex::default);
+    let executor = EngineExecutor {
+        execution_id,
+        flow: Arc::clone(flow),
+        handlers,
+        remote,
+        tracer: tracer.as_ref(),
+        sub_flow_registry,
+    };
+
+    let result = executor.execute_function_thunk(function, value_store);
     let trace = tracer.and_then(|collector| collector.into_inner().ok()?.take_run());
     (result.signal, trace)
 }
@@ -716,6 +748,27 @@ impl<'a> EngineExecutor<'a> {
                         );
                         args.push(Argument::Eval(value));
                     }
+                    ValueStoreResult::SubFlowFunction(function) => {
+                        let thunk = returned_function_thunk(function, index)?;
+                        let target = thunk.trace_target();
+                        self.trace_record_arg(
+                            frame_id,
+                            ArgTrace {
+                                index,
+                                kind: ArgKind::Thunk {
+                                    target: target.clone(),
+                                    eager: false,
+                                    executed: false,
+                                },
+                                preview: format!(
+                                    "store.get({}) -> sub_flow({})",
+                                    preview_reference(reference),
+                                    target
+                                ),
+                            },
+                        );
+                        args.push(Argument::Thunk(thunk));
+                    }
                     ValueStoreResult::Error(err) => {
                         self.trace_record_arg(
                             frame_id,
@@ -801,7 +854,8 @@ impl<'a> EngineExecutor<'a> {
                     args.push(Argument::Thunk(thunk));
                 }
                 CompiledArg::Template(template) => {
-                    let argument = self.compiled_arg_to_argument(&parameter.arg, value_store)?;
+                    let argument =
+                        self.compiled_arg_to_argument(&parameter.arg, index, value_store)?;
                     self.trace_record_arg(
                         frame_id,
                         ArgTrace {
@@ -826,8 +880,28 @@ impl<'a> EngineExecutor<'a> {
         value_store: &mut ValueStore,
         frame_id: Option<u64>,
     ) -> Result<Vec<Argument>, RuntimeError> {
-        let mut args = Vec::with_capacity(function.settings.len());
         let current_node_id = value_store.get_current_node_id();
+
+        // A returned sub flow function declares no parameters: it is called
+        // with exactly the positional inputs its caller seeded.
+        if function.sub_flow_function.is_some() {
+            let inputs = value_store.positional_inputs(current_node_id, function.parameter_index);
+            let mut args = Vec::with_capacity(inputs.len());
+            for (index, value) in inputs.into_iter().enumerate() {
+                self.trace_record_arg(
+                    frame_id,
+                    ArgTrace {
+                        index,
+                        kind: ArgKind::Literal,
+                        preview: format!("input({}) -> {}", index, preview_value(&value)),
+                    },
+                );
+                args.push(Argument::Eval(value));
+            }
+            return Ok(args);
+        }
+
+        let mut args = Vec::with_capacity(function.settings.len());
 
         for (index, setting) in function.settings.iter().enumerate() {
             let input_type = InputType {
@@ -858,15 +932,21 @@ impl<'a> EngineExecutor<'a> {
     /// recursing into `CompiledTemplate` references. Unlike `build_args`
     /// this performs no tracing -- it's used both for the top-level
     /// `CompiledArg::Template` case and for each nested reference inside it.
+    /// `parameter_index` is the position of the node parameter `arg` belongs
+    /// to, which a referenced sub flow function's inputs are addressed by.
     fn compiled_arg_to_argument(
         &self,
         arg: &CompiledArg,
+        parameter_index: usize,
         value_store: &mut ValueStore,
     ) -> Result<Argument, RuntimeError> {
         match arg {
             CompiledArg::Literal(value) => Ok(Argument::Eval(value.clone())),
             CompiledArg::Reference(reference) => match value_store.get(reference) {
                 ValueStoreResult::Success(value) => Ok(Argument::Eval(value)),
+                ValueStoreResult::SubFlowFunction(function) => Ok(Argument::Thunk(
+                    returned_function_thunk(function, parameter_index)?,
+                )),
                 ValueStoreResult::Error(err) => Err(err),
                 ValueStoreResult::NotFound => Err(RuntimeError::new(
                     "T-CORE-000004",
@@ -878,7 +958,11 @@ impl<'a> EngineExecutor<'a> {
             CompiledArg::Template(template) => {
                 let mut references = Vec::with_capacity(template.references.len());
                 for reference in &template.references {
-                    let arg = self.compiled_arg_to_argument(&reference.arg, value_store)?;
+                    let arg = self.compiled_arg_to_argument(
+                        &reference.arg,
+                        parameter_index,
+                        value_store,
+                    )?;
                     references.push(TemplateReferenceArgument {
                         signature: reference.signature.clone(),
                         arg: Box::new(arg),
@@ -1079,6 +1163,7 @@ impl<'a> EngineExecutor<'a> {
                             execution_identifier: id,
                             input_schema: input_schema.clone(),
                             output_schema: output_schema.clone(),
+                            sub_flow_function: None,
                         })
                     }
                     None => Err(Signal::Failure(RuntimeError::new(
@@ -1088,10 +1173,32 @@ impl<'a> EngineExecutor<'a> {
                     ))),
                 }
             }
+            // A sub flow function a remote runtime returned is handed on
+            // as-is, exactly like a node range above: the receiving action
+            // may be a consumer (e.g. a handler) that runs it zero, one or
+            // many times, so it is never run on the action's behalf here.
+            Argument::Thunk(Thunk::Function(function)) if function.sub_flow_function.is_some() => {
+                let returned = function.sub_flow_function.clone();
+                let id = self.sub_flow_registry.mint_function(
+                    &self.flow,
+                    function.clone(),
+                    self.execution_id,
+                    Arc::clone(activity),
+                    value_store.get_current_node_id(),
+                    index as i64,
+                );
+                minted_ids.push(id.clone());
+                Ok(RemoteParam::SubFlow {
+                    execution_identifier: id,
+                    input_schema: returned.as_ref().and_then(|f| f.input_schema.clone()),
+                    output_schema: returned.as_ref().and_then(|f| f.output_schema.clone()),
+                    sub_flow_function: returned,
+                })
+            }
             Argument::Thunk(thunk @ Thunk::Function(_)) => {
                 // Remote execution always receives materialized values for
-                // function-thunk args -- this mirrors the pre-existing
-                // eager-resolution behavior unchanged.
+                // function-thunk args compiled from the flow -- this mirrors
+                // the pre-existing eager-resolution behavior unchanged.
                 self.trace_mark_thunk(frame_id, index, true, true);
                 let child = self.execute_thunk(thunk, value_store);
                 if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
@@ -1174,7 +1281,9 @@ impl<'a> EngineExecutor<'a> {
         function: &FunctionThunk,
         args: &[Argument],
     ) -> Result<ActionExecutionRequest, RuntimeError> {
-        if function.settings.len() != args.len() {
+        // A returned sub flow function declares no parameters and forwards
+        // whatever its caller passed (see `build_function_thunk_args`).
+        if function.sub_flow_function.is_none() && function.settings.len() != args.len() {
             return Err(RuntimeError::new(
                 "T-CORE-000005",
                 "RemoteParameterMismatch",
@@ -1333,22 +1442,16 @@ impl<'a> EngineExecutor<'a> {
             result.parameter_results = parameter_results;
         }
         match result.result.clone() {
-            Some(TucanaNodeResult::Success(value)) => match node_value_result_to_value(&value) {
-                Ok(value) => {
-                    value_store.insert_node_result(node_id, result);
-                    Signal::Success(value)
-                }
-                Err(runtime_error) => {
-                    value_store.insert_error_with_timing(
-                        node_id,
-                        runtime_error.clone(),
-                        result.parameter_results,
-                        started_at,
-                        finished_at,
-                    );
-                    Signal::Failure(runtime_error)
-                }
-            },
+            Some(TucanaNodeResult::Success(value)) => {
+                // A returned sub flow function stays in the store as-is, so a
+                // later node referencing it receives it as a sub flow (see
+                // `ValueStore::get`) and decides itself whether to run it.
+                // The node's own signal carries null, since a function isn't
+                // a `Value`.
+                let signal_value = raw_value_of(&value).cloned().unwrap_or_else(null_value);
+                value_store.insert_node_result(node_id, result);
+                Signal::Success(signal_value)
+            }
             Some(TucanaNodeResult::Error(error)) => {
                 value_store.insert_node_result(node_id, result);
                 Signal::Failure(RuntimeError::from_tucana_error(&error))
@@ -1462,11 +1565,61 @@ fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeValueExecutionResul
     args.iter()
         .map(|arg| match arg {
             Argument::Eval(value) => raw_value_result(value.clone()),
+            Argument::Thunk(Thunk::Function(FunctionThunk {
+                sub_flow_function: Some(function),
+                ..
+            })) => sub_flow_function_value_result(function),
             // A template not yet collapsed to `Eval` (remote path) has
             // no single materialized value, same as an unresolved thunk.
             Argument::Thunk(_) | Argument::Template(_) => NodeValueExecutionResult::default(),
         })
         .collect()
+}
+
+/// Reports a returned sub flow function passed on as a parameter, so the
+/// execution result shows which function the node received.
+fn sub_flow_function_value_result(function: &SubFlowFunctionResult) -> NodeValueExecutionResult {
+    NodeValueExecutionResult {
+        value: Some(node_value_execution_result::Value::SubFlowFunctionResult(
+            function.clone(),
+        )),
+    }
+}
+
+/// Turns a sub flow function a remote runtime returned as a node result into
+/// a function thunk for the consuming node's parameter at `parameter_index`.
+/// Nothing runs here -- the consumer decides whether and when to call it.
+fn returned_function_thunk(
+    function: Arc<SubFlowFunctionResult>,
+    parameter_index: usize,
+) -> Result<Thunk, RuntimeError> {
+    let Some(reference) = function.function.as_ref() else {
+        return Err(RuntimeError::new(
+            "T-CORE-000008",
+            "SubFlowFunctionResultInvalid",
+            "Returned sub flow function does not name the function to execute",
+        ));
+    };
+    let Some(execution_target) =
+        NodeExecutionTarget::for_definition_source(reference.definition_source.as_deref())
+    else {
+        return Err(RuntimeError::new(
+            "T-CORE-000008",
+            "SubFlowFunctionResultInvalid",
+            format!(
+                "Returned sub flow function {} has a definition source without a service",
+                reference.function_identifier
+            ),
+        ));
+    };
+
+    Ok(Thunk::Function(FunctionThunk {
+        identifier: reference.function_identifier.clone(),
+        execution_target,
+        parameter_index: parameter_index as i64,
+        settings: Vec::new(),
+        sub_flow_function: Some(function),
+    }))
 }
 
 /// One resolved remote-call parameter slot: a materialized literal value, a
@@ -1479,6 +1632,9 @@ enum RemoteParam {
         execution_identifier: String,
         input_schema: Option<Struct>,
         output_schema: Option<Struct>,
+        /// The returned sub flow function this reference was minted for,
+        /// if any -- reported in the node's parameter results.
+        sub_flow_function: Option<Arc<SubFlowFunctionResult>>,
     },
     Template {
         value: Value,
@@ -1496,6 +1652,7 @@ fn remote_param_to_action_value(param: RemoteParam) -> action_node_value::Value 
             execution_identifier,
             input_schema,
             output_schema,
+            ..
         } => action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
             execution_identifier,
             input_schema,
@@ -1524,6 +1681,10 @@ fn parameter_results_from_remote_params(params: &[RemoteParam]) -> Vec<NodeValue
         .iter()
         .map(|param| match param {
             RemoteParam::Literal(value) => raw_value_result(value.clone()),
+            RemoteParam::SubFlow {
+                sub_flow_function: Some(function),
+                ..
+            } => sub_flow_function_value_result(function),
             // No literal value was materialized for a minted sub-flow
             // reference or an unresolved template -- same convention as
             // an unresolved `Argument::Thunk` in `parameter_results_from_args`.
@@ -1555,6 +1716,7 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             execution_target: execution_target.clone(),
             parameter_index: *parameter_index,
             settings: settings.clone(),
+            sub_flow_function: None,
         }),
     }
 }
@@ -1598,7 +1760,9 @@ fn resolve_function_setting(
             }
         }
         ValueStoreResult::Error(err) => Err(err),
-        ValueStoreResult::NotFound => {
+        // Input slots only ever hold values, so a sub flow function can't be
+        // found here; treat it like a missing input.
+        ValueStoreResult::NotFound | ValueStoreResult::SubFlowFunction(_) => {
             if let Some(default_value) = setting.default_value.clone() {
                 Ok(default_value)
             } else {

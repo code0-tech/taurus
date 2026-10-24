@@ -55,11 +55,9 @@
 						"value": {
 							"subFlow": {
 								"signature": "(value: NUMBER): NUMBER",
-								"settings": [
+								"parameters": [
 									{
-										"identifier": "value",
-										"optional": false,
-										"hidden": false
+										"identifier": "value"
 									}
 								],
 								"function": {

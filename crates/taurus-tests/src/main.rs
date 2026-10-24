@@ -1,171 +1,49 @@
-//! Batch fixture runner: loads every `ValidationFlow` fixture under `./flows/`
-//! (see `taurus_core::fixtures`), runs each through `ExecutionEngine::execute_graph`
-//! directly (no NATS involved), and logs a pass/fail line per case. Not wired
-//! into `cargo test`; run explicitly via `cargo run --package taurus-tests`.
+//! Batch fixture runner: runs every `ValidationFlow` fixture of two suites
+//! (see `taurus_core::fixtures`) through `ExecutionEngine::execute_graph`
+//! directly (no NATS involved) and logs a pass/fail line per case:
+//!
+//! - `flows/local/`: flows that never leave Taurus. They run without a remote
+//!   runtime, so a flow that tries to call an action fails as it would
+//!   without one configured.
+//! - `flows/remote/`: flows that call actions. They run against
+//!   [`SimulatedActions`], an in-process stand-in for a few action functions.
+//!
+//! Not wired into `cargo test`; run explicitly via
+//! `cargo run --package taurus-tests [-- local|remote]`. Exits non-zero if
+//! any case fails, so CI catches regressions.
+
+mod simulated_actions;
 
 use serde_json::json;
-use taurus_core::fixtures::{Case, Cases, Input, RemoteFixture, print_failure, print_success};
+use taurus_core::fixtures::{Case, Cases, Input, print_failure, print_success};
 use taurus_core::runtime::engine::ExecutionEngine;
-use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
-use taurus_core::types::errors::runtime_error::RuntimeError;
+use taurus_core::runtime::remote::RemoteRuntime;
 use taurus_core::types::signal::Signal;
-use taurus_core::value::raw_value_result;
-use tucana::aquila::{ActionNodeSubFlowValue, action_node_value};
-use tucana::shared::node_execution_result::{
-    Id as NodeExecutionResultId, Result as NodeExecutionOutcome,
-};
-use tucana::shared::value::Kind;
-use tucana::shared::{
-    NodeExecutionResult, Value,
-    helper::value::{from_json_value, to_json_value},
-};
+use tucana::shared::helper::value::{from_json_value, to_json_value};
 
-struct FixtureRemoteRuntime<'a> {
-    fixture: RemoteFixture,
-    // Needed to simulate an action invoking a minted `SubFlow` reference
-    // back into `ExecutionEngine::execute_sub_flow` (see `sub_flow_calls`)
-    // -- the same engine instance the flow itself is running on, so the
-    // callback resolves against the registry entry the flow's own remote
-    // call minted.
-    engine: &'a ExecutionEngine,
+use simulated_actions::SimulatedActions;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Suite {
+    Local,
+    Remote,
 }
 
-#[async_trait::async_trait]
-impl RemoteRuntime for FixtureRemoteRuntime<'_> {
-    async fn execute_remote(
-        &self,
-        execution: RemoteExecution,
-    ) -> Result<NodeExecutionResult, RuntimeError> {
-        if execution.target_service != self.fixture.target_service {
-            return Err(RuntimeError::new(
-                "T-TEST-000001",
-                "UnexpectedRemoteService",
-                format!(
-                    "Expected remote service {}, received {}",
-                    self.fixture.target_service, execution.target_service
-                ),
-            ));
-        }
-        if execution.request.function_identifier != self.fixture.function_identifier {
-            return Err(RuntimeError::new(
-                "T-TEST-000002",
-                "UnexpectedRemoteFunction",
-                format!(
-                    "Expected remote function {}, received {}",
-                    self.fixture.function_identifier, execution.request.function_identifier
-                ),
-            ));
-        }
+impl Suite {
+    const ALL: [Suite; 2] = [Suite::Local, Suite::Remote];
 
-        // A `SubFlow`-valued parameter means this request carries a minted
-        // callback reference (see `resolve_remote_args`/`SubFlowRegistry`)
-        // -- drive it via `sub_flow_calls` regardless of how many entries
-        // that list has (zero is a legitimate, real case: an empty input
-        // list means the reference is minted but never actually invoked).
-        // Only fall through to the literal-echo path below when no
-        // `SubFlow` parameter is present at all.
-        if let Some(execution_identifier) =
-            execution.request.parameters.iter().find_map(|parameter| {
-                match parameter.value.as_ref()? {
-                    action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
-                        execution_identifier,
-                        ..
-                    }) => Some(execution_identifier.clone()),
-                    _ => None,
-                }
-            })
-        {
-            return self
-                .drive_sub_flow_calls(&execution, &execution_identifier)
-                .await;
+    fn name(self) -> &'static str {
+        match self {
+            Suite::Local => "local",
+            Suite::Remote => "remote",
         }
-
-        // Parameters are positional on the wire now (no key), so fixtures
-        // with a `resultParameter` only make sense with a single remote
-        // parameter — take it directly rather than looking it up by name.
-        let value = execution
-            .request
-            .parameters
-            .first()
-            .and_then(|parameter| parameter.value.as_ref())
-            .and_then(|value| match value {
-                // Fixtures never exercise `${signature}` templating, so the
-                // literal's `value` is always already the concrete result.
-                action_node_value::Value::LiteralValue(literal) => literal.value.clone(),
-                action_node_value::Value::SubFlow(_) => None,
-            })
-            .ok_or_else(|| {
-                RuntimeError::new(
-                    "T-TEST-000003",
-                    "RemoteParameterMissing",
-                    format!(
-                        "Remote parameter {:?} was not provided",
-                        self.fixture.result_parameter
-                    ),
-                )
-            })?;
-
-        Ok(NodeExecutionResult {
-            started_at: 0,
-            finished_at: 0,
-            parameter_results: Vec::new(),
-            id: Some(NodeExecutionResultId::FunctionIdentifier(
-                execution.request.function_identifier,
-            )),
-            result: Some(NodeExecutionOutcome::Success(raw_value_result(value))),
-        })
     }
-}
 
-impl FixtureRemoteRuntime<'_> {
-    /// Simulates an action driving `ActionSubFlowExecutionRequest` traffic
-    /// against `execution_identifier` (the request's minted `SubFlow`
-    /// reference): one `execute_sub_flow` call per `sub_flow_calls` entry,
-    /// in order -- exactly as `hercules`'s `for_each` implementation calls
-    /// back once per list element via `executeSubFlow`. An empty
-    /// `sub_flow_calls` is valid and drives zero calls (e.g. an empty input
-    /// list: the reference is minted but never actually invoked). Fails the
-    /// whole remote call the moment any individual sub-flow run fails,
-    /// since a real action would abort the same way. Resolves to `null`,
-    /// matching a `void`-signature consumer-driving remote function (e.g.
-    /// `for_each` itself).
-    async fn drive_sub_flow_calls(
-        &self,
-        execution: &RemoteExecution,
-        execution_identifier: &str,
-    ) -> Result<NodeExecutionResult, RuntimeError> {
-        for call in &self.fixture.sub_flow_calls {
-            let value = from_json_value(call.clone());
-            let report = self
-                .engine
-                .execute_sub_flow(&execution_identifier, vec![value], Some(self), false)
-                .await
-                .ok_or_else(|| {
-                    RuntimeError::new(
-                        "T-TEST-000005",
-                        "SubFlowNotFound",
-                        format!(
-                            "Sub flow {} was not minted (or already resolved)",
-                            execution_identifier
-                        ),
-                    )
-                })?;
-            if let Signal::Failure(err) = report.signal {
-                return Err(err);
-            }
+    fn path(self) -> &'static str {
+        match self {
+            Suite::Local => "./flows/local/",
+            Suite::Remote => "./flows/remote/",
         }
-
-        Ok(NodeExecutionResult {
-            started_at: 0,
-            finished_at: 0,
-            parameter_results: Vec::new(),
-            id: Some(NodeExecutionResultId::FunctionIdentifier(
-                execution.request.function_identifier.clone(),
-            )),
-            result: Some(NodeExecutionOutcome::Success(raw_value_result(Value {
-                kind: Some(Kind::NullValue(0)),
-            }))),
-        })
     }
 }
 
@@ -174,66 +52,58 @@ pub enum CaseResult {
     Failure(Input, serde_json::Value),
 }
 
-pub trait Testable {
-    fn run(&self) -> CaseResult;
-}
+/// Runs every case of `suite` and returns how many failed.
+fn run_suite(suite: Suite) -> usize {
+    let cases = Cases::from_path(suite.path());
+    log::info!(
+        "running {} suite ({} cases)",
+        suite.name(),
+        cases.cases.len()
+    );
 
-fn run_tests(cases: Cases) {
+    let mut failed = 0;
     for case in &cases.cases {
-        match case.run() {
+        match run_case(case, suite) {
             CaseResult::Success => print_success(case),
-            CaseResult::Failure(input, result) => print_failure(case, &input, result),
-        }
-    }
-}
-
-impl Testable for Case {
-    fn run(&self) -> CaseResult {
-        let engine = ExecutionEngine::new();
-        let remote = self.remote.clone().map(|fixture| FixtureRemoteRuntime {
-            fixture,
-            engine: &engine,
-        });
-
-        for input in self.inputs.clone() {
-            let flow_input = input.clone().input.map(from_json_value);
-            let (res, _) = engine.execute_graph(
-                "test-execution",
-                self.flow.starting_node_id,
-                self.flow.node_functions.clone(),
-                flow_input,
-                remote.as_ref().map(|runtime| runtime as &dyn RemoteRuntime),
-                false,
-            );
-
-            match res {
-                taurus_core::types::signal::Signal::Failure(err) => {
-                    let json = json!({
-                        "name": err.category,
-                        "message": err.message,
-                    });
-                    if json != input.clone().expected_result {
-                        return CaseResult::Failure(input, json);
-                    }
-                }
-                taurus_core::types::signal::Signal::Success(value) => {
-                    let json = to_json_value(value);
-                    if json != input.clone().expected_result {
-                        return CaseResult::Failure(input, json);
-                    }
-                }
-                taurus_core::types::signal::Signal::Return(value) => {
-                    let json = to_json_value(value);
-                    if json != input.clone().expected_result {
-                        return CaseResult::Failure(input, json);
-                    }
-                }
-                taurus_core::types::signal::Signal::Stop => continue,
+            CaseResult::Failure(input, result) => {
+                failed += 1;
+                print_failure(case, &input, result);
             }
         }
-
-        CaseResult::Success
     }
+    failed
+}
+
+fn run_case(case: &Case, suite: Suite) -> CaseResult {
+    let engine = ExecutionEngine::new();
+    let simulated_actions = SimulatedActions::new(&engine);
+    let remote = (suite == Suite::Remote).then_some(&simulated_actions as &dyn RemoteRuntime);
+
+    for input in case.inputs.clone() {
+        let flow_input = input.clone().input.map(from_json_value);
+        let (signal, _) = engine.execute_graph(
+            "test-execution",
+            case.flow.starting_node_id,
+            case.flow.node_functions.clone(),
+            flow_input,
+            remote,
+            false,
+        );
+
+        let result = match signal {
+            Signal::Failure(err) => json!({
+                "name": err.category,
+                "message": err.message,
+            }),
+            Signal::Success(value) | Signal::Return(value) => to_json_value(value),
+            Signal::Stop => continue,
+        };
+        if result != input.expected_result {
+            return CaseResult::Failure(input, result);
+        }
+    }
+
+    CaseResult::Success
 }
 
 fn main() {
@@ -241,6 +111,19 @@ fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let cases = Cases::from_path("./flows/");
-    run_tests(cases);
+    let suites: Vec<Suite> = match std::env::args().nth(1).as_deref() {
+        None => Suite::ALL.to_vec(),
+        Some("local") => vec![Suite::Local],
+        Some("remote") => vec![Suite::Remote],
+        Some(other) => {
+            log::error!("unknown suite {:?}; expected `local` or `remote`", other);
+            std::process::exit(2);
+        }
+    };
+
+    let failed: usize = suites.into_iter().map(run_suite).sum();
+    if failed > 0 {
+        log::error!("{} case(s) failed", failed);
+        std::process::exit(1);
+    }
 }

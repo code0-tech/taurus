@@ -25,6 +25,7 @@ This document is the canonical catalog for runtime error codes emitted by Taurus
 | `T-CORE-000004` | Engine | Reference lookup failed in the execution value store. | Missing prior node result, missing flow input path, or unresolved input reference. | `runtime/engine/executor.rs` |
 | `T-CORE-000005` | Engine | Remote request cannot be assembled because parameter metadata and resolved values diverge. | Parameter count mismatch during remote request materialization. | `runtime/engine/executor.rs` |
 | `T-CORE-000006` | Engine | Node execution result exists without a success/error outcome. | Provider or value store returned a `NodeExecutionResult` with no `result` field. | `runtime/engine/executor.rs`, `runtime/execution/value_store.rs` |
+| `T-CORE-000007` | Engine | Node execution result carries a value the engine can't consume yet. | A remote runtime returned a `SubFlowFunctionResult` instead of a `raw_value` as node success. | `value.rs` |
 | `T-CORE-000101` | Compiler | Flow compilation failed because a node id appears more than once. | Duplicate `database_id` in input nodes. | `runtime/engine/compiler.rs` |
 | `T-CORE-000102` | Compiler | Flow compilation failed because the declared start node is absent. | `start_node_id` not found in node list. | `runtime/engine/compiler.rs` |
 | `T-CORE-000103` | Compiler | Flow compilation failed because a `next` edge points to a missing node. | `next_node_id` references unknown node id. | `runtime/engine/compiler.rs` |

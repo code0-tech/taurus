@@ -96,6 +96,11 @@ Defaults are defined in `crates/taurus/src/config/mod.rs`.
 | `RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS` | Heartbeat interval in dynamic mode (`0` disables heartbeat) | `30` |
 | `AQUILA_GRPC_CONNECT_TIMEOUT_SECS` | Timeout in seconds for establishing Aquila gRPC channels | `2` |
 | `AQUILA_GRPC_REQUEST_TIMEOUT_SECS` | Timeout in seconds for Aquila gRPC requests | `10` |
+| `EXECUTION_RESULT_SAMPLE_RATE` | Probability (`0.0`-`1.0`) that an execution reports its full result (input + node results) for Sagittarius; test executions always do | `1.0` |
+| `RUNTIME_USAGE_STREAM` | JetStream work-queue stream (and subject) runtime usages are published to | `runtime_usage` |
+| `RUNTIME_USAGE_BATCH_SIZE` | Maximum number of runtime usages per published NATS message | `1000` |
+| `RUNTIME_USAGE_FLUSH_INTERVAL_MS` | Maximum time in milliseconds a runtime usage waits before its batch is published | `1000` |
+| `RUNTIME_USAGE_BUFFER_CAPACITY` | Maximum number of buffered runtime usages before new ones are dropped | `100000` |
 | `OPENTELEMETRY_ENABLED` | Enables OpenTelemetry export when an endpoint is configured | `false` |
 | `OPENTELEMETRY_SERVICE_NAME` | Service name used for exported telemetry | `taurus` |
 | `OPENTELEMETRY_LOGS_ENDPOINT` | OTLP logs endpoint | empty |

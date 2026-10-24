@@ -5,12 +5,12 @@ use std::sync::Arc;
 
 use tucana::shared::node_execution_result::{Id as TucanaNodeResultId, Result as TucanaNodeResult};
 use tucana::shared::{
-    InputType, NodeExecutionResult, NodeParameterNodeExecutionResult, ReferenceValue, Value,
-    value::Kind,
+    InputType, NodeExecutionResult, NodeValueExecutionResult, ReferenceValue, Value, value::Kind,
 };
 
 use crate::runtime::execution::trace::{StoreInputSlotEntry, StoreResultEntry, StoreSnapshot};
 use crate::types::errors::runtime_error::RuntimeError;
+use crate::value::{node_value_result_to_value, raw_value_of, raw_value_result};
 
 #[derive(Clone)]
 pub enum ValueStoreResult {
@@ -114,7 +114,10 @@ impl ValueStore {
     fn get_result(&mut self, id: i64) -> ValueStoreResult {
         match self.latest_results.get(&id) {
             Some(result) => match &result.result {
-                Some(TucanaNodeResult::Success(value)) => ValueStoreResult::Success(value.clone()),
+                Some(TucanaNodeResult::Success(value)) => match node_value_result_to_value(value) {
+                    Ok(value) => ValueStoreResult::Success(value),
+                    Err(err) => ValueStoreResult::Error(err),
+                },
                 Some(TucanaNodeResult::Error(error)) => {
                     ValueStoreResult::Error(RuntimeError::from_tucana_error(error))
                 }
@@ -158,7 +161,7 @@ impl ValueStore {
         &mut self,
         id: i64,
         value: Value,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
     ) {
@@ -169,7 +172,7 @@ impl ValueStore {
                 finished_at,
                 parameter_results,
                 id: Some(TucanaNodeResultId::NodeId(id)),
-                result: Some(TucanaNodeResult::Success(value)),
+                result: Some(TucanaNodeResult::Success(raw_value_result(value))),
             },
         );
     }
@@ -178,7 +181,7 @@ impl ValueStore {
         &mut self,
         id: i64,
         runtime_error: RuntimeError,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
     ) {
@@ -205,7 +208,7 @@ impl ValueStore {
         &mut self,
         id: String,
         value: Value,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
     ) {
@@ -214,7 +217,7 @@ impl ValueStore {
             finished_at,
             parameter_results,
             id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
-            result: Some(TucanaNodeResult::Success(value)),
+            result: Some(TucanaNodeResult::Success(raw_value_result(value))),
         }));
     }
 
@@ -222,7 +225,7 @@ impl ValueStore {
         &mut self,
         id: String,
         runtime_error: RuntimeError,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
     ) {
@@ -265,7 +268,10 @@ impl ValueStore {
         let mut results = Vec::with_capacity(self.latest_results.len());
         for (node_id, result) in &self.latest_results {
             let preview = match &result.result {
-                Some(TucanaNodeResult::Success(value)) => preview_value(value),
+                Some(TucanaNodeResult::Success(value)) => match raw_value_of(value) {
+                    Some(value) => preview_value(value),
+                    None => "sub-flow-function-result".to_string(),
+                },
                 Some(TucanaNodeResult::Error(err)) => {
                     format!("{}:{} {}", err.code, err.category, err.message)
                 }

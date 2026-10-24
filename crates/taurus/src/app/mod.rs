@@ -24,6 +24,7 @@ use tucana::shared::module_status::StatusVariant;
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
 use crate::client::runtime_status::TaurusRuntimeStatusService;
+use crate::client::runtime_usage::{self, RuntimeUsageRecorder, RuntimeUsageSettings};
 use crate::config::Config;
 use crate::telemetry::{self, TelemetrySettings, errors};
 
@@ -41,6 +42,7 @@ pub async fn run() {
     let mut health_task = spawn_health_task(&config);
     let (runtime_status_service, runtime_execution_service, mut runtime_status_heartbeat_task) =
         setup_dynamic_services_if_needed(&config).await;
+    let (runtime_usage, runtime_usage_task) = spawn_runtime_usage_if_needed(&config, &client);
 
     let nats_remote = NATSRemoteRuntime::with_execution_result_timeout(
         client.clone(),
@@ -51,7 +53,11 @@ pub async fn run() {
         client,
         engine,
         nats_remote,
-        runtime_execution_service,
+        worker::ExecutionReporting {
+            runtime_execution_service,
+            runtime_usage,
+            result_sample_rate: config.execution_result_sample_rate,
+        },
         mode_label(&config).to_string(),
         worker_shutdown.clone(),
         config.max_concurrent_executions,
@@ -59,6 +65,14 @@ pub async fn run() {
     );
 
     wait_for_shutdown(&mut worker_task, &mut health_task, &worker_shutdown).await;
+    // The worker owned every runtime usage recorder, so with it finished the
+    // publisher flushes what's left and exits on its own.
+    if let Some(handle) = runtime_usage_task
+        && let Err(err) = handle.await
+    {
+        log::warn!("Runtime usage publisher ended unexpectedly: {}", err);
+        errors::record("task", "runtime_usage.task", &err, "mode=dynamic");
+    }
     if let Some(handle) = runtime_status_heartbeat_task.take() {
         handle.abort();
         if let Err(err) = handle.await
@@ -258,6 +272,28 @@ async fn setup_dynamic_services_if_needed(
         runtime_execution_service,
         runtime_status_heartbeat_task,
     )
+}
+
+/// Starts the runtime usage group-commit publisher in dynamic mode, where
+/// Aquila drains the usage stream and forwards it to Sagittarius.
+fn spawn_runtime_usage_if_needed(
+    config: &Config,
+    client: &async_nats::Client,
+) -> (Option<RuntimeUsageRecorder>, Option<JoinHandle<()>>) {
+    if config.mode != DYNAMIC {
+        return (None, None);
+    }
+
+    let (recorder, handle) = runtime_usage::spawn(
+        client.clone(),
+        RuntimeUsageSettings {
+            stream: config.runtime_usage_stream.clone(),
+            batch_size: config.runtime_usage_batch_size,
+            flush_interval: Duration::from_millis(config.runtime_usage_flush_interval_ms),
+            buffer_capacity: config.runtime_usage_buffer_capacity,
+        },
+    );
+    (Some(recorder), Some(handle))
 }
 
 async fn update_stopped_status(runtime_status_service: Option<&Arc<TaurusRuntimeStatusService>>) {

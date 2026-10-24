@@ -7,7 +7,7 @@ use tucana::shared::{NodeFunction, node_value, sub_flow};
 use crate::{
     runtime::engine::model::{
         CompiledArg, CompiledFlow, CompiledNode, CompiledParameter, CompiledTemplate,
-        CompiledTemplateReference, CompiledThunk, NodeExecutionTarget,
+        CompiledTemplateReference, CompiledThunk, NodeExecutionTarget, SubFlowSetting,
     },
     types::errors::runtime_error::RuntimeError,
 };
@@ -247,7 +247,11 @@ fn compile_node_value(
                         function.definition_source.as_deref(),
                     )?,
                     parameter_index: parameter_index as i64,
-                    settings: sub_flow.settings.clone(),
+                    settings: sub_flow
+                        .parameters
+                        .iter()
+                        .map(SubFlowSetting::from)
+                        .collect(),
                 }))
             }
             None => Err(CompileError::SubFlowExecutionReferenceMissing {

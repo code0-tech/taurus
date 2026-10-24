@@ -1,7 +1,15 @@
 //! The NATS-driven flow execution loop: subscribes to `execution.*`, decodes
 //! each message into an `ExecutionFlow`, runs it through
 //! `taurus_core::runtime::engine::ExecutionEngine`, and (in dynamic mode)
-//! reports the result back to Aquila via [`TaurusRuntimeExecutionService`].
+//! reports the result back to Aquila via [`TaurusRuntimeExecutionService`]
+//! and records the execution's runtime usage via [`RuntimeUsageRecorder`].
+//!
+//! Every execution reports its outcome to Aquila, since actions and test
+//! executions wait on it, but only a sampled share (see
+//! [`ExecutionReporting::result_sample_rate`]) carries the full result --
+//! input and per-node results -- that Aquila forwards to Sagittarius.
+//! Executions Aquila dispatches with the [`SAMPLED_HEADER`] (Sagittarius test
+//! executions) are always sampled.
 //!
 //! Also subscribes to `sub_flow_execution.*`: Aquila forwards
 //! `ActionSubFlowExecutionRequest`s there (NATS request/reply, not the
@@ -45,13 +53,36 @@ use tucana::shared::execution_result;
 use tucana::shared::{ExecutionFlow, ExecutionResult, NodeExecutionResult, Value};
 
 use crate::client::runtime_execution::TaurusRuntimeExecutionService;
+use crate::client::runtime_usage::RuntimeUsageRecorder;
 use crate::telemetry::{errors, metrics};
+
+/// NATS header Aquila sets (value `true`) on executions whose full result
+/// must always be reported, regardless of the configured sample rate.
+pub const SAMPLED_HEADER: &str = "Code0-Sampled";
+
+/// Everything the worker reports about a finished execution. Both services
+/// are only present in dynamic mode.
+#[derive(Clone)]
+pub struct ExecutionReporting {
+    pub runtime_execution_service: Option<TaurusRuntimeExecutionService>,
+    pub runtime_usage: Option<RuntimeUsageRecorder>,
+    /// Probability (0.0..=1.0) that an execution reports its full result.
+    pub result_sample_rate: f64,
+}
+
+impl ExecutionReporting {
+    fn is_sampled(&self, forced: bool) -> bool {
+        forced
+            || self.result_sample_rate >= 1.0
+            || (self.result_sample_rate > 0.0 && rand::random_bool(self.result_sample_rate))
+    }
+}
 
 pub fn spawn_worker(
     client: async_nats::Client,
     engine: ExecutionEngine,
     nats_remote: NATSRemoteRuntime,
-    runtime_execution_service: Option<TaurusRuntimeExecutionService>,
+    reporting: ExecutionReporting,
     flow_type: String,
     shutdown: Arc<Notify>,
     max_concurrent_executions: usize,
@@ -116,7 +147,7 @@ pub fn spawn_worker(
                             };
                             let engine = engine.clone();
                             let nats_remote = nats_remote.clone();
-                            let runtime_execution_service = runtime_execution_service.clone();
+                            let reporting = reporting.clone();
                             let flow_type = flow_type.clone();
                             in_flight.spawn(async move {
                                 let _permit = permit;
@@ -124,7 +155,7 @@ pub fn spawn_worker(
                                     message,
                                     &engine,
                                     &nats_remote,
-                                    runtime_execution_service,
+                                    reporting,
                                     flow_type.as_str(),
                                     with_trace,
                                 ).await;
@@ -194,10 +225,16 @@ async fn process_execution_message(
     message: async_nats::Message,
     engine: &ExecutionEngine,
     nats_remote: &NATSRemoteRuntime,
-    mut runtime_execution_service: Option<TaurusRuntimeExecutionService>,
+    mut reporting: ExecutionReporting,
     flow_type: &str,
     with_trace: bool,
 ) {
+    let forced_sample = message
+        .headers
+        .as_ref()
+        .and_then(|headers| headers.get(SAMPLED_HEADER))
+        .is_some_and(|value| value.as_str() == "true");
+
     let requested_execution_id = parse_execution_id_from_subject(&message.subject, "execution")
         .unwrap_or_else(|| {
             let generated = ExecutionId::new_v4();
@@ -227,9 +264,14 @@ async fn process_execution_message(
                     message.payload.len()
                 ),
             );
-            if let Some(execution_service) = runtime_execution_service.as_mut() {
+            // Decode failures are rare and point at a bug, so they're always
+            // reported in full.
+            if let Some(execution_service) = reporting.runtime_execution_service.as_mut() {
                 execution_service
-                    .update_runtime_execution(build_decode_error_result(requested_execution_id))
+                    .update_runtime_execution(
+                        build_decode_error_result(requested_execution_id),
+                        true,
+                    )
                     .await;
             }
             return;
@@ -253,21 +295,42 @@ async fn process_execution_message(
         flow_id
     );
 
-    let execution_result = build_execution_result(
+    if let Some(runtime_usage) = reporting.runtime_usage.as_ref() {
+        runtime_usage.record(
+            run_result.flow_id,
+            run_result.finished_at.saturating_sub(run_result.started_at),
+        );
+    }
+
+    let sampled = reporting.is_sampled(forced_sample);
+    let Some(execution_service) = reporting.runtime_execution_service.as_mut() else {
+        return;
+    };
+
+    execution_service
+        .update_runtime_execution(reported_execution_result(run_result, sampled), sampled)
+        .await;
+}
+
+/// Builds the result reported to Aquila. An unsampled execution reports only
+/// its outcome and timing -- enough for the action or test execution waiting
+/// on it -- without the input and per-node results Sagittarius persists.
+fn reported_execution_result(run_result: FlowRunResult, sampled: bool) -> ExecutionResult {
+    let (input, node_execution_results) = if sampled {
+        (run_result.input, run_result.node_execution_results)
+    } else {
+        (None, Vec::new())
+    };
+
+    build_execution_result(
         run_result.execution_id,
         run_result.flow_id,
         run_result.started_at,
         run_result.finished_at,
-        run_result.input.clone(),
-        run_result.node_execution_results,
-        run_result.signal.clone(),
-    );
-
-    if let Some(execution_service) = runtime_execution_service.as_mut() {
-        execution_service
-            .update_runtime_execution(execution_result)
-            .await;
-    }
+        input,
+        node_execution_results,
+        run_result.signal,
+    )
 }
 
 /// Handles one `sub_flow_execution.*` NATS request/reply message: decodes it
@@ -626,6 +689,7 @@ mod tests {
     use taurus_core::runtime::engine::ExecutionEngine;
     use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
     use taurus_core::types::exit_reason::ExitReason;
+    use taurus_core::value::raw_value_result;
     use tonic::async_trait;
     use tucana::aquila::{ActionNodeSubFlowValue, action_node_value};
     use tucana::shared::{
@@ -646,6 +710,79 @@ mod tests {
     struct FlowFixture {
         inputs: Vec<FixtureInput>,
         flow: ValidationFlow,
+    }
+
+    fn sampling_test_run_result() -> FlowRunResult {
+        FlowRunResult {
+            execution_id: ExecutionId::new_v4(),
+            flow_id: 7,
+            started_at: 10,
+            finished_at: 25,
+            input: Some(from_json_value(serde_json::json!({ "key": "value" }))),
+            signal: Signal::Success(from_json_value(serde_json::json!("done"))),
+            node_execution_results: vec![NodeExecutionResult {
+                started_at: 11,
+                finished_at: 24,
+                parameter_results: Vec::new(),
+                id: Some(tucana::shared::node_execution_result::Id::NodeId(1)),
+                result: Some(tucana::shared::node_execution_result::Result::Success(
+                    raw_value_result(from_json_value(serde_json::json!("done"))),
+                )),
+            }],
+        }
+    }
+
+    fn reporting_with_sample_rate(result_sample_rate: f64) -> ExecutionReporting {
+        ExecutionReporting {
+            runtime_execution_service: None,
+            runtime_usage: None,
+            result_sample_rate,
+        }
+    }
+
+    #[test]
+    fn sample_rate_zero_only_samples_forced_executions() {
+        let reporting = reporting_with_sample_rate(0.0);
+
+        assert!(!reporting.is_sampled(false));
+        assert!(reporting.is_sampled(true));
+    }
+
+    #[test]
+    fn sample_rate_one_samples_every_execution() {
+        let reporting = reporting_with_sample_rate(1.0);
+
+        assert!(reporting.is_sampled(false));
+        assert!(reporting.is_sampled(true));
+    }
+
+    #[test]
+    fn sampled_execution_reports_input_and_node_results() {
+        let response = reported_execution_result(sampling_test_run_result(), true);
+
+        assert!(response.input.is_some());
+        assert_eq!(response.node_execution_results.len(), 1);
+    }
+
+    #[test]
+    fn unsampled_execution_reports_only_outcome_and_timing() {
+        let run_result = sampling_test_run_result();
+        let execution_id = run_result.execution_id;
+
+        let response = reported_execution_result(run_result, false);
+
+        assert_eq!(response.execution_identifier, execution_id.to_string());
+        assert_eq!(response.flow_id, 7);
+        assert_eq!(response.started_at, 10);
+        assert_eq!(response.finished_at, 25);
+        assert!(response.input.is_none());
+        assert!(response.node_execution_results.is_empty());
+        match response.result {
+            Some(execution_result::Result::Success(value)) => {
+                assert_eq!(to_json_value(value), serde_json::json!("done"));
+            }
+            other => panic!("expected successful execution result, got {:?}", other),
+        }
     }
 
     #[test]
@@ -746,12 +883,12 @@ mod tests {
         let node_result = NodeExecutionResult {
             started_at: 1,
             finished_at: 2,
-            parameter_results: vec![tucana::shared::NodeParameterNodeExecutionResult {
-                value: Some(from_json_value(serde_json::json!("parameter-value"))),
-            }],
+            parameter_results: vec![raw_value_result(from_json_value(serde_json::json!(
+                "parameter-value"
+            )))],
             id: Some(tucana::shared::node_execution_result::Id::NodeId(42)),
             result: Some(tucana::shared::node_execution_result::Result::Success(
-                from_json_value(serde_json::json!("node-output")),
+                raw_value_result(from_json_value(serde_json::json!("node-output"))),
             )),
         };
 
@@ -828,8 +965,10 @@ mod tests {
                 value: Some(node_value::Value::SubFlow(tucana::shared::SubFlow {
                     input_schema: None,
                     output_schema: None,
+                    name: None,
+                    description: None,
                     signature: String::new(),
-                    settings: Vec::new(),
+                    parameters: Vec::new(),
                     execution_reference: Some(ExecutionReference::StartingNodeId(node_id)),
                 })),
             }),
@@ -950,7 +1089,7 @@ mod tests {
                 parameter_results: Vec::new(),
                 id: Some(tucana::shared::node_execution_result::Id::NodeId(1)),
                 result: Some(tucana::shared::node_execution_result::Result::Success(
-                    int_value(1),
+                    raw_value_result(int_value(1)),
                 )),
             },
             minted_id: Arc::clone(&minted_id),
@@ -1066,7 +1205,7 @@ mod tests {
                 parameter_results: Vec::new(),
                 id: Some(tucana::shared::node_execution_result::Id::NodeId(1)),
                 result: Some(tucana::shared::node_execution_result::Result::Success(
-                    int_value(1),
+                    raw_value_result(int_value(1)),
                 )),
             },
             minted_id: Arc::clone(&minted_id),

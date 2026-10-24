@@ -476,6 +476,7 @@ mod tests {
     use crate::runtime::execution::value_store::ValueStore;
     use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
     use crate::types::exit_reason::ExitReason;
+    use crate::value::{raw_value_of, raw_value_result};
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -484,7 +485,7 @@ mod tests {
     };
     use tucana::shared::{
         InputType, ListValue, LiteralValue, NodeExecutionResult, NodeParameter, NodeValue,
-        ReferenceValue, Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value,
+        ReferenceValue, Struct, SubFlow, SubFlowFunction, SubFlowParameters, Value,
         node_execution_result, node_value, reference_value, sub_flow::ExecutionReference,
         value::Kind,
     };
@@ -511,8 +512,10 @@ mod tests {
                 value: Some(node_value::Value::SubFlow(SubFlow {
                     input_schema: None,
                     output_schema: None,
+                    name: None,
+                    description: None,
                     signature: String::new(),
-                    settings: Vec::new(),
+                    parameters: Vec::new(),
                     execution_reference: Some(ExecutionReference::StartingNodeId(node_id)),
                 })),
             }),
@@ -524,7 +527,7 @@ mod tests {
         database_id: i64,
         runtime_parameter_id: &str,
         function_identifier: &str,
-        settings: Vec<SubFlowSetting>,
+        settings: Vec<SubFlowParameters>,
     ) -> NodeParameter {
         function_thunk_param_with_source(
             database_id,
@@ -540,7 +543,7 @@ mod tests {
         runtime_parameter_id: &str,
         function_identifier: &str,
         definition_source: Option<&str>,
-        settings: Vec<SubFlowSetting>,
+        settings: Vec<SubFlowParameters>,
     ) -> NodeParameter {
         NodeParameter {
             database_id,
@@ -549,8 +552,10 @@ mod tests {
                 value: Some(node_value::Value::SubFlow(SubFlow {
                     input_schema: None,
                     output_schema: None,
+                    name: None,
+                    description: None,
                     signature: String::new(),
-                    settings,
+                    parameters: settings,
                     execution_reference: Some(ExecutionReference::Function(SubFlowFunction {
                         function_identifier: function_identifier.to_string(),
                         definition_source: definition_source.map(str::to_string),
@@ -561,17 +566,16 @@ mod tests {
         }
     }
 
-    fn subflow_setting(
-        identifier: &str,
-        default_value: Option<Value>,
-        optional: bool,
-        hidden: bool,
-    ) -> SubFlowSetting {
-        SubFlowSetting {
+    fn subflow_setting(identifier: &str, default_value: Option<Value>) -> SubFlowParameters {
+        SubFlowParameters {
             identifier: identifier.to_string(),
-            default_value,
-            optional: Some(optional),
-            hidden: Some(hidden),
+            value: default_value.map(|value| NodeValue {
+                value: Some(node_value::Value::LiteralValue(LiteralValue {
+                    value: Some(value),
+                    references: Vec::new(),
+                })),
+            }),
+            cast: None,
         }
     }
 
@@ -908,8 +912,8 @@ mod tests {
                     "transform",
                     "std::number::add",
                     vec![
-                        subflow_setting("lhs", None, false, false),
-                        subflow_setting("rhs", Some(int_value(2)), false, true),
+                        subflow_setting("lhs", None),
+                        subflow_setting("rhs", Some(int_value(2))),
                     ],
                 ),
             ],
@@ -938,7 +942,9 @@ mod tests {
                 id: Some(node_execution_result::Id::FunctionIdentifier(
                     "remote::add".to_string(),
                 )),
-                result: Some(node_execution_result::Result::Success(int_value(99))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(99),
+                ))),
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
@@ -955,8 +961,8 @@ mod tests {
                     "remote::add",
                     Some("action.example"),
                     vec![
-                        subflow_setting("lhs", None, false, false),
-                        subflow_setting("rhs", Some(int_value(2)), false, true),
+                        subflow_setting("lhs", None),
+                        subflow_setting("rhs", Some(int_value(2))),
                     ],
                 ),
             ],
@@ -1036,7 +1042,7 @@ mod tests {
                     "transform",
                     "remote::identity",
                     Some("remote-service"),
-                    vec![subflow_setting("value", None, false, false)],
+                    vec![subflow_setting("value", None)],
                 ),
             ],
             None,
@@ -1064,7 +1070,7 @@ mod tests {
                     "transform",
                     "remote::identity",
                     Some("action."),
-                    vec![subflow_setting("value", None, false, false)],
+                    vec![subflow_setting("value", None)],
                 ),
             ],
             None,
@@ -1101,8 +1107,8 @@ mod tests {
                     "predicate",
                     "std::number::is_greater",
                     vec![
-                        subflow_setting("lhs", None, false, false),
-                        subflow_setting("rhs", Some(int_value(3)), false, true),
+                        subflow_setting("lhs", None),
+                        subflow_setting("rhs", Some(int_value(3))),
                     ],
                 ),
             ],
@@ -1132,7 +1138,7 @@ mod tests {
                     101,
                     "transform",
                     "std::control::value",
-                    vec![subflow_setting("value", Some(int_value(9)), false, false)],
+                    vec![subflow_setting("value", Some(int_value(9)))],
                 ),
             ],
             None,
@@ -1145,65 +1151,6 @@ mod tests {
             expect_success(signal),
             list_value(vec![int_value(9), int_value(5)])
         );
-    }
-
-    #[test]
-    fn function_subflow_hidden_setting_always_uses_default() {
-        let engine = ExecutionEngine::new();
-
-        let map_node = node(
-            1,
-            "std::list::map",
-            vec![
-                literal_param(100, "list", list_value(vec![int_value(1), int_value(2)])),
-                function_thunk_param(
-                    101,
-                    "transform",
-                    "std::control::value",
-                    vec![subflow_setting("value", Some(int_value(9)), false, true)],
-                ),
-            ],
-            None,
-        );
-
-        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
-
-        assert_eq!(reason, ExitReason::Success);
-        assert_eq!(
-            expect_success(signal),
-            list_value(vec![int_value(9), int_value(9)])
-        );
-    }
-
-    #[test]
-    fn function_subflow_optional_missing_setting_uses_null() {
-        let engine = ExecutionEngine::new();
-
-        let if_node = node(
-            1,
-            "std::control::if",
-            vec![
-                literal_param(
-                    100,
-                    "condition",
-                    Value {
-                        kind: Some(Kind::BoolValue(true)),
-                    },
-                ),
-                function_thunk_param(
-                    101,
-                    "runnable",
-                    "std::control::value",
-                    vec![subflow_setting("value", None, true, false)],
-                ),
-            ],
-            None,
-        );
-
-        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
-
-        assert_eq!(reason, ExitReason::Success);
-        assert_eq!(expect_success(signal), null_value());
     }
 
     #[test]
@@ -1225,7 +1172,7 @@ mod tests {
                     101,
                     "runnable",
                     "std::control::value",
-                    vec![subflow_setting("value", None, false, false)],
+                    vec![subflow_setting("value", None)],
                 ),
             ],
             None,
@@ -1281,7 +1228,7 @@ mod tests {
                     100,
                     "lhs",
                     "std::control::value",
-                    vec![subflow_setting("value", Some(int_value(40)), false, true)],
+                    vec![subflow_setting("value", Some(int_value(40)))],
                 ),
                 literal_param(101, "rhs", int_value(2)),
             ],
@@ -1318,7 +1265,7 @@ mod tests {
                     100,
                     "lhs",
                     "std::test::echo",
-                    vec![subflow_setting("value", Some(int_value(20)), false, true)],
+                    vec![subflow_setting("value", Some(int_value(20)))],
                 ),
                 literal_param(101, "rhs", int_value(2)),
             ],
@@ -1335,12 +1282,12 @@ mod tests {
         assert_function_result_id(function_result, "std::test::echo");
         assert_eq!(function_result.parameter_results.len(), 1);
         assert_eq!(
-            function_result.parameter_results[0].value,
+            raw_value_of(&function_result.parameter_results[0]).cloned(),
             Some(int_value(20))
         );
         match function_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(20));
+                assert_eq!(raw_value_of(value), Some(&int_value(20)));
             }
             other => panic!("expected function success result, got {:?}", other),
         }
@@ -1349,7 +1296,7 @@ mod tests {
         assert_node_result_id(node_result, 1);
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(22));
+                assert_eq!(raw_value_of(value), Some(&int_value(22)));
             }
             other => panic!("expected node success result, got {:?}", other),
         }
@@ -1376,12 +1323,18 @@ mod tests {
         let node_result = &report.node_execution_results[0];
         assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 2);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(1)));
-        assert_eq!(node_result.parameter_results[1].value, Some(int_value(2)));
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[0]).cloned(),
+            Some(int_value(1))
+        );
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[1]).cloned(),
+            Some(int_value(2))
+        );
 
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(3));
+                assert_eq!(raw_value_of(value), Some(&int_value(3)));
             }
             other => panic!("expected node success result, got {:?}", other),
         }
@@ -1415,12 +1368,18 @@ mod tests {
         let node_result = &report.node_execution_results[1];
         assert_node_result_id(node_result, 2);
         assert_eq!(node_result.parameter_results.len(), 2);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(7)));
-        assert_eq!(node_result.parameter_results[1].value, Some(int_value(5)));
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[0]).cloned(),
+            Some(int_value(7))
+        );
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[1]).cloned(),
+            Some(int_value(5))
+        );
 
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(12));
+                assert_eq!(raw_value_of(value), Some(&int_value(12)));
             }
             other => panic!("expected node success result, got {:?}", other),
         }
@@ -1462,7 +1421,10 @@ mod tests {
         let node_result = &report.node_execution_results[0];
         assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 1);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(20)));
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[0]).cloned(),
+            Some(int_value(20))
+        );
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Error(error)) => {
                 assert_eq!(error.code, "T-CORE-000006");
@@ -1482,7 +1444,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(99)),
-                result: Some(node_execution_result::Result::Success(string_value("ok"))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    string_value("ok"),
+                ))),
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
@@ -1518,7 +1482,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(99)),
-                result: Some(node_execution_result::Result::Success(string_value("ok"))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    string_value("ok"),
+                ))),
             },
             target_services: None,
             project_ids: Some(Arc::clone(&project_ids)),
@@ -1601,7 +1567,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(1)),
-                result: Some(node_execution_result::Result::Success(int_value(1))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
             },
             requests: Arc::clone(&requests),
             found_pending_during_call: Arc::clone(&found_pending_during_call),
@@ -1745,7 +1713,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(1)),
-                result: Some(node_execution_result::Result::Success(int_value(1))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
             },
             minted_sub_flow_id: Arc::clone(&minted_sub_flow_id),
             release: Arc::clone(&release),
@@ -1936,7 +1906,9 @@ mod tests {
         let callback_values: Vec<_> = callback_results
             .iter()
             .map(|result| match result.result.as_ref() {
-                Some(node_execution_result::Result::Success(value)) => value.clone(),
+                Some(node_execution_result::Result::Success(value)) => {
+                    raw_value_of(value).cloned().expect("expected raw value")
+                }
                 other => panic!("expected callback success result, got {:?}", other),
             })
             .collect();
@@ -1951,7 +1923,7 @@ mod tests {
                 result
                     .parameter_results
                     .iter()
-                    .map(|parameter| parameter.value.clone())
+                    .map(|parameter| raw_value_of(parameter).cloned())
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -1998,7 +1970,7 @@ mod tests {
                     5,
                     "consumer",
                     "std::boolean::from_number",
-                    vec![subflow_setting("value", Some(null_value()), false, false)],
+                    vec![subflow_setting("value", Some(null_value()))],
                 ),
             ],
             Some(1),
@@ -2033,16 +2005,16 @@ mod tests {
         for (index, result) in function_results.iter().enumerate() {
             assert_eq!(result.parameter_results.len(), 1);
             assert_eq!(
-                result.parameter_results[0].value,
+                raw_value_of(&result.parameter_results[0]).cloned(),
                 Some(int_value(index as i64 + 1))
             );
             match result.result.as_ref() {
                 Some(node_execution_result::Result::Success(value)) => {
                     assert_eq!(
-                        value,
-                        &Value {
+                        raw_value_of(value),
+                        Some(&Value {
                             kind: Some(Kind::BoolValue(true)),
-                        }
+                        })
                     );
                 }
                 other => panic!("expected function success result, got {:?}", other),
@@ -2284,7 +2256,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(2)),
-                result: Some(node_execution_result::Result::Success(int_value(42))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(42),
+                ))),
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
@@ -2344,7 +2318,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(3)),
-                result: Some(node_execution_result::Result::Success(int_value(7))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(7),
+                ))),
             },
             target_services: None,
             project_ids: None,
@@ -2427,9 +2403,11 @@ mod tests {
         );
         assert_eq!(
             report.node_execution_results[0].result,
-            Some(node_execution_result::Result::Success(Value {
-                kind: Some(Kind::NullValue(0)),
-            }))
+            Some(node_execution_result::Result::Success(raw_value_result(
+                Value {
+                    kind: Some(Kind::NullValue(0)),
+                }
+            )))
         );
     }
 
@@ -2488,9 +2466,11 @@ mod tests {
         for result in &report.node_execution_results {
             assert_eq!(
                 result.result,
-                Some(node_execution_result::Result::Success(Value {
-                    kind: Some(Kind::NullValue(0)),
-                }))
+                Some(node_execution_result::Result::Success(raw_value_result(
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    }
+                )))
             );
         }
     }

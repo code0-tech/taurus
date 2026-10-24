@@ -2,14 +2,16 @@
 //!
 //! Results are normalized (via `taurus_core::normalize`) before being sent so
 //! every optional proto field Aquila reads is explicitly populated rather
-//! than left `None`.
+//! than left `None`. Each request carries [`SAMPLED_METADATA_KEY`] so Aquila
+//! only forwards sampled (full) results to Sagittarius, while still handing
+//! every outcome to the action or test execution waiting on it.
 
 use code0_flow::flow_service::{
     auth::get_authorization_metadata, retry::create_channel_with_retry,
 };
 use std::time::Duration;
 use taurus_core::normalize::{normalize_node_execution_result, normalize_value, null_value};
-use tonic::{Extensions, Request, transport::Channel};
+use tonic::{Extensions, Request, metadata::MetadataValue, transport::Channel};
 use tucana::{
     aquila::{ExecutionRequest, execution_service_client::ExecutionServiceClient},
     shared::{ExecutionResult, execution_result},
@@ -17,6 +19,11 @@ use tucana::{
 
 use crate::auth::aquila_jwt;
 use crate::telemetry::errors;
+
+/// gRPC metadata key telling Aquila whether this result was sampled
+/// (`true`, carries input and node results and is forwarded to Sagittarius)
+/// or not (`false`, outcome only).
+pub const SAMPLED_METADATA_KEY: &str = "code0-sampled";
 
 // tonic clients over `Channel` are cheap to clone (the channel itself is a
 // multiplexed, Arc-backed HTTP/2 connection); cloning per concurrently
@@ -45,18 +52,29 @@ impl TaurusRuntimeExecutionService {
         }
     }
 
-    pub async fn update_runtime_execution(&mut self, mut runtime_execution: ExecutionResult) {
+    pub async fn update_runtime_execution(
+        &mut self,
+        mut runtime_execution: ExecutionResult,
+        sampled: bool,
+    ) {
         log::info!(
-            "Transmitting execution result to Aquila (execution_id={}, flow_id={}, node_results={})",
+            "Transmitting execution result to Aquila (execution_id={}, flow_id={}, node_results={}, sampled={})",
             runtime_execution.execution_identifier.as_str(),
             runtime_execution.flow_id,
-            runtime_execution.node_execution_results.len()
+            runtime_execution.node_execution_results.len(),
+            sampled
         );
 
         normalize_execution_result(&mut runtime_execution);
 
+        let mut metadata = get_authorization_metadata(&aquila_jwt(&self.aquila_token));
+        metadata.insert(
+            SAMPLED_METADATA_KEY,
+            MetadataValue::from_static(if sampled { "true" } else { "false" }),
+        );
+
         let request = Request::from_parts(
-            get_authorization_metadata(&aquila_jwt(&self.aquila_token)),
+            metadata,
             Extensions::new(),
             ExecutionRequest {
                 execution_result: Some(runtime_execution),
@@ -113,9 +131,10 @@ fn normalize_execution_result(result: &mut ExecutionResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use taurus_core::value::{raw_value_of, raw_value_result};
     use tucana::shared::{
-        Error, ListValue, NodeExecutionResult, NodeParameterNodeExecutionResult, NumberValue,
-        Struct, Value, node_execution_result, value::Kind,
+        Error, ListValue, NodeExecutionResult, NodeValueExecutionResult, NumberValue, Struct,
+        Value, node_execution_result, value::Kind,
     };
 
     #[test]
@@ -129,7 +148,7 @@ mod tests {
             node_execution_results: vec![NodeExecutionResult {
                 started_at: 1,
                 finished_at: 2,
-                parameter_results: vec![NodeParameterNodeExecutionResult { value: None }],
+                parameter_results: vec![NodeValueExecutionResult { value: None }],
                 id: Some(node_execution_result::Id::NodeId(10)),
                 result: None,
             }],
@@ -150,16 +169,19 @@ mod tests {
                 kind: Some(Kind::NullValue(_))
             }))
         ));
+        let Some(node_execution_result::Result::Success(node_success)) =
+            result.node_execution_results[0].result.as_ref()
+        else {
+            panic!("expected normalized node success");
+        };
         assert!(matches!(
-            result.node_execution_results[0].result.as_ref(),
-            Some(node_execution_result::Result::Success(Value {
+            raw_value_of(node_success),
+            Some(Value {
                 kind: Some(Kind::NullValue(_))
-            }))
+            })
         ));
         assert!(matches!(
-            result.node_execution_results[0].parameter_results[0]
-                .value
-                .as_ref(),
+            raw_value_of(&result.node_execution_results[0].parameter_results[0]),
             Some(Value {
                 kind: Some(Kind::NullValue(_))
             })
@@ -193,9 +215,7 @@ mod tests {
             node_execution_results: vec![NodeExecutionResult {
                 started_at: 1,
                 finished_at: 2,
-                parameter_results: vec![NodeParameterNodeExecutionResult {
-                    value: Some(Value { kind: None }),
-                }],
+                parameter_results: vec![raw_value_result(Value { kind: None })],
                 id: Some(node_execution_result::Id::NodeId(10)),
                 result: Some(node_execution_result::Result::Error(Error {
                     details: Some(Struct {
@@ -219,9 +239,7 @@ mod tests {
             }))
         ));
         assert!(matches!(
-            result.node_execution_results[0].parameter_results[0]
-                .value
-                .as_ref(),
+            raw_value_of(&result.node_execution_results[0].parameter_results[0]),
             Some(Value {
                 kind: Some(Kind::NullValue(_))
             })

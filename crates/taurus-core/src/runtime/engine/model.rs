@@ -5,7 +5,42 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::{ReferenceValue, Struct, SubFlowSetting, Value};
+use tucana::shared::{ReferenceValue, Struct, SubFlowParameters, Value, node_value};
+
+/// One parameter of a function sub-flow, as the executor resolves it.
+///
+/// Tucana 0.0.83 replaced the wire-level `SubFlowSetting`
+/// (`default_value`/`optional`/`hidden`) with `SubFlowParameters`
+/// (`NodeValue` + `cast`). Until the executor resolves those natively, each
+/// parameter is mapped onto the previous semantics: a plain literal value acts
+/// as the default used when the caller doesn't supply one; everything else
+/// (references, nested sub-flows, `cast`) is not yet honoured.
+// TODO: resolve `SubFlowParameters` values and casts like node parameters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubFlowSetting {
+    pub identifier: String,
+    pub default_value: Option<Value>,
+}
+
+impl From<&SubFlowParameters> for SubFlowSetting {
+    fn from(parameter: &SubFlowParameters) -> Self {
+        let default_value = match parameter
+            .value
+            .as_ref()
+            .and_then(|value| value.value.as_ref())
+        {
+            Some(node_value::Value::LiteralValue(literal)) if literal.references.is_empty() => {
+                literal.value.clone()
+            }
+            _ => None,
+        };
+
+        Self {
+            identifier: parameter.identifier.clone(),
+            default_value,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum NodeExecutionTarget {

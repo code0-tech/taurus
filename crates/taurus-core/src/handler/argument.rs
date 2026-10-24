@@ -7,9 +7,9 @@ use tucana::shared::value::Kind;
 use tucana::shared::{ListValue, NumberValue, Struct, Value};
 
 use crate::runtime::engine::model::NodeExecutionTarget;
+use crate::runtime::engine::model::SubFlowSetting;
 use crate::value::{number_to_f64, number_to_i64_lossy};
 use std::fmt;
-use tucana::shared::SubFlowSetting;
 
 #[derive(Clone)]
 pub struct FunctionThunk {

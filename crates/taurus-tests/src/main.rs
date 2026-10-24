@@ -9,6 +9,7 @@ use taurus_core::runtime::engine::ExecutionEngine;
 use taurus_core::runtime::remote::{RemoteExecution, RemoteRuntime};
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
+use taurus_core::value::raw_value_result;
 use tucana::aquila::{ActionNodeSubFlowValue, action_node_value};
 use tucana::shared::node_execution_result::{
     Id as NodeExecutionResultId, Result as NodeExecutionOutcome,
@@ -111,7 +112,7 @@ impl RemoteRuntime for FixtureRemoteRuntime<'_> {
             id: Some(NodeExecutionResultId::FunctionIdentifier(
                 execution.request.function_identifier,
             )),
-            result: Some(NodeExecutionOutcome::Success(value)),
+            result: Some(NodeExecutionOutcome::Success(raw_value_result(value))),
         })
     }
 }
@@ -161,9 +162,9 @@ impl FixtureRemoteRuntime<'_> {
             id: Some(NodeExecutionResultId::FunctionIdentifier(
                 execution.request.function_identifier.clone(),
             )),
-            result: Some(NodeExecutionOutcome::Success(Value {
+            result: Some(NodeExecutionOutcome::Success(raw_value_result(Value {
                 kind: Some(Kind::NullValue(0)),
-            })),
+            }))),
         })
     }
 }

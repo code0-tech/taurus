@@ -8,7 +8,7 @@ use crate::handler::argument::{
 };
 use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
 use crate::runtime::engine::model::{
-    CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget,
+    CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget, SubFlowSetting,
 };
 use crate::runtime::engine::sub_flow_registry::SubFlowRegistry;
 use crate::runtime::execution::trace::{
@@ -20,6 +20,7 @@ use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
 use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
+use crate::value::{node_value_result_to_value, raw_value_result};
 use futures_lite::future::block_on;
 use tokio::sync::Notify;
 use tucana::aquila::{
@@ -31,7 +32,7 @@ use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{
     InputType, ListValue, NodeExecutionResult as TucanaNodeExecutionResult,
-    NodeParameterNodeExecutionResult, ReferenceValue, Struct, SubFlowSetting, Value,
+    NodeValueExecutionResult, ReferenceValue, Struct, Value,
 };
 
 /// Executes a compiled flow plan starting at `start_idx` -- used both by a
@@ -80,7 +81,7 @@ struct NodeResult {
 
 struct ExecutedNode {
     signal: Signal,
-    parameter_results: Vec<NodeParameterNodeExecutionResult>,
+    parameter_results: Vec<NodeValueExecutionResult>,
 }
 
 struct EngineExecutor<'a> {
@@ -1213,7 +1214,7 @@ impl<'a> EngineExecutor<'a> {
         &self,
         node_id: i64,
         signal: Signal,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
         value_store: &mut ValueStore,
@@ -1274,7 +1275,7 @@ impl<'a> EngineExecutor<'a> {
         &self,
         function_id: &str,
         signal: Signal,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
         value_store: &mut ValueStore,
@@ -1323,7 +1324,7 @@ impl<'a> EngineExecutor<'a> {
         &self,
         node_id: i64,
         mut result: TucanaNodeExecutionResult,
-        parameter_results: Vec<NodeParameterNodeExecutionResult>,
+        parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
         value_store: &mut ValueStore,
@@ -1332,10 +1333,22 @@ impl<'a> EngineExecutor<'a> {
             result.parameter_results = parameter_results;
         }
         match result.result.clone() {
-            Some(TucanaNodeResult::Success(value)) => {
-                value_store.insert_node_result(node_id, result);
-                Signal::Success(value)
-            }
+            Some(TucanaNodeResult::Success(value)) => match node_value_result_to_value(&value) {
+                Ok(value) => {
+                    value_store.insert_node_result(node_id, result);
+                    Signal::Success(value)
+                }
+                Err(runtime_error) => {
+                    value_store.insert_error_with_timing(
+                        node_id,
+                        runtime_error.clone(),
+                        result.parameter_results,
+                        started_at,
+                        finished_at,
+                    );
+                    Signal::Failure(runtime_error)
+                }
+            },
             Some(TucanaNodeResult::Error(error)) => {
                 value_store.insert_node_result(node_id, result);
                 Signal::Failure(RuntimeError::from_tucana_error(&error))
@@ -1445,15 +1458,13 @@ impl<'a> EngineExecutor<'a> {
     }
 }
 
-fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeParameterNodeExecutionResult> {
+fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeValueExecutionResult> {
     args.iter()
-        .map(|arg| NodeParameterNodeExecutionResult {
-            value: match arg {
-                Argument::Eval(value) => Some(value.clone()),
-                // A template not yet collapsed to `Eval` (remote path) has
-                // no single materialized value, same as an unresolved thunk.
-                Argument::Thunk(_) | Argument::Template(_) => None,
-            },
+        .map(|arg| match arg {
+            Argument::Eval(value) => raw_value_result(value.clone()),
+            // A template not yet collapsed to `Eval` (remote path) has
+            // no single materialized value, same as an unresolved thunk.
+            Argument::Thunk(_) | Argument::Template(_) => NodeValueExecutionResult::default(),
         })
         .collect()
 }
@@ -1508,19 +1519,17 @@ fn remote_param_to_action_value(param: RemoteParam) -> action_node_value::Value 
     }
 }
 
-fn parameter_results_from_remote_params(
-    params: &[RemoteParam],
-) -> Vec<NodeParameterNodeExecutionResult> {
+fn parameter_results_from_remote_params(params: &[RemoteParam]) -> Vec<NodeValueExecutionResult> {
     params
         .iter()
-        .map(|param| NodeParameterNodeExecutionResult {
-            value: match param {
-                RemoteParam::Literal(value) => Some(value.clone()),
-                // No literal value was materialized for a minted sub-flow
-                // reference or an unresolved template -- same convention as
-                // an unresolved `Argument::Thunk` in `parameter_results_from_args`.
-                RemoteParam::SubFlow { .. } | RemoteParam::Template { .. } => None,
-            },
+        .map(|param| match param {
+            RemoteParam::Literal(value) => raw_value_result(value.clone()),
+            // No literal value was materialized for a minted sub-flow
+            // reference or an unresolved template -- same convention as
+            // an unresolved `Argument::Thunk` in `parameter_results_from_args`.
+            RemoteParam::SubFlow { .. } | RemoteParam::Template { .. } => {
+                NodeValueExecutionResult::default()
+            }
         })
         .collect()
 }
@@ -1552,7 +1561,10 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
 
 fn remote_result_to_signal(result: TucanaNodeExecutionResult) -> Signal {
     match result.result {
-        Some(TucanaNodeResult::Success(value)) => Signal::Success(value),
+        Some(TucanaNodeResult::Success(value)) => match node_value_result_to_value(&value) {
+            Ok(value) => Signal::Success(value),
+            Err(runtime_error) => Signal::Failure(runtime_error),
+        },
         Some(TucanaNodeResult::Error(error)) => {
             Signal::Failure(RuntimeError::from_tucana_error(&error))
         }
@@ -1570,10 +1582,6 @@ fn resolve_function_setting(
     input_type: InputType,
     value_store: &mut ValueStore,
 ) -> Result<Value, RuntimeError> {
-    if setting.hidden.unwrap_or(false) {
-        return Ok(setting_default_or_null(setting));
-    }
-
     let reference = ReferenceValue {
         target: Some(Target::InputType(input_type)),
         paths: Vec::new(),
@@ -1593,8 +1601,6 @@ fn resolve_function_setting(
         ValueStoreResult::NotFound => {
             if let Some(default_value) = setting.default_value.clone() {
                 Ok(default_value)
-            } else if setting.optional.unwrap_or(false) {
-                Ok(null_value())
             } else {
                 Err(RuntimeError::new(
                     "T-CORE-000107",
@@ -1607,10 +1613,6 @@ fn resolve_function_setting(
             }
         }
     }
-}
-
-fn setting_default_or_null(setting: &SubFlowSetting) -> Value {
-    setting.default_value.clone().unwrap_or_else(null_value)
 }
 
 fn is_null_value(value: &Value) -> bool {

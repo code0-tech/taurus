@@ -473,7 +473,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "tucana",
+ "tucana 0.0.82",
  "walkdir",
 ]
 
@@ -1726,13 +1726,13 @@ dependencies = [
 
 [[package]]
 name = "lupus"
-version = "0.0.5"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d63a56c98f5a06e1d00b5ab768b62302641450d70da6fdb79573584e3f582371"
+checksum = "e96dc06c47a11ec3ac687ecf376ef025c793ef1adcafabd928881823204de02c"
 dependencies = [
  "jsonschema",
  "serde_json",
- "tucana",
+ "tucana 0.0.83",
 ]
 
 [[package]]
@@ -3125,7 +3125,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-health",
- "tucana",
+ "tucana 0.0.82",
  "uuid",
 ]
 
@@ -3136,7 +3136,7 @@ dependencies = [
  "criterion",
  "prost",
  "taurus-core",
- "tucana",
+ "tucana 0.0.82",
 ]
 
 [[package]]
@@ -3158,7 +3158,7 @@ dependencies = [
  "serde_json",
  "taurus-macros",
  "tokio",
- "tucana",
+ "tucana 0.0.82",
  "ureq",
  "uuid",
 ]
@@ -3186,7 +3186,7 @@ dependencies = [
  "taurus-provider",
  "tokio",
  "tonic",
- "tucana",
+ "tucana 0.0.82",
 ]
 
 [[package]]
@@ -3200,7 +3200,7 @@ dependencies = [
  "taurus-core",
  "tokio",
  "tonic",
- "tucana",
+ "tucana 0.0.82",
 ]
 
 [[package]]
@@ -3212,7 +3212,7 @@ dependencies = [
  "log",
  "serde_json",
  "taurus-core",
- "tucana",
+ "tucana 0.0.82",
 ]
 
 [[package]]
@@ -3222,7 +3222,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -3631,6 +3631,26 @@ name = "tucana"
 version = "0.0.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f2eb0829308e8695969b580f1ff4c80f0e2c5e6b6b7f49aeb751d458410e93a"
+dependencies = [
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-build",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "tucana"
+version = "0.0.83"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4810f214ea212f895371454f99eb87b1af072b3275f89fa6b4d3aba7780dbef"
 dependencies = [
  "pbjson",
  "pbjson-build",

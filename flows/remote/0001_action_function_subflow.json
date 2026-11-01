@@ -1,5 +1,5 @@
 {
-	"name": "0012_remote_function_subflow",
+	"name": "0001_action_function_subflow",
 	"description": "This flow validates that a non-local function-backed sub_flow is dispatched to the remote runtime with its callback input",
 	"inputs": [
 		{
@@ -10,11 +10,6 @@
 			]
 		}
 	],
-	"remote": {
-		"targetService": "example",
-		"functionIdentifier": "remote::identity",
-		"resultParameter": "value"
-	},
 	"flow": {
 		"flowId": "13",
 		"projectId": "1",
@@ -55,11 +50,9 @@
 						"value": {
 							"subFlow": {
 								"signature": "(value: NUMBER): NUMBER",
-								"settings": [
+								"parameters": [
 									{
-										"identifier": "value",
-										"optional": false,
-										"hidden": false
+										"identifier": "value"
 									}
 								],
 								"function": {

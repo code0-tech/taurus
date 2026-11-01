@@ -214,6 +214,7 @@ async fn wait_for_reply(
 mod tests {
     use super::*;
     use std::time::Instant;
+    use taurus_core::value::raw_value_result;
     use tucana::aquila::ActionExecutionRequest;
     use tucana::shared::{node_execution_result, value::Kind};
 
@@ -305,11 +306,11 @@ mod tests {
                     finished_at: 0,
                     parameter_results: Vec::new(),
                     id: None,
-                    result: Some(node_execution_result::Result::Success(
+                    result: Some(node_execution_result::Result::Success(raw_value_result(
                         tucana::shared::Value {
                             kind: Some(Kind::BoolValue(true)),
                         },
-                    )),
+                    ))),
                 }),
             };
             client
@@ -450,11 +451,11 @@ mod tests {
         match result {
             Ok(node_result) => assert_eq!(
                 node_result.result,
-                Some(node_execution_result::Result::Success(
+                Some(node_execution_result::Result::Success(raw_value_result(
                     tucana::shared::Value {
                         kind: Some(Kind::BoolValue(true)),
                     }
-                ))
+                )))
             ),
             Err(err) => panic!("expected a successful round trip, got {:?}", err),
         }

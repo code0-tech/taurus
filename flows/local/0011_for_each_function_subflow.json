@@ -69,14 +69,16 @@
 						"value": {
 							"subFlow": {
 								"signature": "(value: NUMBER): BOOLEAN",
-								"settings": [
+								"parameters": [
 									{
 										"identifier": "value",
-										"defaultValue": {
-											"nullValue": "NULL_VALUE"
-										},
-										"optional": false,
-										"hidden": false
+										"value": {
+											"literalValue": {
+												"value": {
+													"nullValue": "NULL_VALUE"
+												}
+											}
+										}
 									}
 								],
 								"function": {

@@ -23,7 +23,8 @@ Taurus is the execution runtime in the CodeZero execution block.
 | `crates/taurus-provider` | NATS remote-runtime transport adapter |
 | `crates/taurus-manual` | Manual CLI executor for running a single validation flow file |
 | `crates/taurus-tests` | Local execution-suite runner for JSON flow fixtures under `flows/` |
-| `flows/` | Example/validation flow cases used by `taurus-tests` |
+| `flows/local/` | Validation flow cases that never call an action |
+| `flows/remote/` | Validation flow cases that call actions, run against simulated actions |
 
 ## Runtime Flow
 
@@ -96,6 +97,11 @@ Defaults are defined in `crates/taurus/src/config/mod.rs`.
 | `RUNTIME_STATUS_UPDATE_INTERVAL_SECONDS` | Heartbeat interval in dynamic mode (`0` disables heartbeat) | `30` |
 | `AQUILA_GRPC_CONNECT_TIMEOUT_SECS` | Timeout in seconds for establishing Aquila gRPC channels | `2` |
 | `AQUILA_GRPC_REQUEST_TIMEOUT_SECS` | Timeout in seconds for Aquila gRPC requests | `10` |
+| `EXECUTION_RESULT_SAMPLE_RATE` | Probability (`0.0`-`1.0`) that an execution reports its full result (input + node results) for Sagittarius; test executions always do | `1.0` |
+| `RUNTIME_USAGE_STREAM` | JetStream work-queue stream (and subject) runtime usages are published to | `runtime_usage` |
+| `RUNTIME_USAGE_BATCH_SIZE` | Maximum number of runtime usages per published NATS message | `1000` |
+| `RUNTIME_USAGE_FLUSH_INTERVAL_MS` | Maximum time in milliseconds a runtime usage waits before its batch is published | `1000` |
+| `RUNTIME_USAGE_BUFFER_CAPACITY` | Maximum number of buffered runtime usages before new ones are dropped | `100000` |
 | `OPENTELEMETRY_ENABLED` | Enables OpenTelemetry export when an endpoint is configured | `false` |
 | `OPENTELEMETRY_SERVICE_NAME` | Service name used for exported telemetry | `taurus` |
 | `OPENTELEMETRY_LOGS_ENDPOINT` | OTLP logs endpoint | empty |
@@ -124,12 +130,15 @@ cargo run -p taurus
 cargo run -p taurus-tests
 ```
 
-This executes all JSON files in `./flows` and compares runtime outputs.
+This executes the `local` suite (`./flows/local`, no remote runtime) and the
+`remote` suite (`./flows/remote`, against simulated actions) and compares
+runtime outputs; it exits non-zero if any case fails. Pass `local` or
+`remote` (`cargo run -p taurus-tests -- remote`) to run a single suite.
 
 ### 5. Run one flow manually
 
 ```bash
-cargo run -p taurus-manual -- --path ./flows/0003_for_each.json --index 0 --offline
+cargo run -p taurus-manual -- --path ./flows/local/0003_for_each.json --index 0 --offline
 ```
 
 This is useful when debugging one case or remote-execution behavior.
@@ -166,3 +175,20 @@ In the compiler, a node or function-backed sub-flow is treated as local when
 - prefixed with `draco`
 
 Any other source is routed as remote execution to that service name.
+
+### Sub flow functions returned by actions
+
+An action may return a sub flow function (`SubFlowFunctionResult`) instead of
+a value. Taurus never runs it on its own: the node's result keeps the
+function, and the node itself contributes `null` as a value. A later node that
+references the result receives it as a sub flow parameter, exactly like a sub
+flow defined in the flow:
+
+- a local function (e.g. `std::list::map`) calls it with the inputs it seeds;
+  the function has no declared parameters, so it receives all of them in order
+- a remote node receives it as a callable sub flow reference it may invoke
+  zero, one or many times while its call is outstanding (e.g. a handler)
+- an eager parameter runs it, as for any sub flow passed to one
+
+The function runs wherever its `definition_source` points, following the
+routing rule above.

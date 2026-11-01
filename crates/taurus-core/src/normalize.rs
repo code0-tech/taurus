@@ -4,7 +4,10 @@
 //! that expect every field to be present (e.g. JSON reporting, debug
 //! printing) need `None` normalized to an explicit `NullValue` first.
 
-use tucana::shared::{NodeExecutionResult, Value, node_execution_result, value::Kind};
+use tucana::shared::{
+    NodeExecutionResult, NodeValueExecutionResult, Value, node_execution_result,
+    node_value_execution_result, value::Kind,
+};
 
 pub fn null_value() -> Value {
     Value {
@@ -34,18 +37,26 @@ pub fn normalize_value(value: &mut Value) {
     }
 }
 
+/// Normalizes a node value result: a raw value is normalized in place, an
+/// unset one becomes an explicit null raw value. Sub-flow function results
+/// carry no `Value` to normalize and are left untouched.
+pub fn normalize_node_value_result(result: &mut NodeValueExecutionResult) {
+    match &mut result.value {
+        Some(node_value_execution_result::Value::RawValue(value)) => normalize_value(value),
+        Some(node_value_execution_result::Value::SubFlowFunctionResult(_)) => {}
+        None => {
+            result.value = Some(node_value_execution_result::Value::RawValue(null_value()));
+        }
+    }
+}
+
 pub fn normalize_node_execution_result(result: &mut NodeExecutionResult) {
     for parameter_result in &mut result.parameter_results {
-        match &mut parameter_result.value {
-            Some(value) => normalize_value(value),
-            None => {
-                parameter_result.value = Some(null_value());
-            }
-        }
+        normalize_node_value_result(parameter_result);
     }
 
     match &mut result.result {
-        Some(node_execution_result::Result::Success(value)) => normalize_value(value),
+        Some(node_execution_result::Result::Success(value)) => normalize_node_value_result(value),
         Some(node_execution_result::Result::Error(error)) => {
             if let Some(details) = &mut error.details {
                 for value in details.fields.values_mut() {
@@ -54,7 +65,11 @@ pub fn normalize_node_execution_result(result: &mut NodeExecutionResult) {
             }
         }
         None => {
-            result.result = Some(node_execution_result::Result::Success(null_value()));
+            result.result = Some(node_execution_result::Result::Success(
+                NodeValueExecutionResult {
+                    value: Some(node_value_execution_result::Value::RawValue(null_value())),
+                },
+            ));
         }
     }
 }

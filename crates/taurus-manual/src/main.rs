@@ -14,6 +14,7 @@ use taurus_core::normalize::normalize_node_execution_result;
 use taurus_core::runtime::engine::{ExecutionEngine, ExecutionId};
 use taurus_core::time::now_unix_micros;
 use taurus_core::types::signal::Signal;
+use taurus_core::value::raw_value_of;
 use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tucana::shared::ExecutionFlow;
 use tucana::shared::NodeExecutionResult;
@@ -224,9 +225,8 @@ fn print_timing_debug(
             .iter()
             .enumerate()
             .map(|(param_index, param)| {
-                let value = param
-                    .value
-                    .clone()
+                let value = raw_value_of(param)
+                    .cloned()
                     .map(to_json_value)
                     .unwrap_or(serde_json::Value::Null);
                 format!("{}={}", param_index, value)

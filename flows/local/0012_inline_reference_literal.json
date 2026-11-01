@@ -1,5 +1,5 @@
 {
-	"name": "0016_inline_reference_literal",
+	"name": "0012_inline_reference_literal",
 	"description": "Resolves ${signature} inline references inside a literal value -- a placeholder embedded in a larger string is spliced in as text, while a string that is exactly one placeholder preserves the referenced value's original type",
 	"inputs": [
 		{

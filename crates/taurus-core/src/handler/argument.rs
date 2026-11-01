@@ -3,13 +3,14 @@
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use std::convert::Infallible;
+use std::sync::Arc;
 use tucana::shared::value::Kind;
-use tucana::shared::{ListValue, NumberValue, Struct, Value};
+use tucana::shared::{ListValue, NumberValue, Struct, SubFlowFunctionResult, Value};
 
 use crate::runtime::engine::model::NodeExecutionTarget;
+use crate::runtime::engine::model::SubFlowSetting;
 use crate::value::{number_to_f64, number_to_i64_lossy};
 use std::fmt;
-use tucana::shared::SubFlowSetting;
 
 #[derive(Clone)]
 pub struct FunctionThunk {
@@ -17,6 +18,12 @@ pub struct FunctionThunk {
     pub execution_target: NodeExecutionTarget,
     pub parameter_index: i64,
     pub settings: Vec<SubFlowSetting>,
+    /// Set when this function is a sub flow a remote runtime returned as a
+    /// node result, rather than one compiled from the flow. Such a function
+    /// declares no parameters, so it receives every positional input its
+    /// caller seeds; and it is handed on to remote nodes as a callable sub
+    /// flow (and reported) as-is instead of being run eagerly.
+    pub sub_flow_function: Option<Arc<SubFlowFunctionResult>>,
 }
 
 impl fmt::Debug for FunctionThunk {
@@ -26,6 +33,7 @@ impl fmt::Debug for FunctionThunk {
             .field("execution_target", &self.execution_target)
             .field("parameter_index", &self.parameter_index)
             .field("settings_len", &self.settings.len())
+            .field("returned_sub_flow", &self.sub_flow_function.is_some())
             .finish()
     }
 }

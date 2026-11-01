@@ -1,0 +1,63 @@
+{
+	"name": "0008_returned_subflow_not_invoked_by_action",
+	"description": "An action returns a sub flow function that fails whenever it runs (remote::fail) and hands it to another action that only keeps it (remote::keep). The flow must succeed: receiving a sub flow never means Taurus calls it.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": "kept"
+		}
+	],
+	"flow": {
+		"flowId": "21",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::sub_flow_function",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "function_identifier",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "remote::fail"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "definition_source",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "action.example"
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::keep",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "handler",
+						"value": {
+							"referenceValue": {
+								"nodeId": "1"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

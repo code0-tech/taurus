@@ -111,7 +111,7 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [],
+								"parameters": [],
 								"startingNodeId": "8"
 							}
 						}
@@ -175,7 +175,7 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [],
+								"parameters": [],
 								"startingNodeId": "1"
 							}
 						}
@@ -186,7 +186,7 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [],
+								"parameters": [],
 								"startingNodeId": "3"
 							}
 						}
@@ -303,7 +303,7 @@
 						"value": {
 							"sub_flow": {
 								"signature": "",
-								"settings": [],
+								"parameters": [],
 								"startingNodeId": "6"
 							}
 						}

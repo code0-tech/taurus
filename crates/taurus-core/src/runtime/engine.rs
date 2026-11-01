@@ -27,7 +27,7 @@ use crate::types::exit_reason::ExitReason;
 use crate::types::signal::Signal;
 use compiler::compile_flow;
 use model::CompiledFlow;
-use sub_flow_registry::SubFlowRegistry;
+use sub_flow_registry::{PendingSubFlowTarget, SubFlowRegistry};
 
 /// Unique identifier for one top-level flow execution.
 pub type ExecutionId = uuid::Uuid;
@@ -357,7 +357,8 @@ impl ExecutionEngine {
         Self::finish_report(signal, trace_run, &mut value_store, with_trace)
     }
 
-    /// Run a previously minted sub-flow node range (see `SubFlowRegistry`).
+    /// Run a previously minted sub-flow (see `SubFlowRegistry`): a node range
+    /// of the flow, or a sub flow function a remote runtime returned.
     ///
     /// `parameters` are the action-supplied positional values from
     /// `ActionSubFlowExecutionRequest.parameters` -- bound the same way a
@@ -428,17 +429,36 @@ impl ExecutionEngine {
             run_execution_id
         );
 
-        let (signal, trace_run) = executor::execute_compiled_from(
-            &run_execution_id,
-            &pending.flow,
-            pending.start_idx,
-            &self.handlers,
-            &mut value_store,
-            remote,
-            with_trace,
-            self.sub_flow_registry.clone(),
-        )
-        .await;
+        let (signal, trace_run) = match &pending.target {
+            PendingSubFlowTarget::NodeRange { start_idx } => {
+                executor::execute_compiled_from(
+                    &run_execution_id,
+                    &pending.flow,
+                    *start_idx,
+                    &self.handlers,
+                    &mut value_store,
+                    remote,
+                    with_trace,
+                    self.sub_flow_registry.clone(),
+                )
+                .await
+            }
+            PendingSubFlowTarget::Function(function) => {
+                // The function reads its inputs from the slots seeded above,
+                // which are keyed by the node it was handed to.
+                value_store.set_current_node_id(pending.caller_node_id);
+                executor::execute_function_standalone(
+                    &run_execution_id,
+                    &pending.flow,
+                    function,
+                    &self.handlers,
+                    &mut value_store,
+                    remote,
+                    with_trace,
+                    self.sub_flow_registry.clone(),
+                )
+            }
+        };
         Some(Self::finish_report(
             signal,
             trace_run,
@@ -476,6 +496,7 @@ mod tests {
     use crate::runtime::execution::value_store::ValueStore;
     use crate::runtime::remote::{RemoteExecution, RemoteRuntime};
     use crate::types::exit_reason::ExitReason;
+    use crate::value::{raw_value_of, raw_value_result};
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -484,9 +505,9 @@ mod tests {
     };
     use tucana::shared::{
         InputType, ListValue, LiteralValue, NodeExecutionResult, NodeParameter, NodeValue,
-        ReferenceValue, Struct, SubFlow, SubFlowFunction, SubFlowSetting, Value,
-        node_execution_result, node_value, reference_value, sub_flow::ExecutionReference,
-        value::Kind,
+        NodeValueExecutionResult, ReferenceValue, Struct, SubFlow, SubFlowFunction,
+        SubFlowFunctionResult, SubFlowParameters, Value, node_execution_result, node_value,
+        node_value_execution_result, reference_value, sub_flow::ExecutionReference, value::Kind,
     };
 
     fn literal_param(database_id: i64, runtime_parameter_id: &str, value: Value) -> NodeParameter {
@@ -511,8 +532,10 @@ mod tests {
                 value: Some(node_value::Value::SubFlow(SubFlow {
                     input_schema: None,
                     output_schema: None,
+                    name: None,
+                    description: None,
                     signature: String::new(),
-                    settings: Vec::new(),
+                    parameters: Vec::new(),
                     execution_reference: Some(ExecutionReference::StartingNodeId(node_id)),
                 })),
             }),
@@ -524,7 +547,7 @@ mod tests {
         database_id: i64,
         runtime_parameter_id: &str,
         function_identifier: &str,
-        settings: Vec<SubFlowSetting>,
+        settings: Vec<SubFlowParameters>,
     ) -> NodeParameter {
         function_thunk_param_with_source(
             database_id,
@@ -540,7 +563,7 @@ mod tests {
         runtime_parameter_id: &str,
         function_identifier: &str,
         definition_source: Option<&str>,
-        settings: Vec<SubFlowSetting>,
+        settings: Vec<SubFlowParameters>,
     ) -> NodeParameter {
         NodeParameter {
             database_id,
@@ -549,8 +572,10 @@ mod tests {
                 value: Some(node_value::Value::SubFlow(SubFlow {
                     input_schema: None,
                     output_schema: None,
+                    name: None,
+                    description: None,
                     signature: String::new(),
-                    settings,
+                    parameters: settings,
                     execution_reference: Some(ExecutionReference::Function(SubFlowFunction {
                         function_identifier: function_identifier.to_string(),
                         definition_source: definition_source.map(str::to_string),
@@ -561,17 +586,16 @@ mod tests {
         }
     }
 
-    fn subflow_setting(
-        identifier: &str,
-        default_value: Option<Value>,
-        optional: bool,
-        hidden: bool,
-    ) -> SubFlowSetting {
-        SubFlowSetting {
+    fn subflow_setting(identifier: &str, default_value: Option<Value>) -> SubFlowParameters {
+        SubFlowParameters {
             identifier: identifier.to_string(),
-            default_value,
-            optional: Some(optional),
-            hidden: Some(hidden),
+            value: default_value.map(|value| NodeValue {
+                value: Some(node_value::Value::LiteralValue(LiteralValue {
+                    value: Some(value),
+                    references: Vec::new(),
+                })),
+            }),
+            cast: None,
         }
     }
 
@@ -908,8 +932,8 @@ mod tests {
                     "transform",
                     "std::number::add",
                     vec![
-                        subflow_setting("lhs", None, false, false),
-                        subflow_setting("rhs", Some(int_value(2)), false, true),
+                        subflow_setting("lhs", None),
+                        subflow_setting("rhs", Some(int_value(2))),
                     ],
                 ),
             ],
@@ -938,7 +962,9 @@ mod tests {
                 id: Some(node_execution_result::Id::FunctionIdentifier(
                     "remote::add".to_string(),
                 )),
-                result: Some(node_execution_result::Result::Success(int_value(99))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(99),
+                ))),
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
@@ -955,8 +981,8 @@ mod tests {
                     "remote::add",
                     Some("action.example"),
                     vec![
-                        subflow_setting("lhs", None, false, false),
-                        subflow_setting("rhs", Some(int_value(2)), false, true),
+                        subflow_setting("lhs", None),
+                        subflow_setting("rhs", Some(int_value(2))),
                     ],
                 ),
             ],
@@ -1036,7 +1062,7 @@ mod tests {
                     "transform",
                     "remote::identity",
                     Some("remote-service"),
-                    vec![subflow_setting("value", None, false, false)],
+                    vec![subflow_setting("value", None)],
                 ),
             ],
             None,
@@ -1064,7 +1090,7 @@ mod tests {
                     "transform",
                     "remote::identity",
                     Some("action."),
-                    vec![subflow_setting("value", None, false, false)],
+                    vec![subflow_setting("value", None)],
                 ),
             ],
             None,
@@ -1101,8 +1127,8 @@ mod tests {
                     "predicate",
                     "std::number::is_greater",
                     vec![
-                        subflow_setting("lhs", None, false, false),
-                        subflow_setting("rhs", Some(int_value(3)), false, true),
+                        subflow_setting("lhs", None),
+                        subflow_setting("rhs", Some(int_value(3))),
                     ],
                 ),
             ],
@@ -1132,7 +1158,7 @@ mod tests {
                     101,
                     "transform",
                     "std::control::value",
-                    vec![subflow_setting("value", Some(int_value(9)), false, false)],
+                    vec![subflow_setting("value", Some(int_value(9)))],
                 ),
             ],
             None,
@@ -1145,65 +1171,6 @@ mod tests {
             expect_success(signal),
             list_value(vec![int_value(9), int_value(5)])
         );
-    }
-
-    #[test]
-    fn function_subflow_hidden_setting_always_uses_default() {
-        let engine = ExecutionEngine::new();
-
-        let map_node = node(
-            1,
-            "std::list::map",
-            vec![
-                literal_param(100, "list", list_value(vec![int_value(1), int_value(2)])),
-                function_thunk_param(
-                    101,
-                    "transform",
-                    "std::control::value",
-                    vec![subflow_setting("value", Some(int_value(9)), false, true)],
-                ),
-            ],
-            None,
-        );
-
-        let (signal, reason) = engine.execute_graph("test", 1, vec![map_node], None, None, false);
-
-        assert_eq!(reason, ExitReason::Success);
-        assert_eq!(
-            expect_success(signal),
-            list_value(vec![int_value(9), int_value(9)])
-        );
-    }
-
-    #[test]
-    fn function_subflow_optional_missing_setting_uses_null() {
-        let engine = ExecutionEngine::new();
-
-        let if_node = node(
-            1,
-            "std::control::if",
-            vec![
-                literal_param(
-                    100,
-                    "condition",
-                    Value {
-                        kind: Some(Kind::BoolValue(true)),
-                    },
-                ),
-                function_thunk_param(
-                    101,
-                    "runnable",
-                    "std::control::value",
-                    vec![subflow_setting("value", None, true, false)],
-                ),
-            ],
-            None,
-        );
-
-        let (signal, reason) = engine.execute_graph("test", 1, vec![if_node], None, None, false);
-
-        assert_eq!(reason, ExitReason::Success);
-        assert_eq!(expect_success(signal), null_value());
     }
 
     #[test]
@@ -1225,7 +1192,7 @@ mod tests {
                     101,
                     "runnable",
                     "std::control::value",
-                    vec![subflow_setting("value", None, false, false)],
+                    vec![subflow_setting("value", None)],
                 ),
             ],
             None,
@@ -1281,7 +1248,7 @@ mod tests {
                     100,
                     "lhs",
                     "std::control::value",
-                    vec![subflow_setting("value", Some(int_value(40)), false, true)],
+                    vec![subflow_setting("value", Some(int_value(40)))],
                 ),
                 literal_param(101, "rhs", int_value(2)),
             ],
@@ -1318,7 +1285,7 @@ mod tests {
                     100,
                     "lhs",
                     "std::test::echo",
-                    vec![subflow_setting("value", Some(int_value(20)), false, true)],
+                    vec![subflow_setting("value", Some(int_value(20)))],
                 ),
                 literal_param(101, "rhs", int_value(2)),
             ],
@@ -1335,12 +1302,12 @@ mod tests {
         assert_function_result_id(function_result, "std::test::echo");
         assert_eq!(function_result.parameter_results.len(), 1);
         assert_eq!(
-            function_result.parameter_results[0].value,
+            raw_value_of(&function_result.parameter_results[0]).cloned(),
             Some(int_value(20))
         );
         match function_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(20));
+                assert_eq!(raw_value_of(value), Some(&int_value(20)));
             }
             other => panic!("expected function success result, got {:?}", other),
         }
@@ -1349,7 +1316,7 @@ mod tests {
         assert_node_result_id(node_result, 1);
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(22));
+                assert_eq!(raw_value_of(value), Some(&int_value(22)));
             }
             other => panic!("expected node success result, got {:?}", other),
         }
@@ -1376,12 +1343,18 @@ mod tests {
         let node_result = &report.node_execution_results[0];
         assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 2);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(1)));
-        assert_eq!(node_result.parameter_results[1].value, Some(int_value(2)));
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[0]).cloned(),
+            Some(int_value(1))
+        );
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[1]).cloned(),
+            Some(int_value(2))
+        );
 
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(3));
+                assert_eq!(raw_value_of(value), Some(&int_value(3)));
             }
             other => panic!("expected node success result, got {:?}", other),
         }
@@ -1415,12 +1388,18 @@ mod tests {
         let node_result = &report.node_execution_results[1];
         assert_node_result_id(node_result, 2);
         assert_eq!(node_result.parameter_results.len(), 2);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(7)));
-        assert_eq!(node_result.parameter_results[1].value, Some(int_value(5)));
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[0]).cloned(),
+            Some(int_value(7))
+        );
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[1]).cloned(),
+            Some(int_value(5))
+        );
 
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Success(value)) => {
-                assert_eq!(value, &int_value(12));
+                assert_eq!(raw_value_of(value), Some(&int_value(12)));
             }
             other => panic!("expected node success result, got {:?}", other),
         }
@@ -1462,7 +1441,10 @@ mod tests {
         let node_result = &report.node_execution_results[0];
         assert_node_result_id(node_result, 1);
         assert_eq!(node_result.parameter_results.len(), 1);
-        assert_eq!(node_result.parameter_results[0].value, Some(int_value(20)));
+        assert_eq!(
+            raw_value_of(&node_result.parameter_results[0]).cloned(),
+            Some(int_value(20))
+        );
         match node_result.result.as_ref() {
             Some(node_execution_result::Result::Error(error)) => {
                 assert_eq!(error.code, "T-CORE-000006");
@@ -1482,7 +1464,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(99)),
-                result: Some(node_execution_result::Result::Success(string_value("ok"))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    string_value("ok"),
+                ))),
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
@@ -1518,7 +1502,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(99)),
-                result: Some(node_execution_result::Result::Success(string_value("ok"))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    string_value("ok"),
+                ))),
             },
             target_services: None,
             project_ids: Some(Arc::clone(&project_ids)),
@@ -1601,7 +1587,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(1)),
-                result: Some(node_execution_result::Result::Success(int_value(1))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
             },
             requests: Arc::clone(&requests),
             found_pending_during_call: Arc::clone(&found_pending_during_call),
@@ -1745,7 +1733,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(1)),
-                result: Some(node_execution_result::Result::Success(int_value(1))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
             },
             minted_sub_flow_id: Arc::clone(&minted_sub_flow_id),
             release: Arc::clone(&release),
@@ -1936,7 +1926,9 @@ mod tests {
         let callback_values: Vec<_> = callback_results
             .iter()
             .map(|result| match result.result.as_ref() {
-                Some(node_execution_result::Result::Success(value)) => value.clone(),
+                Some(node_execution_result::Result::Success(value)) => {
+                    raw_value_of(value).cloned().expect("expected raw value")
+                }
                 other => panic!("expected callback success result, got {:?}", other),
             })
             .collect();
@@ -1951,7 +1943,7 @@ mod tests {
                 result
                     .parameter_results
                     .iter()
-                    .map(|parameter| parameter.value.clone())
+                    .map(|parameter| raw_value_of(parameter).cloned())
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -1998,7 +1990,7 @@ mod tests {
                     5,
                     "consumer",
                     "std::boolean::from_number",
-                    vec![subflow_setting("value", Some(null_value()), false, false)],
+                    vec![subflow_setting("value", Some(null_value()))],
                 ),
             ],
             Some(1),
@@ -2033,16 +2025,16 @@ mod tests {
         for (index, result) in function_results.iter().enumerate() {
             assert_eq!(result.parameter_results.len(), 1);
             assert_eq!(
-                result.parameter_results[0].value,
+                raw_value_of(&result.parameter_results[0]).cloned(),
                 Some(int_value(index as i64 + 1))
             );
             match result.result.as_ref() {
                 Some(node_execution_result::Result::Success(value)) => {
                     assert_eq!(
-                        value,
-                        &Value {
+                        raw_value_of(value),
+                        Some(&Value {
                             kind: Some(Kind::BoolValue(true)),
-                        }
+                        })
                     );
                 }
                 other => panic!("expected function success result, got {:?}", other),
@@ -2284,7 +2276,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(2)),
-                result: Some(node_execution_result::Result::Success(int_value(42))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(42),
+                ))),
             },
             target_services: Some(Arc::clone(&target_services)),
             project_ids: None,
@@ -2344,7 +2338,9 @@ mod tests {
                 finished_at: 2,
                 parameter_results: Vec::new(),
                 id: Some(node_execution_result::Id::NodeId(3)),
-                result: Some(node_execution_result::Result::Success(int_value(7))),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(7),
+                ))),
             },
             target_services: None,
             project_ids: None,
@@ -2427,9 +2423,11 @@ mod tests {
         );
         assert_eq!(
             report.node_execution_results[0].result,
-            Some(node_execution_result::Result::Success(Value {
-                kind: Some(Kind::NullValue(0)),
-            }))
+            Some(node_execution_result::Result::Success(raw_value_result(
+                Value {
+                    kind: Some(Kind::NullValue(0)),
+                }
+            )))
         );
     }
 
@@ -2488,10 +2486,240 @@ mod tests {
         for result in &report.node_execution_results {
             assert_eq!(
                 result.result,
-                Some(node_execution_result::Result::Success(Value {
-                    kind: Some(Kind::NullValue(0)),
-                }))
+                Some(node_execution_result::Result::Success(raw_value_result(
+                    Value {
+                        kind: Some(Kind::NullValue(0)),
+                    }
+                )))
             );
+        }
+    }
+
+    fn returned_sub_flow_function(
+        function_identifier: &str,
+        definition_source: Option<&str>,
+    ) -> SubFlowFunctionResult {
+        SubFlowFunctionResult {
+            function: Some(SubFlowFunction {
+                function_identifier: function_identifier.to_string(),
+                definition_source: definition_source.map(str::to_string),
+            }),
+            input_schema: None,
+            output_schema: None,
+            name: function_identifier.to_string(),
+            description: String::new(),
+        }
+    }
+
+    fn returning_sub_flow_function(function: SubFlowFunctionResult) -> NodeExecutionResult {
+        NodeExecutionResult {
+            started_at: 1,
+            finished_at: 2,
+            parameter_results: Vec::new(),
+            id: Some(node_execution_result::Id::NodeId(1)),
+            result: Some(node_execution_result::Result::Success(
+                NodeValueExecutionResult {
+                    value: Some(node_value_execution_result::Value::SubFlowFunctionResult(
+                        function,
+                    )),
+                },
+            )),
+        }
+    }
+
+    fn expect_reported_sub_flow_function(result: &NodeValueExecutionResult, identifier: &str) {
+        match result.value.as_ref() {
+            Some(node_value_execution_result::Value::SubFlowFunctionResult(function)) => {
+                assert_eq!(
+                    function
+                        .function
+                        .as_ref()
+                        .map(|function| function.function_identifier.as_str()),
+                    Some(identifier)
+                )
+            }
+            other => panic!("expected a reported sub flow function, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn returned_sub_flow_function_is_kept_as_node_result_and_reported_where_consumed() {
+        let engine = ExecutionEngine::new();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let remote = StubRemoteRuntime {
+            result: returning_sub_flow_function(returned_sub_flow_function(
+                "std::number::negate",
+                None,
+            )),
+            target_services: None,
+            project_ids: None,
+            requests: Some(Arc::clone(&requests)),
+        };
+
+        let mut producer = node(1, "remote::make_transform", Vec::new(), Some(2));
+        producer.definition_source = Some("action.example".to_string());
+        let consumer = node(
+            2,
+            "std::list::map",
+            vec![
+                literal_param(200, "list", list_value(vec![int_value(1), int_value(2)])),
+                node_result_ref_param(201, "transform", 1),
+            ],
+            None,
+        );
+        let flow = ExecutionFlow {
+            flow_id: 1,
+            project_id: 1,
+            starting_node_id: 1,
+            node_functions: vec![producer, consumer],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+
+        assert_eq!(report.exit_reason, ExitReason::Success);
+        assert_eq!(
+            expect_success(report.signal),
+            list_value(vec![int_value(-1), int_value(-2)])
+        );
+        // Only the producer went remote; the returned function is local.
+        assert_eq!(requests.lock().expect("request recorder").len(), 1);
+
+        let producer_result = report
+            .node_execution_results
+            .iter()
+            .find(|result| result.id == Some(node_execution_result::Id::NodeId(1)))
+            .expect("producer result should be reported");
+        match producer_result.result.as_ref() {
+            Some(node_execution_result::Result::Success(value)) => {
+                expect_reported_sub_flow_function(value, "std::number::negate")
+            }
+            other => panic!("expected producer success, got {:?}", other),
+        }
+
+        let consumer_result = report
+            .node_execution_results
+            .iter()
+            .find(|result| result.id == Some(node_execution_result::Id::NodeId(2)))
+            .expect("consumer result should be reported");
+        assert_eq!(consumer_result.parameter_results.len(), 2);
+        expect_reported_sub_flow_function(
+            &consumer_result.parameter_results[1],
+            "std::number::negate",
+        );
+    }
+
+    #[test]
+    fn returned_sub_flow_function_is_minted_for_remote_consumer_and_released_afterwards() {
+        let engine = ExecutionEngine::new();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let found_pending_during_call = Arc::new(Mutex::new(None));
+        let remote = SubFlowMintProbeRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            result: returning_sub_flow_function(returned_sub_flow_function(
+                "remote::fail",
+                Some("action.example"),
+            )),
+            requests: Arc::clone(&requests),
+            found_pending_during_call: Arc::clone(&found_pending_during_call),
+        };
+
+        let mut producer = node(
+            1,
+            "remote::make_handler",
+            vec![literal_param(100, "name", string_value("handler"))],
+            Some(2),
+        );
+        producer.definition_source = Some("action.example".to_string());
+        let mut consumer = node(
+            2,
+            "remote::register_handler",
+            vec![node_result_ref_param(200, "handler", 1)],
+            None,
+        );
+        consumer.definition_source = Some("action.example".to_string());
+        let flow = ExecutionFlow {
+            flow_id: 1,
+            project_id: 1,
+            starting_node_id: 1,
+            node_functions: vec![producer, consumer],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        let requests = requests.lock().expect("request recorder");
+        // The handler (`remote::fail`) is never run -- only the two nodes are.
+        assert_eq!(requests.len(), 2);
+        let execution_identifier = match &requests[1].parameters[0].value {
+            Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+                ..
+            })) => execution_identifier.clone(),
+            other => panic!("expected the handler as a minted sub flow, got {:?}", other),
+        };
+        assert_eq!(
+            *found_pending_during_call.lock().expect("probe recorder"),
+            Some(true),
+            "the handler must be invocable while the consuming call is outstanding"
+        );
+        assert!(
+            engine
+                .sub_flow_registry
+                .get(&execution_identifier)
+                .is_none(),
+            "the handler's registry entry should be removed once the consuming call resolves"
+        );
+
+        let consumer_result = report
+            .node_execution_results
+            .iter()
+            .find(|result| result.id == Some(node_execution_result::Id::NodeId(2)))
+            .expect("consumer result should be reported");
+        expect_reported_sub_flow_function(&consumer_result.parameter_results[0], "remote::fail");
+    }
+
+    #[test]
+    fn returned_sub_flow_function_without_function_reference_fails_when_consumed() {
+        let engine = ExecutionEngine::new();
+        let mut function = returned_sub_flow_function("std::number::negate", None);
+        function.function = None;
+        let remote = StubRemoteRuntime {
+            result: returning_sub_flow_function(function),
+            target_services: None,
+            project_ids: None,
+            requests: None,
+        };
+
+        let mut producer = node(1, "remote::make_transform", Vec::new(), Some(2));
+        producer.definition_source = Some("action.example".to_string());
+        let consumer = node(
+            2,
+            "std::list::map",
+            vec![
+                literal_param(200, "list", list_value(vec![int_value(1)])),
+                node_result_ref_param(201, "transform", 1),
+            ],
+            None,
+        );
+        let flow = ExecutionFlow {
+            flow_id: 1,
+            project_id: 1,
+            starting_node_id: 1,
+            node_functions: vec![producer, consumer],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+
+        assert_eq!(report.exit_reason, ExitReason::Failure);
+        match report.signal {
+            Signal::Failure(err) => assert_eq!(err.code, "T-CORE-000008"),
+            other => panic!(
+                "expected an invalid sub flow function failure, got {:?}",
+                other
+            ),
         }
     }
 }

@@ -1,7 +1,13 @@
 # Test Execution Suite
 
-This package runs every JSON fixture in `./flows` directly through Taurus's
-execution engine and compares the result with the fixture's expected value.
+This package runs JSON flow fixtures directly through Taurus's execution
+engine and compares each result with the fixture's expected value. The
+fixtures are split into two suites:
+
+| Suite | Directory | Runs with |
+| --- | --- | --- |
+| `local` | `flows/local/` | No remote runtime. Flows that call an action fail as they would without one. |
+| `remote` | `flows/remote/` | Simulated actions (`src/simulated_actions.rs`) standing in for real ones. |
 
 ## Run the execution suite
 
@@ -9,7 +15,17 @@ execution engine and compares the result with the fixture's expected value.
 cargo run --package taurus-tests
 ```
 
+Pass `local` or `remote` to run a single suite:
+
+```console
+cargo run --package taurus-tests -- remote
+```
+
+The runner exits non-zero if any case fails.
+
 ## Add a flow
+
+Put the fixture into the suite directory that matches what the flow does:
 
 ```json
 {
@@ -25,19 +41,21 @@ cargo run --package taurus-tests
 }
 ```
 
-## Testing remote function sub-flows
+## Simulated actions
 
-Add a `remote` fixture to the case when the flow should dispatch a
-function-backed sub-flow without connecting to NATS:
+Flows in the `remote` suite dispatch to these in-process action functions.
+Point a node (or a function-backed sub-flow) at one with its
+`definitionSource` and `runtimeFunctionId`:
 
-```json
-"remote": {
-  "targetService": "example",
-  "functionIdentifier": "remote::identity",
-  "resultParameter": "value"
-}
-```
+| Service (`definitionSource`) | Function | Behavior |
+| --- | --- | --- |
+| `action.example` | `remote::identity(value)` | Returns `value`. |
+| `action.example` | `remote::double(value)` | Returns `value * 2`. |
+| `action.example` | `remote::fail()` | Always fails, to prove a function never runs. |
+| `action.example` | `remote::sub_flow_function(function_identifier, definition_source)` | Returns a sub flow function instead of a value (`definition_source` may be `null` for Taurus functions). |
+| `action.example` | `remote::apply(handler, value)` | Invokes the `handler` sub flow once with `value` and returns its result. |
+| `action.example` | `remote::keep(handler)` | Receives a `handler` sub flow, never invokes it, and returns `"kept"`. |
+| `action.websocket-action` | `for_each(list, consumer)` | Invokes the `consumer` sub flow once per element and returns `null`. |
 
-The fixture validates the target service and function identifier, then returns
-the named request parameter as the remote result. This lets a flow verify both
-remote routing and sub-flow setting materialization.
+To test new action behavior, add a function to `SimulatedActions` and
+document it here.

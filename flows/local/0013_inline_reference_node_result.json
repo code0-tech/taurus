@@ -1,5 +1,5 @@
 {
-	"name": "0017_inline_reference_node_result",
+	"name": "0013_inline_reference_node_result",
 	"description": "An inline reference (${signature}) resolves against another node's execution result, not just a nested literal -- exercises the same node-execution + reference-resolution path a plain referenceValue parameter would",
 	"inputs": [
 		{

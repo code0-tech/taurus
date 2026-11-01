@@ -57,8 +57,10 @@ fn thunk_param(runtime_parameter_id: &str, starting_node_id: i64) -> NodeParamet
             value: Some(node_value::Value::SubFlow(SubFlow {
                 input_schema: None,
                 output_schema: None,
+                name: None,
+                description: None,
                 signature: String::new(),
-                settings: Vec::new(),
+                parameters: Vec::new(),
                 execution_reference: Some(ExecutionReference::StartingNodeId(starting_node_id)),
             })),
         }),

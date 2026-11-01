@@ -1,0 +1,96 @@
+{
+	"name": "0005_returned_subflow_consumed_locally",
+	"description": "An action returns a sub flow function (std::number::square) instead of a value. A later local map receives it as its transform sub flow and runs it once per element with that element as input.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": [
+				1,
+				4,
+				9
+			]
+		}
+	],
+	"flow": {
+		"flowId": "18",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::sub_flow_function",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "function_identifier",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "std::number::square"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "definition_source",
+						"value": {
+							"literalValue": {
+								"value": {
+									"nullValue": "NULL_VALUE"
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "2",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "2"
+												}
+											},
+											{
+												"numberValue": {
+													"integer": "3"
+												}
+											}
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "201",
+						"runtimeParameterId": "transform",
+						"value": {
+							"referenceValue": {
+								"nodeId": "1"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

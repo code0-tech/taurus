@@ -40,6 +40,9 @@ path = "./crates/taurus-core"
 [workspace.dependencies.taurus-provider]
 path = "./crates/taurus-provider"
 
+[workspace.dependencies.apus-protocol]
+path = "../apus/rust/apus-protocol"
+
 [workspace.dependencies.taurus-macros]
 path = "./crates/taurus-macros"
 

@@ -1,0 +1,67 @@
+{
+	"name": "0017_stashed_reference_invoked_twice",
+	"description": "Strengthens code0-tech/taurus#346: the same stashed reference is invoked by two later nodes. Flow-scoped lifetimes keep it alive across both (entries are swept at flow end, not on first use), so node 3's invocation still succeeds and the flow returns \"survived\".",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": "survived"
+		}
+	],
+	"flow": {
+		"flowId": "27",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::stash",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "handler",
+						"value": { "sub_flow": { "signature": "(value: TEXT): TEXT", "parameters": [{ "identifier": "value" }], "startingNodeId": "4" } }
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::run_stashed",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "value",
+						"value": { "literalValue": { "value": { "stringValue": "first" } } }
+					}
+				],
+				"nextNodeId": "3"
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "3",
+				"runtimeFunctionId": "remote::run_stashed",
+				"parameters": [
+					{
+						"databaseId": "300",
+						"runtimeParameterId": "value",
+						"value": { "literalValue": { "value": { "stringValue": "second" } } }
+					}
+				]
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "4",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "400",
+						"runtimeParameterId": "value",
+						"value": { "literalValue": { "value": { "stringValue": "survived" } } }
+					}
+				]
+			}
+		]
+	}
+}

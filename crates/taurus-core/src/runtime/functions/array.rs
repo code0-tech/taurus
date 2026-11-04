@@ -2185,6 +2185,47 @@ mod tests {
         assert_eq!(out_r.len(), 4);
     }
 
+    // `run_from_values(vec![])` yields `0.0` (Equal) for every comparison, so a
+    // correct *stable* sort must leave the list in its original order. This is
+    // independent of the merge sort's internal comparison sequence, so it's a
+    // robust guard on both the stability and the correctness of the rewritten
+    // async sort (ascending/descending ordering itself is asserted end-to-end
+    // by the 0013/0019 remote-comparator fixtures).
+    #[test]
+    fn sort_is_stable_when_every_comparison_is_equal() {
+        let mut ctx = ValueStore::default();
+        let items = vec![v_str("a"), v_str("b"), v_str("c"), v_str("d"), v_str("e")];
+        let input = v_list(items.clone());
+
+        let mut run = run_from_values(Vec::new());
+        let out = expect_list(sort(&[a_val(input.clone()), a_thunk(1)], &mut ctx, &mut run));
+        assert_eq!(out, items, "stable sort must preserve input order on all-equal");
+
+        let mut run = run_from_values(Vec::new());
+        let out_r = expect_list(sort_reverse(&[a_val(input), a_thunk(1)], &mut ctx, &mut run));
+        assert_eq!(
+            out_r, items,
+            "stable sort_reverse must preserve input order on all-equal"
+        );
+    }
+
+    #[test]
+    fn sort_of_empty_and_single_element_lists_is_identity() {
+        let mut ctx = ValueStore::default();
+
+        let mut run = run_from_values(Vec::new());
+        let empty = expect_list(sort(&[a_val(v_list(vec![])), a_thunk(1)], &mut ctx, &mut run));
+        assert!(empty.is_empty());
+
+        let mut run = run_from_values(Vec::new());
+        let single = expect_list(sort(
+            &[a_val(v_list(vec![v_num(42.0)])), a_thunk(1)],
+            &mut ctx,
+            &mut run,
+        ));
+        assert_eq!(single, vec![v_num(42.0)]);
+    }
+
     // --- reverse / flat ------------------------------------------------------
     #[test]
     fn test_reverse_success_and_error() {

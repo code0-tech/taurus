@@ -1,0 +1,89 @@
+{
+	"name": "0013_sort_with_remote_comparator",
+	"description": "std::list::sort driven by a comparator sub flow that calls a remote action (remote::compare returns a - b). Exercises the async bottom-up merge sort awaiting a remote comparator per comparison -- the path that replaced slice::sort_by + block_on. Ascending sort of [3,1,2] yields [1,2,3].",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": [
+				1,
+				2,
+				3
+			]
+		}
+	],
+	"flow": {
+		"flowId": "23",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::list::sort",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{ "numberValue": { "integer": "3" } },
+											{ "numberValue": { "integer": "1" } },
+											{ "numberValue": { "integer": "2" } }
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "comparator",
+						"value": {
+							"sub_flow": {
+								"signature": "(a: NUMBER, b: NUMBER): NUMBER",
+								"parameters": [],
+								"startingNodeId": "2"
+							}
+						}
+					}
+				]
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::compare",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "a",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "1",
+									"parameterIndex": "1",
+									"inputIndex": "0"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "201",
+						"runtimeParameterId": "b",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "1",
+									"parameterIndex": "1",
+									"inputIndex": "1"
+								}
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

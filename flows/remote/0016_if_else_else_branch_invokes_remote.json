@@ -1,0 +1,76 @@
+{
+	"name": "0016_if_else_else_branch_invokes_remote",
+	"description": "The ELSE branch of std::control::if_else dispatches to a remote action (remote::double). Complements 0012 (the if/true branch) so both synchronous-callback-to-remote branches go through the async path. condition=false runs remote::double(21) -> 42.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": 42
+		}
+	],
+	"flow": {
+		"flowId": "26",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::control::if_else",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "condition",
+						"value": { "literalValue": { "value": { "boolValue": false } } }
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "runnable",
+						"value": { "sub_flow": { "signature": "", "parameters": [], "startingNodeId": "10" } }
+					},
+					{
+						"databaseId": "102",
+						"runtimeParameterId": "else_runnable",
+						"value": { "sub_flow": { "signature": "", "parameters": [], "startingNodeId": "11" } }
+					}
+				],
+				"nextNodeId": "12"
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "10",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "1000",
+						"runtimeParameterId": "value",
+						"value": { "literalValue": { "value": { "stringValue": "if-branch" } } }
+					}
+				]
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "11",
+				"runtimeFunctionId": "remote::double",
+				"parameters": [
+					{
+						"databaseId": "1100",
+						"runtimeParameterId": "value",
+						"value": { "literalValue": { "value": { "numberValue": { "integer": "21" } } } }
+					}
+				]
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "12",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "1200",
+						"runtimeParameterId": "value",
+						"value": { "referenceValue": { "nodeId": "11" } }
+					}
+				]
+			}
+		]
+	}
+}

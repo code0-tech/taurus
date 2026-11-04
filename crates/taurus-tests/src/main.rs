@@ -127,3 +127,37 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The fixtures live at the repo root (`flows/`), but `cargo test` runs
+    // with the crate dir as CWD, so resolve them relative to the manifest.
+    fn flows_dir(suite: &str) -> String {
+        format!("{}/../../flows/{}/", env!("CARGO_MANIFEST_DIR"), suite)
+    }
+
+    fn assert_suite(suite: Suite, dir: &str) {
+        let cases = Cases::from_path(dir);
+        assert!(!cases.cases.is_empty(), "no fixtures found in {dir}");
+        for case in &cases.cases {
+            if let CaseResult::Failure(input, result) = run_case(case, suite) {
+                panic!(
+                    "fixture `{}` failed\n  expected: {}\n  got:      {}\n  why: {}",
+                    case.name, input.expected_result, result, case.description
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn local_fixtures_pass() {
+        assert_suite(Suite::Local, &flows_dir("local"));
+    }
+
+    #[test]
+    fn remote_fixtures_pass() {
+        assert_suite(Suite::Remote, &flows_dir("remote"));
+    }
+}

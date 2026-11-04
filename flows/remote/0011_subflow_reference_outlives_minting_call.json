@@ -1,0 +1,76 @@
+{
+	"name": "0011_subflow_reference_outlives_minting_call",
+	"description": "Reproduces code0-tech/taurus#346: node 1 (remote::stash) receives a sub flow but does not invoke it -- so its reference is minted for node 1's call and that call resolves. node 2 (remote::run_stashed) invokes that same reference afterwards. Pre-fix the reference was dropped when node 1's call resolved (SubFlowNotFound); with flow-scoped lifetimes it survives until the flow ends, so node 2 runs it and gets \"survived\".",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": "survived"
+		}
+	],
+	"flow": {
+		"flowId": "21",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::stash",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "handler",
+						"value": {
+							"sub_flow": {
+								"signature": "(value: TEXT): TEXT",
+								"parameters": [
+									{
+										"identifier": "value"
+									}
+								],
+								"startingNodeId": "3"
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::run_stashed",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "ignored"
+								}
+							}
+						}
+					}
+				]
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "3",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "300",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "survived"
+								}
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

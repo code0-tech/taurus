@@ -15,6 +15,8 @@
 //! | `example` | `remote::sub_flow_function(function_identifier, definition_source)` | Returns a sub flow function (`SubFlowFunctionResult`) instead of a value. |
 //! | `example` | `remote::apply(handler, value)` | Invokes the `handler` sub flow once with `value` and returns its result. |
 //! | `example` | `remote::keep(handler)` | Receives a `handler` sub flow but never invokes it; returns `"kept"`. |
+//! | `example` | `remote::stash(handler)` | Stores the `handler` sub flow's id for a later call (does not invoke it); returns `"stashed"`. |
+//! | `example` | `remote::run_stashed(value)` | Invokes the handler a prior `remote::stash` stored, with `value` -- proving a minted reference outlives the call that minted it (code0-tech/taurus#346). |
 //! | `websocket-action` | `for_each(list, consumer)` | Invokes `consumer` once per element; returns `null`. |
 
 use taurus_core::runtime::engine::ExecutionEngine;
@@ -37,11 +39,18 @@ pub struct SimulatedActions<'a> {
     /// minted sub flow resolves it against the registry entry the flow's own
     /// remote call created.
     engine: &'a ExecutionEngine,
+    /// A sub flow id a `remote::stash` call kept, to be invoked by a *later*
+    /// `remote::run_stashed` call. `Mutex` (not `RefCell`) so `&self` stays
+    /// `Send` across the `async_trait` future boundary.
+    stashed: std::sync::Mutex<Option<String>>,
 }
 
 impl<'a> SimulatedActions<'a> {
     pub fn new(engine: &'a ExecutionEngine) -> Self {
-        Self { engine }
+        Self {
+            engine,
+            stashed: std::sync::Mutex::new(None),
+        }
     }
 }
 
@@ -73,6 +82,32 @@ impl RemoteRuntime for SimulatedActions<'_> {
             ("example", "remote::keep") => {
                 sub_flow(parameters, 0)?;
                 raw(string("kept"))
+            }
+            ("example", "remote::stash") => {
+                let handler = sub_flow(parameters, 0)?;
+                *self
+                    .stashed
+                    .lock()
+                    .expect("stashed mutex should not be poisoned") = Some(handler);
+                raw(string("stashed"))
+            }
+            ("example", "remote::run_stashed") => {
+                // Clone the id out, releasing the lock before the `.await`.
+                let handler = {
+                    self.stashed
+                        .lock()
+                        .expect("stashed mutex should not be poisoned")
+                        .clone()
+                };
+                let handler = handler.ok_or_else(|| {
+                    RuntimeError::new(
+                        "T-TEST-000007",
+                        "NothingStashed",
+                        "remote::run_stashed called before remote::stash",
+                    )
+                })?;
+                let value = literal(parameters, 0)?;
+                raw(self.invoke(&handler, value).await?)
             }
             ("websocket-action", "for_each") => {
                 let consumer = sub_flow(parameters, 1)?;

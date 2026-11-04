@@ -5,41 +5,24 @@
 
 use std::collections::HashMap;
 
-use tucana::shared::{ReferenceValue, Struct, SubFlowParameters, Value, node_value};
+use tucana::shared::{ReferenceValue, Struct, Value};
 
-/// One parameter of a function sub-flow, as the executor resolves it.
+/// One parameter of a function sub-flow (`SubFlowParameters`), compiled like a
+/// node parameter.
 ///
-/// Tucana 0.0.83 replaced the wire-level `SubFlowSetting`
-/// (`default_value`/`optional`/`hidden`) with `SubFlowParameters`
-/// (`NodeValue` + `cast`). Until the executor resolves those natively, each
-/// parameter is mapped onto the previous semantics: a plain literal value acts
-/// as the default used when the caller doesn't supply one; everything else
-/// (references, nested sub-flows, `cast`) is not yet honoured.
-// TODO: resolve `SubFlowParameters` values and casts like node parameters.
-#[derive(Debug, Clone, PartialEq)]
+/// `default` is the fully compiled parameter value, used when the caller
+/// supplies nothing (or a null) for this parameter. Because it is compiled
+/// through the same path as a node parameter (`compiler::compile_node_value`),
+/// it may be a literal, a reference, a `${signature}` template, or a nested
+/// sub-flow -- not only a bare literal as before. `None` when the parameter
+/// declared no value.
+///
+/// Note: `SubFlowParameters.cast` is not applied, matching node parameters --
+/// casting is not implemented anywhere in the engine yet.
+#[derive(Debug, Clone)]
 pub struct SubFlowSetting {
     pub identifier: String,
-    pub default_value: Option<Value>,
-}
-
-impl From<&SubFlowParameters> for SubFlowSetting {
-    fn from(parameter: &SubFlowParameters) -> Self {
-        let default_value = match parameter
-            .value
-            .as_ref()
-            .and_then(|value| value.value.as_ref())
-        {
-            Some(node_value::Value::LiteralValue(literal)) if literal.references.is_empty() => {
-                literal.value.clone()
-            }
-            _ => None,
-        };
-
-        Self {
-            identifier: parameter.identifier.clone(),
-            default_value,
-        }
-    }
+    pub default: Option<CompiledArg>,
 }
 
 #[derive(Debug, Clone)]

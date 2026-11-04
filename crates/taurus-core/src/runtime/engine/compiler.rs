@@ -250,8 +250,8 @@ fn compile_node_value(
                     settings: sub_flow
                         .parameters
                         .iter()
-                        .map(SubFlowSetting::from)
-                        .collect(),
+                        .map(|parameter| compile_sub_flow_setting(node_id, parameter_index, parameter))
+                        .collect::<Result<Vec<_>, _>>()?,
                 }))
             }
             None => Err(CompileError::SubFlowExecutionReferenceMissing {
@@ -260,6 +260,27 @@ fn compile_node_value(
             }),
         },
     }
+}
+
+/// Compiles one function sub-flow parameter into a [`SubFlowSetting`]. The
+/// parameter's value is compiled through the same `compile_node_value` path as
+/// a node parameter, so a sub-flow default can be a literal, a reference, a
+/// template, or a nested sub-flow -- not only a literal. A parameter with no
+/// value compiles to a setting with no default.
+fn compile_sub_flow_setting(
+    node_id: i64,
+    parameter_index: usize,
+    parameter: &tucana::shared::SubFlowParameters,
+) -> Result<SubFlowSetting, CompileError> {
+    let default = match parameter.value.as_ref().and_then(|value| value.value.as_ref()) {
+        Some(value) => Some(compile_node_value(node_id, parameter_index, value)?),
+        None => None,
+    };
+
+    Ok(SubFlowSetting {
+        identifier: parameter.identifier.clone(),
+        default,
+    })
 }
 
 fn execution_target_for(

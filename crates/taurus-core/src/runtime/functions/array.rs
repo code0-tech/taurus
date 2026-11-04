@@ -133,11 +133,14 @@ async fn run_with_binary_inputs(
 /// be used because its comparator is synchronous and the comparator here runs
 /// a (possibly remote) sub-flow that must be `.await`ed. Bottom-up merge sort
 /// keeps the comparisons in a flat loop (no recursion, so no borrow gymnastics
-/// across the awaits) and is stable and O(n log n) in comparator calls -- the
-/// calls, not the element moves, are the expensive part here.
+/// across the awaits) and is stable and O(n log n) in comparator calls.
+///
+/// It merges an index permutation rather than the `Value`s themselves, so the
+/// per-merge work is cheap `usize` copies; the values are moved into their
+/// final positions exactly once at the end (no clones anywhere).
 #[allow(clippy::too_many_arguments)]
 async fn async_merge_sort(
-    mut values: Vec<Value>,
+    values: Vec<Value>,
     ctx: &mut ValueStore,
     left_input: InputType,
     right_input: InputType,
@@ -151,7 +154,8 @@ async fn async_merge_sort(
     }
 
     let mut cmp_idx = 0usize;
-    let mut buf: Vec<Value> = Vec::with_capacity(n);
+    let mut order: Vec<usize> = (0..n).collect();
+    let mut buf: Vec<usize> = Vec::with_capacity(n);
     let mut width = 1;
     while width < n {
         let mut i = 0;
@@ -165,8 +169,8 @@ async fn async_merge_sort(
                     left_input,
                     right_input,
                     cmp_idx,
-                    &values[l],
-                    &values[r],
+                    &values[order[l]],
+                    &values[order[r]],
                     run,
                     thunk_node,
                 )
@@ -174,29 +178,33 @@ async fn async_merge_sort(
                 cmp_idx += 1;
                 // Stable: on a tie (or left-first ordering) take the left run.
                 if comparator_ordering(signal, reverse)? != Ordering::Greater {
-                    buf.push(values[l].clone());
+                    buf.push(order[l]);
                     l += 1;
                 } else {
-                    buf.push(values[r].clone());
+                    buf.push(order[r]);
                     r += 1;
                 }
             }
-            while l < left_end {
-                buf.push(values[l].clone());
-                l += 1;
-            }
-            while r < right_end {
-                buf.push(values[r].clone());
-                r += 1;
-            }
+            buf.extend_from_slice(&order[l..left_end]);
+            buf.extend_from_slice(&order[r..right_end]);
             i = right_end;
         }
-        std::mem::swap(&mut values, &mut buf);
+        std::mem::swap(&mut order, &mut buf);
         buf.clear();
         width *= 2;
     }
 
-    Ok(values)
+    // `order` is a permutation of `0..n`, so each slot is taken exactly once:
+    // move every value into its sorted position without cloning.
+    let mut slots: Vec<Option<Value>> = values.into_iter().map(Some).collect();
+    Ok(order
+        .into_iter()
+        .map(|index| {
+            slots[index]
+                .take()
+                .expect("merge sort order is a permutation; each index used once")
+        })
+        .collect())
 }
 
 fn callback_result_value(signal: Signal) -> Result<Value, Signal> {

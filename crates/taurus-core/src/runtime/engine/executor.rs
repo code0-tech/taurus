@@ -318,7 +318,7 @@ impl<'a> EngineExecutor<'a> {
             value_store,
         );
 
-        let mut args = match self.build_function_thunk_args(function, value_store, frame_id) {
+        let mut args = match self.build_function_thunk_args(function, value_store, frame_id).await {
             Ok(args) => args,
             Err(err) => {
                 let signal = Signal::Failure(err);
@@ -383,7 +383,7 @@ impl<'a> EngineExecutor<'a> {
             value_store,
         );
 
-        let args = match self.build_function_thunk_args(function, value_store, frame_id) {
+        let args = match self.build_function_thunk_args(function, value_store, frame_id).await {
             Ok(args) => args,
             Err(err) => {
                 let signal = Signal::Failure(err);
@@ -859,7 +859,7 @@ impl<'a> EngineExecutor<'a> {
         Ok(args)
     }
 
-    fn build_function_thunk_args(
+    async fn build_function_thunk_args(
         &self,
         function: &FunctionThunk,
         value_store: &mut ValueStore,
@@ -894,7 +894,9 @@ impl<'a> EngineExecutor<'a> {
                 parameter_index: function.parameter_index,
                 input_index: index as i64,
             };
-            let value = resolve_function_setting(function, setting, input_type, value_store)?;
+            let value = self
+                .resolve_function_setting(function, setting, input_type, value_store)
+                .await?;
             self.trace_record_arg(
                 frame_id,
                 ArgTrace {
@@ -1560,6 +1562,85 @@ impl<'a> EngineExecutor<'a> {
                 .mark_thunk_executed(frame_id, thunk.trace_target().as_str());
         }
     }
+
+    /// Resolves the value a function sub-flow callback receives for one
+    /// parameter: the caller-supplied input if present (and non-null),
+    /// otherwise the parameter's compiled default. The default is resolved the
+    /// same way a node parameter is -- so it may be a literal, a reference, a
+    /// template, or a nested sub-flow (code0-tech/taurus#346 follow-up). A
+    /// parameter with no caller value and no default is an error.
+    async fn resolve_function_setting(
+        &self,
+        function: &FunctionThunk,
+        setting: &SubFlowSetting,
+        input_type: InputType,
+        value_store: &mut ValueStore,
+    ) -> Result<Value, RuntimeError> {
+        let reference = ReferenceValue {
+            target: Some(Target::InputType(input_type)),
+            paths: Vec::new(),
+        };
+
+        // Own the lookup result so the value_store borrow is released before we
+        // may re-borrow it to resolve the default.
+        match value_store.get(&reference) {
+            ValueStoreResult::Success(value) => {
+                if is_null_value(&value) && setting.default.is_some() {
+                    self.resolve_setting_default(function, setting, value_store)
+                        .await
+                } else {
+                    Ok(value)
+                }
+            }
+            ValueStoreResult::Error(err) => Err(err),
+            // Input slots only ever hold values, so a sub flow function can't
+            // be found here; treat it like a missing input.
+            ValueStoreResult::NotFound | ValueStoreResult::SubFlowFunction(_) => {
+                self.resolve_setting_default(function, setting, value_store)
+                    .await
+            }
+        }
+    }
+
+    /// Resolves a sub-flow parameter's compiled default to a concrete value,
+    /// or errors if it has no default (required parameter, unsupplied).
+    async fn resolve_setting_default(
+        &self,
+        function: &FunctionThunk,
+        setting: &SubFlowSetting,
+        value_store: &mut ValueStore,
+    ) -> Result<Value, RuntimeError> {
+        let Some(default) = setting.default.as_ref() else {
+            return Err(RuntimeError::new(
+                "T-CORE-000107",
+                "SubFlowSettingValueMissing",
+                format!(
+                    "Required sub_flow setting {} for function {} is missing",
+                    setting.identifier, function.identifier
+                ),
+            ));
+        };
+
+        match self.compiled_arg_to_argument(
+            default,
+            function.parameter_index as usize,
+            value_store,
+        )? {
+            Argument::Eval(value) => Ok(value),
+            Argument::Template(template) => {
+                self.resolve_template_value(&template, value_store, None).await
+            }
+            // A reference resolving to a sub flow function, or a nested sub
+            // flow default, runs to produce the default value.
+            Argument::Thunk(thunk) => match self.execute_thunk(&thunk, value_store).await.signal {
+                Signal::Success(value) | Signal::Return(value) => Ok(value),
+                Signal::Failure(err) => Err(err),
+                Signal::Stop => Ok(Value {
+                    kind: Some(Kind::NullValue(0)),
+                }),
+            },
+        }
+    }
 }
 
 fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeValueExecutionResult> {
@@ -1736,47 +1817,6 @@ fn remote_result_to_signal(result: TucanaNodeExecutionResult) -> Signal {
             "NodeExecutionResultMissingOutcome",
             "Remote function execution result is missing success/error outcome",
         )),
-    }
-}
-
-fn resolve_function_setting(
-    function: &FunctionThunk,
-    setting: &SubFlowSetting,
-    input_type: InputType,
-    value_store: &mut ValueStore,
-) -> Result<Value, RuntimeError> {
-    let reference = ReferenceValue {
-        target: Some(Target::InputType(input_type)),
-        paths: Vec::new(),
-    };
-
-    match value_store.get(&reference) {
-        ValueStoreResult::Success(value) => {
-            if is_null_value(&value)
-                && let Some(default_value) = setting.default_value.clone()
-            {
-                Ok(default_value)
-            } else {
-                Ok(value)
-            }
-        }
-        ValueStoreResult::Error(err) => Err(err),
-        // Input slots only ever hold values, so a sub flow function can't be
-        // found here; treat it like a missing input.
-        ValueStoreResult::NotFound | ValueStoreResult::SubFlowFunction(_) => {
-            if let Some(default_value) = setting.default_value.clone() {
-                Ok(default_value)
-            } else {
-                Err(RuntimeError::new(
-                    "T-CORE-000107",
-                    "SubFlowSettingValueMissing",
-                    format!(
-                        "Required sub_flow setting {} for function {} is missing",
-                        setting.identifier, function.identifier
-                    ),
-                ))
-            }
-        }
     }
 }
 

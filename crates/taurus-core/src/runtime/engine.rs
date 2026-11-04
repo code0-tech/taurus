@@ -612,6 +612,130 @@ mod tests {
         }
     }
 
+    /// A function sub-flow parameter whose default value is a *reference*
+    /// (to a node result) rather than a literal -- the case that used to be
+    /// silently dropped.
+    fn subflow_setting_reference(identifier: &str, node_id: i64) -> SubFlowParameters {
+        SubFlowParameters {
+            identifier: identifier.to_string(),
+            value: Some(NodeValue {
+                value: Some(node_value::Value::ReferenceValue(ReferenceValue {
+                    target: Some(reference_value::Target::NodeId(node_id)),
+                    paths: Vec::new(),
+                })),
+            }),
+            cast: None,
+        }
+    }
+
+    #[test]
+    fn sub_flow_parameter_reference_default_is_compiled_not_dropped() {
+        use crate::runtime::engine::compiler::compile_flow;
+        use crate::runtime::engine::model::{CompiledArg, CompiledThunk};
+
+        // A local node with a function-thunk parameter whose sub-flow
+        // parameter default is a reference. Before resolving SubFlowParameters
+        // like node parameters, a non-literal default compiled to `None` and
+        // was lost; now it must survive as a compiled `Reference`.
+        let consumer = node(
+            1,
+            "std::list::map",
+            vec![function_thunk_param_with_source(
+                101,
+                "transform",
+                "remote::identity",
+                Some("action.example"),
+                vec![subflow_setting_reference("value", 9)],
+            )],
+            None,
+        );
+
+        let flow = compile_flow(1, 1, vec![consumer]).expect("flow compiles");
+        let compiled = &flow.nodes[flow.start_idx];
+        match &compiled.parameters[0].arg {
+            CompiledArg::Deferred(CompiledThunk::Function { settings, .. }) => {
+                assert_eq!(settings.len(), 1);
+                assert_eq!(settings[0].identifier, "value");
+                assert!(
+                    matches!(settings[0].default, Some(CompiledArg::Reference(_))),
+                    "a reference default must be compiled, not dropped to None; got {:?}",
+                    settings[0].default
+                );
+            }
+            other => panic!("expected a deferred function thunk, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn callback_trace_links_control_node_to_its_branch() {
+        use crate::runtime::engine::compiler::compile_flow;
+        use crate::runtime::execution::trace::EdgeKind;
+        use std::sync::Arc;
+
+        // if(true) { return "x" }. The branch runs through the async ThunkExec
+        // runner, which must reproduce the old synchronous `run` closure's
+        // trace bookkeeping: a RuntimeCall edge from the `if` node's frame to
+        // the branch's frame.
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                thunk_param(101, "runnable", 2),
+            ],
+            None,
+        );
+        let branch = node(
+            2,
+            "std::control::return",
+            vec![literal_param(200, "value", string_value("x"))],
+            None,
+        );
+
+        let compiled = Arc::new(compile_flow(1, 1, vec![if_node, branch]).expect("compiles"));
+        let handlers = FunctionStore::default();
+        let mut value_store = ValueStore::new(null_value(), true);
+
+        let (_signal, trace) = futures_lite::future::block_on(executor::execute_compiled_from(
+            "trace-test",
+            "trace-test",
+            &compiled,
+            compiled.start_idx,
+            &handlers,
+            &mut value_store,
+            None,
+            true,
+            SubFlowRegistry::new(),
+        ));
+        let trace = trace.expect("tracing was enabled");
+
+        let if_frame = trace
+            .frames
+            .iter()
+            .find(|frame| frame.node_id == 1)
+            .expect("if node frame present");
+        let runtime_call = if_frame
+            .children
+            .iter()
+            .find(|child| matches!(child.edge, EdgeKind::RuntimeCall { .. }))
+            .expect("if node must record a RuntimeCall edge to its branch");
+        let branch_frame = trace
+            .frames
+            .iter()
+            .find(|frame| frame.frame_id == runtime_call.child_frame_id)
+            .expect("branch frame present");
+        assert_eq!(
+            branch_frame.node_id, 2,
+            "the RuntimeCall edge must link to the branch body node"
+        );
+    }
+
     fn node_result_ref_param(
         database_id: i64,
         runtime_parameter_id: &str,

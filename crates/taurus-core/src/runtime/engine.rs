@@ -345,6 +345,7 @@ impl ExecutionEngine {
 
         let (signal, trace_run) = executor::execute_compiled_from(
             execution_id,
+            execution_id,
             &compiled,
             start_idx,
             &self.handlers,
@@ -354,6 +355,15 @@ impl ExecutionEngine {
             self.sub_flow_registry.clone(),
         )
         .await;
+
+        // This is the top-level flow run, so every sub-flow registry entry it
+        // (or any sub-flow run nested under it) minted is now unreachable --
+        // the action can no longer invoke any of them. Sweep them all in one
+        // go, keyed on this flow execution id (see `sub_flow_registry` and
+        // code0-tech/taurus#346); per-call cleanup would drop references a
+        // returned sub flow function still needs for a later node.
+        self.sub_flow_registry.remove_for_execution(execution_id);
+
         Self::finish_report(signal, trace_run, &mut value_store, with_trace)
     }
 
@@ -433,6 +443,7 @@ impl ExecutionEngine {
             PendingSubFlowTarget::NodeRange { start_idx } => {
                 executor::execute_compiled_from(
                     &run_execution_id,
+                    &pending.flow_execution_id,
                     &pending.flow,
                     *start_idx,
                     &self.handlers,
@@ -449,6 +460,7 @@ impl ExecutionEngine {
                 value_store.set_current_node_id(pending.caller_node_id);
                 executor::execute_function_standalone(
                     &run_execution_id,
+                    &pending.flow_execution_id,
                     &pending.flow,
                     function,
                     &self.handlers,
@@ -457,6 +469,7 @@ impl ExecutionEngine {
                     with_trace,
                     self.sub_flow_registry.clone(),
                 )
+                .await
             }
         };
         Some(Self::finish_report(
@@ -1061,7 +1074,7 @@ mod tests {
                     101,
                     "transform",
                     "remote::identity",
-                    Some("remote-service"),
+                    Some("action.remote-service"),
                     vec![subflow_setting("value", None)],
                 ),
             ],
@@ -1426,7 +1439,7 @@ mod tests {
             vec![literal_param(100, "payload", int_value(20))],
             None,
         );
-        remote_node.definition_source = Some("remote-service".to_string());
+        remote_node.definition_source = Some("action.remote-service".to_string());
 
         let report =
             engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
@@ -1660,14 +1673,158 @@ mod tests {
             ),
         };
 
-        // The parent node's own remote call has resolved (successfully), so
-        // the registry entry it minted must already have been cleaned up.
+        // The whole flow run has finished, so its minted registry entries are
+        // swept (flow-execution-scoped lifetime -- see `sub_flow_registry`).
         assert!(
             engine
                 .sub_flow_registry
                 .get(&execution_identifier)
                 .is_none(),
-            "registry entry should be removed once the parent call resolves"
+            "registry entry should be removed once the flow execution finishes"
+        );
+    }
+
+    /// Drives the code0-tech/taurus#346 scenario across two sequential remote
+    /// nodes. The first call carries a minted sub-flow reference (as a returned
+    /// function would); the second, later call probes whether that reference is
+    /// still registered. Under the old per-call cleanup the first call's
+    /// resolution dropped it, so a reference handed on to a later node was dead
+    /// by the time that node ran.
+    struct SubFlowOutlivesMintingCallRuntime {
+        registry: SubFlowRegistry,
+        result: NodeExecutionResult,
+        minted_id: Arc<Mutex<Option<String>>>,
+        registered_during_later_node: Arc<Mutex<Option<bool>>>,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for SubFlowOutlivesMintingCallRuntime {
+        async fn execute_remote(
+            &self,
+            execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            match execution
+                .request
+                .parameters
+                .first()
+                .and_then(|parameter| parameter.value.as_ref())
+            {
+                // The first node's call carries the minted sub-flow reference.
+                Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                    execution_identifier,
+                    ..
+                })) => {
+                    *self
+                        .minted_id
+                        .lock()
+                        .expect("minted id recorder should not be poisoned") =
+                        Some(execution_identifier.clone());
+                }
+                // A later node's call (no sub-flow parameter): is the reference
+                // the earlier call minted still resolvable?
+                _ => {
+                    if let Some(id) = self
+                        .minted_id
+                        .lock()
+                        .expect("minted id recorder should not be poisoned")
+                        .clone()
+                    {
+                        *self
+                            .registered_during_later_node
+                            .lock()
+                            .expect("liveness recorder should not be poisoned") =
+                            Some(self.registry.get(&id).is_some());
+                    }
+                }
+            }
+            Ok(self.result.clone())
+        }
+    }
+
+    #[test]
+    fn sub_flow_reference_survives_until_a_later_node_invokes_it() {
+        let engine = ExecutionEngine::new();
+        let minted_id = Arc::new(Mutex::new(None));
+        let registered_during_later_node = Arc::new(Mutex::new(None));
+        let remote = SubFlowOutlivesMintingCallRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
+            },
+            minted_id: Arc::clone(&minted_id),
+            registered_during_later_node: Arc::clone(&registered_during_later_node),
+        };
+
+        // Node 1 (remote) mints a sub-flow reference from node 3's range, then
+        // hands control to node 2 (remote) -- which runs only after node 1's
+        // call has fully resolved.
+        let mut minting_node = node(
+            1,
+            "remote::open_stream",
+            vec![thunk_param(100, "on_message", 3)],
+            Some(2),
+        );
+        minting_node.definition_source = Some("action.example".to_string());
+
+        let mut later_node = node(
+            2,
+            "remote::next",
+            vec![literal_param(200, "value", int_value(7))],
+            None,
+        );
+        later_node.definition_source = Some("action.example".to_string());
+
+        // Node 3 is the minted sub-flow's target range; never run by this test.
+        let sub_flow_target = node(
+            3,
+            "std::control::value",
+            vec![literal_param(300, "value", int_value(9))],
+            None,
+        );
+
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![minting_node, later_node, sub_flow_target],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        assert!(
+            minted_id
+                .lock()
+                .expect("minted id recorder should not be poisoned")
+                .is_some(),
+            "node 1 should have minted a sub-flow reference"
+        );
+        assert_eq!(
+            *registered_during_later_node
+                .lock()
+                .expect("liveness recorder should not be poisoned"),
+            Some(true),
+            "a reference minted by node 1 must still be registered while node 2 runs \
+             (code0-tech/taurus#346)"
+        );
+
+        // Once the whole flow finishes it is swept regardless.
+        let minted = minted_id
+            .lock()
+            .expect("minted id recorder should not be poisoned")
+            .clone()
+            .expect("node 1 minted an id");
+        assert!(
+            engine.sub_flow_registry.get(&minted).is_none(),
+            "flow-end sweep should remove the reference once the run completes"
         );
     }
 
@@ -1995,7 +2152,7 @@ mod tests {
             ],
             Some(1),
         );
-        for_each_node.definition_source = Some("draco-draco-cron".to_string());
+        for_each_node.definition_source = Some("taurus".to_string());
 
         let report = engine.execute_graph_report(
             "test",

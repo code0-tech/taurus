@@ -50,16 +50,20 @@ pub enum NodeExecutionTarget {
 
 impl NodeExecutionTarget {
     /// Resolves where a function with the given `definition_source` runs:
-    /// Taurus' own and Draco's functions locally, everything else on the
-    /// action named by the source (`action.<service>` or `<service>`).
-    /// Returns `None` for a source that names no service at all.
+    /// Taurus' own functions locally, and a function an action contributed
+    /// (`action.<service>`) remotely on that action.
+    ///
+    /// The `action.` prefix is mandatory for a remote target. A source that
+    /// names no service -- anything that is neither local nor a well-formed
+    /// `action.<service>`, including a bare `"action"` with no identifier --
+    /// returns `None`, so the caller fails loudly (`T-CORE-000008`) instead of
+    /// dispatching a call to a service that doesn't exist.
     pub fn for_definition_source(definition_source: Option<&str>) -> Option<Self> {
         match definition_source {
             None | Some("") | Some("taurus") => Some(Self::Local),
-            Some(source) if source.starts_with("draco") => Some(Self::Local),
-            Some(source) => match source.strip_prefix("action.").unwrap_or(source) {
-                "" => None,
-                service => Some(Self::Remote {
+            Some(source) => match source.strip_prefix("action.") {
+                None | Some("") => None,
+                Some(service) => Some(Self::Remote {
                     service: service.to_string(),
                 }),
             },
@@ -138,4 +142,52 @@ pub struct CompiledFlow {
     pub start_idx: usize,
     pub nodes: Vec<CompiledNode>,
     pub node_idx_by_id: HashMap<i64, usize>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_sources_resolve_to_local() {
+        assert!(matches!(
+            NodeExecutionTarget::for_definition_source(None),
+            Some(NodeExecutionTarget::Local)
+        ));
+        assert!(matches!(
+            NodeExecutionTarget::for_definition_source(Some("")),
+            Some(NodeExecutionTarget::Local)
+        ));
+        assert!(matches!(
+            NodeExecutionTarget::for_definition_source(Some("taurus")),
+            Some(NodeExecutionTarget::Local)
+        ));
+    }
+
+    #[test]
+    fn action_prefixed_source_resolves_to_its_service() {
+        match NodeExecutionTarget::for_definition_source(Some("action.send-email")) {
+            Some(NodeExecutionTarget::Remote { service }) => assert_eq!(service, "send-email"),
+            other => panic!("expected remote send-email, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bare_action_names_no_service() {
+        // The failure behind code0-tech/aquila#466: hercules' raw "action"
+        // must not resolve to a service called "action".
+        assert!(NodeExecutionTarget::for_definition_source(Some("action")).is_none());
+    }
+
+    #[test]
+    fn action_prefix_without_identifier_names_no_service() {
+        assert!(NodeExecutionTarget::for_definition_source(Some("action.")).is_none());
+    }
+
+    #[test]
+    fn unprefixed_source_is_not_silently_remote() {
+        // Without the mandatory `action.` prefix the source names no service,
+        // rather than being dispatched to a bare `<service>` as before.
+        assert!(NodeExecutionTarget::for_definition_source(Some("send-email")).is_none());
+    }
 }

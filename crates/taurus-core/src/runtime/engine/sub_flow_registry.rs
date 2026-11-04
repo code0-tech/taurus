@@ -10,9 +10,13 @@
 //! sub-flow's node range standalone, captured at mint time.
 //!
 //! Entries are looked up (never removed) any number of times while the
-//! parent remote call is outstanding -- the action may invoke the same
-//! sub-flow UUID repeatedly. Only the parent call's own resolution (success
-//! or failure) removes the entries it minted; see `EngineExecutor::execute_remote_node`.
+//! flow execution that minted them is still running -- the action may invoke
+//! the same sub-flow UUID repeatedly, and a returned sub flow function may be
+//! handed on and invoked by a *later* node, long after the call that minted
+//! its references resolved. So an entry's lifetime is tied to the whole flow
+//! execution, not to the single remote call that minted it: the top-level run
+//! sweeps every entry it owns when it finishes (`remove_for_execution`, called
+//! from `ExecutionEngine::execute_graph_with_project_id_report_async`).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -42,10 +46,17 @@ pub struct PendingSubFlow {
     /// so minting never deep-clones the node graph.
     pub flow: Arc<CompiledFlow>,
     pub target: PendingSubFlowTarget,
-    /// The *parent* flow execution's id -- reused as the `execution_identifier`
-    /// for any remote call the sub-flow itself makes, and as the key for the
-    /// idle-timeout activity marker (see `activity` below).
+    /// Execution id of the remote call that minted this entry. Informational
+    /// (logging/correlation) now that cleanup is keyed on `flow_execution_id`;
+    /// the sub-flow's own remote calls run under a fresh id (see
+    /// `ExecutionEngine::execute_sub_flow`).
     pub parent_execution_id: String,
+    /// Id of the *top-level* flow execution that owns this entry. All entries
+    /// minted anywhere under one flow run -- including by sub-flow runs nested
+    /// inside it -- carry the same value, so the top-level run can sweep them
+    /// all at once when it finishes. This is what lets a returned sub flow
+    /// function outlive the call that minted its references (code0-tech/taurus#346).
+    pub flow_execution_id: String,
     /// Id of the node whose parameter this sub-flow was minted from (e.g.
     /// the `for_each` node), and that parameter's positional index (e.g.
     /// `consumer`). Together with each call's positional slot these form the
@@ -83,11 +94,13 @@ impl SubFlowRegistry {
     /// Returns `None` if `node_id` isn't a real node in `flow` -- defensive:
     /// the compiler is expected to reject a dangling sub-flow reference
     /// before this is ever reached, but minting must not panic on a bad id.
+    #[allow(clippy::too_many_arguments)]
     pub fn mint(
         &self,
         flow: &Arc<CompiledFlow>,
         node_id: i64,
         parent_execution_id: &str,
+        flow_execution_id: &str,
         activity: Arc<Notify>,
         caller_node_id: i64,
         caller_parameter_index: i64,
@@ -97,6 +110,7 @@ impl SubFlowRegistry {
             flow: Arc::clone(flow),
             target: PendingSubFlowTarget::NodeRange { start_idx },
             parent_execution_id: parent_execution_id.to_string(),
+            flow_execution_id: flow_execution_id.to_string(),
             activity,
             caller_node_id,
             caller_parameter_index,
@@ -105,11 +119,13 @@ impl SubFlowRegistry {
 
     /// Mint a fresh execution id for a returned sub flow function handed on
     /// to a remote node, and register it.
+    #[allow(clippy::too_many_arguments)]
     pub fn mint_function(
         &self,
         flow: &Arc<CompiledFlow>,
         function: FunctionThunk,
         parent_execution_id: &str,
+        flow_execution_id: &str,
         activity: Arc<Notify>,
         caller_node_id: i64,
         caller_parameter_index: i64,
@@ -118,6 +134,7 @@ impl SubFlowRegistry {
             flow: Arc::clone(flow),
             target: PendingSubFlowTarget::Function(function),
             parent_execution_id: parent_execution_id.to_string(),
+            flow_execution_id: flow_execution_id.to_string(),
             activity,
             caller_node_id,
             caller_parameter_index,
@@ -143,14 +160,25 @@ impl SubFlowRegistry {
             .cloned()
     }
 
-    /// Remove a single entry. Called once per minted id when the *parent*
-    /// node's own remote call resolves (success or failure) -- not after
-    /// each individual sub-flow invocation.
+    /// Remove a single entry. Used on paths where a minted reference is known
+    /// to be orphaned before it could ever escape -- e.g. the remote call it
+    /// was minted for failed to even be built, so no action ever received it.
     pub fn remove(&self, id: &str) {
         self.entries
             .lock()
             .expect("sub flow registry mutex should not be poisoned")
             .remove(id);
+    }
+
+    /// Remove every entry owned by a top-level flow execution. Called once,
+    /// when that execution finishes, so all references it minted -- including
+    /// those a returned sub flow function carried across nodes -- stay alive
+    /// for exactly as long as the flow can still invoke them.
+    pub fn remove_for_execution(&self, flow_execution_id: &str) {
+        self.entries
+            .lock()
+            .expect("sub flow registry mutex should not be poisoned")
+            .retain(|_, pending| pending.flow_execution_id != flow_execution_id);
     }
 
     #[cfg(test)]
@@ -193,7 +221,7 @@ mod tests {
         // (3, 5) so a field mix-up in `mint`/`PendingSubFlow` would be
         // caught by the assertions below instead of accidentally matching.
         let id = registry
-            .mint(&flow, 7, "parent-1", activity, 3, 5)
+            .mint(&flow, 7, "parent-1", "flow-1", activity, 3, 5)
             .expect("node 7 exists in flow");
 
         let pending = registry.get(&id).expect("entry should exist after mint");
@@ -202,6 +230,7 @@ mod tests {
             PendingSubFlowTarget::NodeRange { start_idx: 0 }
         ));
         assert_eq!(pending.parent_execution_id, "parent-1");
+        assert_eq!(pending.flow_execution_id, "flow-1");
         assert_eq!(pending.caller_node_id, 3);
         assert_eq!(pending.caller_parameter_index, 5);
 
@@ -220,7 +249,7 @@ mod tests {
 
         assert!(
             registry
-                .mint(&flow, 999, "parent-1", activity, 1, 1)
+                .mint(&flow, 999, "parent-1", "flow-1", activity, 1, 1)
                 .is_none()
         );
         assert_eq!(registry.len(), 0);
@@ -238,7 +267,7 @@ mod tests {
                 std::thread::spawn(move || {
                     let activity = Arc::new(Notify::new());
                     registry
-                        .mint(&flow, 7, &format!("parent-{i}"), activity, 1, 1)
+                        .mint(&flow, 7, &format!("parent-{i}"), "flow-1", activity, 1, 1)
                         .expect("node 7 exists in flow")
                 })
             })
@@ -271,7 +300,7 @@ mod tests {
             sub_flow_function: None,
         };
 
-        let id = registry.mint_function(&flow, function, "parent-1", activity, 3, 5);
+        let id = registry.mint_function(&flow, function, "parent-1", "flow-1", activity, 3, 5);
 
         let pending = registry.get(&id).expect("entry should exist after mint");
         match pending.target {
@@ -285,5 +314,43 @@ mod tests {
 
         registry.remove(&id);
         assert!(registry.get(&id).is_none());
+    }
+
+    #[test]
+    fn remove_for_execution_only_sweeps_its_own_flow() {
+        let registry = SubFlowRegistry::new();
+        let flow = flow_with_node(7);
+
+        // Two entries under flow A (the one we sweep) and one under flow B.
+        let a1 = registry
+            .mint(&flow, 7, "parent-a", "flow-a", Arc::new(Notify::new()), 1, 1)
+            .expect("node 7 exists in flow");
+        let a2 = registry.mint_function(
+            &flow,
+            FunctionThunk {
+                identifier: "remote::handler".to_string(),
+                execution_target:
+                    crate::runtime::engine::model::NodeExecutionTarget::Remote {
+                        service: "example".to_string(),
+                    },
+                parameter_index: 0,
+                settings: Vec::new(),
+                sub_flow_function: None,
+            },
+            "parent-a",
+            "flow-a",
+            Arc::new(Notify::new()),
+            1,
+            1,
+        );
+        let b1 = registry
+            .mint(&flow, 7, "parent-b", "flow-b", Arc::new(Notify::new()), 1, 1)
+            .expect("node 7 exists in flow");
+
+        registry.remove_for_execution("flow-a");
+
+        assert!(registry.get(&a1).is_none(), "flow-a node range swept");
+        assert!(registry.get(&a2).is_none(), "flow-a function swept");
+        assert!(registry.get(&b1).is_some(), "flow-b entry untouched");
     }
 }

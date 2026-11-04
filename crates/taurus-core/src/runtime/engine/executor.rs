@@ -43,6 +43,7 @@ use tucana::shared::{
 #[allow(clippy::too_many_arguments)]
 pub async fn execute_compiled_from(
     execution_id: &str,
+    flow_execution_id: &str,
     flow: &Arc<CompiledFlow>,
     start_idx: usize,
     handlers: &FunctionStore,
@@ -55,6 +56,7 @@ pub async fn execute_compiled_from(
     let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
         execution_id,
+        flow_execution_id,
         flow: Arc::clone(flow),
         handlers,
         remote,
@@ -72,9 +74,15 @@ pub async fn execute_compiled_from(
 /// returned and Taurus handed on to an action, which now invokes it. The
 /// function reads its arguments from the input slots `value_store` was
 /// seeded with for its caller.
+///
+/// Async so the function's own remote call is `.await`ed rather than blocking
+/// a runtime worker thread: this path is driven from the `sub_flow_execution.*`
+/// subscriber while the parent call is outstanding, and blocking it stalled
+/// delivery of every other message until a timeout fired (code0-tech/taurus#347).
 #[allow(clippy::too_many_arguments)]
-pub fn execute_function_standalone(
+pub async fn execute_function_standalone(
     execution_id: &str,
+    flow_execution_id: &str,
     flow: &Arc<CompiledFlow>,
     function: &FunctionThunk,
     handlers: &FunctionStore,
@@ -86,6 +94,7 @@ pub fn execute_function_standalone(
     let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
         execution_id,
+        flow_execution_id,
         flow: Arc::clone(flow),
         handlers,
         remote,
@@ -93,7 +102,9 @@ pub fn execute_function_standalone(
         sub_flow_registry,
     };
 
-    let result = executor.execute_function_thunk(function, value_store);
+    let result = executor
+        .execute_function_thunk_async(function, value_store)
+        .await;
     let trace = tracer.and_then(|collector| collector.into_inner().ok()?.take_run());
     (result.signal, trace)
 }
@@ -122,6 +133,12 @@ struct EngineExecutor<'a> {
     /// action can correlate a callback (e.g. `respond`) against the run
     /// that triggered it.
     execution_id: &'a str,
+    /// Id of the top-level flow execution this executor belongs to. Equal to
+    /// `execution_id` for a top-level run; for a sub-flow run it is inherited
+    /// from the pending entry so every sub-flow registry id minted here is
+    /// owned by -- and swept with -- the same top-level flow (see
+    /// `sub_flow_registry` and code0-tech/taurus#346).
+    flow_execution_id: &'a str,
     /// `Arc`-wrapped so minting a sub-flow registry entry (which captures
     /// the flow standalone -- see `sub_flow_registry`) is a cheap refcount
     /// bump rather than a deep clone of the node graph.
@@ -254,6 +271,24 @@ impl<'a> EngineExecutor<'a> {
             NodeExecutionTarget::Local => self.execute_local_function_thunk(function, value_store),
             NodeExecutionTarget::Remote { service } => {
                 self.execute_remote_function_thunk(function, service.as_str(), value_store)
+            }
+        }
+    }
+
+    /// Async twin of [`execute_function_thunk`] for the standalone sub-flow
+    /// path: a local function still runs synchronously (local handlers are
+    /// synchronous), but a remote function `.await`s its call instead of
+    /// blocking the worker (code0-tech/taurus#347).
+    async fn execute_function_thunk_async(
+        &self,
+        function: &FunctionThunk,
+        value_store: &mut ValueStore,
+    ) -> ExecutionResult {
+        match &function.execution_target {
+            NodeExecutionTarget::Local => self.execute_local_function_thunk(function, value_store),
+            NodeExecutionTarget::Remote { service } => {
+                self.execute_remote_function_thunk_async(function, service.as_str(), value_store)
+                    .await
             }
         }
     }
@@ -402,6 +437,87 @@ impl<'a> EngineExecutor<'a> {
                         // path never mints a sub-flow UUID.
                         sub_flow_activity: None,
                     })) {
+                        Ok(result) => remote_result_to_signal(result),
+                        Err(err) => Signal::Failure(err),
+                    },
+                }
+            }
+        };
+
+        self.trace_exit(frame_id, &signal, value_store);
+        self.commit_function_result(
+            function.identifier.as_str(),
+            signal.clone(),
+            parameter_results,
+            started_at,
+            now_unix_micros(),
+            value_store,
+        );
+        ExecutionResult {
+            signal,
+            root_frame: frame_id,
+        }
+    }
+
+    /// Async twin of [`execute_remote_function_thunk`]: identical, but
+    /// `.await`s the remote call instead of `block_on`-ing it, so the sub-flow
+    /// subscriber's worker stays free to deliver other messages while this
+    /// call is outstanding (code0-tech/taurus#347).
+    async fn execute_remote_function_thunk_async(
+        &self,
+        function: &FunctionThunk,
+        service: &str,
+        value_store: &mut ValueStore,
+    ) -> ExecutionResult {
+        let started_at = now_unix_micros();
+        let frame_id = self.trace_enter_function(
+            value_store.get_current_node_id(),
+            function.identifier.as_str(),
+            value_store,
+        );
+
+        let args = match self.build_function_thunk_args(function, value_store, frame_id) {
+            Ok(args) => args,
+            Err(err) => {
+                let signal = Signal::Failure(err);
+                self.trace_exit(frame_id, &signal, value_store);
+                self.commit_function_result(
+                    function.identifier.as_str(),
+                    signal.clone(),
+                    Vec::new(),
+                    started_at,
+                    now_unix_micros(),
+                    value_store,
+                );
+                return ExecutionResult {
+                    signal,
+                    root_frame: frame_id,
+                };
+            }
+        };
+        let parameter_results = parameter_results_from_args(&args);
+
+        let signal = match self.remote {
+            None => Signal::Failure(RuntimeError::new(
+                "T-CORE-000003",
+                "RemoteRuntimeNotConfigured",
+                "Remote runtime not configured",
+            )),
+            Some(remote_runtime) => {
+                let request = self.build_remote_function_request(function, &args);
+                match request {
+                    Err(err) => Signal::Failure(err),
+                    Ok(request) => match remote_runtime
+                        .execute_remote(RemoteExecution {
+                            target_service: service.to_string(),
+                            request,
+                            // As in the sync twin: function-thunk settings are
+                            // always eagerly resolved to literals, so this path
+                            // never mints a sub-flow UUID of its own.
+                            sub_flow_activity: None,
+                        })
+                        .await
+                    {
                         Ok(result) => remote_result_to_signal(result),
                         Err(err) => Signal::Failure(err),
                     },
@@ -667,13 +783,13 @@ impl<'a> EngineExecutor<'a> {
             })
             .await;
 
-        // The parent call is done (success or failure) -- every sub-flow
-        // UUID minted for it is no longer reachable by the action and can
-        // be dropped, regardless of how many times (if any) it was actually
-        // invoked while the call was outstanding.
-        for id in &minted_ids {
-            self.sub_flow_registry.remove(id);
-        }
+        // Deliberately *not* removing `minted_ids` here. A reference this call
+        // minted may be carried by a sub flow function the action returns and
+        // invoked by a *later* node, long after this call resolved (e.g. a
+        // model handed to `create agent`, invoked only when the agent runs in
+        // `invoke agent`). Dropping it now would make that invocation fail with
+        // T-TAURUS-000002. The whole flow execution sweeps these at the end
+        // instead (`SubFlowRegistry::remove_for_execution`, code0-tech/taurus#346).
 
         match result {
             Ok(result) => self.commit_remote_result(
@@ -1153,6 +1269,7 @@ impl<'a> EngineExecutor<'a> {
                     &self.flow,
                     *node_id,
                     self.execution_id,
+                    self.flow_execution_id,
                     Arc::clone(activity),
                     value_store.get_current_node_id(),
                     index as i64,
@@ -1183,6 +1300,7 @@ impl<'a> EngineExecutor<'a> {
                     &self.flow,
                     function.clone(),
                     self.execution_id,
+                    self.flow_execution_id,
                     Arc::clone(activity),
                     value_store.get_current_node_id(),
                     index as i64,

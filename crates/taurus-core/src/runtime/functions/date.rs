@@ -370,9 +370,18 @@ mod tests {
         })
     }
 
-    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
-        Signal::Stop
+    struct DummyRun;
+    impl crate::handler::registry::AsyncThunkRunner for DummyRun {
+        fn run_thunk<'a>(
+            &'a mut self,
+            _: &'a crate::handler::argument::Thunk,
+            _: &'a mut ValueStore,
+        ) -> crate::handler::registry::HandlerFuture<'a> {
+            Box::pin(async { Signal::Success(Value { kind: Some(Kind::NullValue(0)) }) })
+        }
     }
+    #[allow(non_upper_case_globals)]
+    const dummy_run: DummyRun = DummyRun;
 
     fn expect_num(sig: Signal) -> i64 {
         match sig {

@@ -698,28 +698,32 @@ mod tests {
         );
     }
 
-    fn sleep_handler(
-        _args: &[Argument],
-        _ctx: &mut ValueStore,
-        _run: &mut ThunkRunner<'_>,
-    ) -> Signal {
-        std::thread::sleep(Duration::from_micros(2_000));
-        Signal::Success(null_value())
+    fn sleep_handler<'a>(
+        _args: &'a [Argument],
+        _ctx: &'a mut ValueStore,
+        _run: &'a mut ThunkRunner<'a>,
+    ) -> crate::handler::registry::HandlerFuture<'a> {
+        Box::pin(async move {
+            std::thread::sleep(Duration::from_micros(2_000));
+            Signal::Success(null_value())
+        })
     }
 
-    fn echo_first_arg_handler(
-        args: &[Argument],
-        _ctx: &mut ValueStore,
-        _run: &mut ThunkRunner<'_>,
-    ) -> Signal {
-        match args.first() {
-            Some(Argument::Eval(value)) => Signal::Success(value.clone()),
-            _ => Signal::Failure(crate::types::errors::runtime_error::RuntimeError::new(
-                "T-TEST-000001",
-                "MissingEchoArgument",
-                "expected first eager argument",
-            )),
-        }
+    fn echo_first_arg_handler<'a>(
+        args: &'a [Argument],
+        _ctx: &'a mut ValueStore,
+        _run: &'a mut ThunkRunner<'a>,
+    ) -> crate::handler::registry::HandlerFuture<'a> {
+        Box::pin(async move {
+            match args.first() {
+                Some(Argument::Eval(value)) => Signal::Success(value.clone()),
+                _ => Signal::Failure(crate::types::errors::runtime_error::RuntimeError::new(
+                    "T-TEST-000001",
+                    "MissingEchoArgument",
+                    "expected first eager argument",
+                )),
+            }
+        })
     }
 
     #[derive(Clone)]

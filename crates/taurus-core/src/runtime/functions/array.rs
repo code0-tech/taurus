@@ -88,7 +88,7 @@ fn unary_input_type(ctx: &mut ValueStore) -> InputType {
     }
 }
 
-fn run_with_unary_input(
+async fn run_with_unary_input(
     ctx: &mut ValueStore,
     input_type: InputType,
     iter_index: usize,
@@ -98,12 +98,12 @@ fn run_with_unary_input(
 ) -> Signal {
     ctx.insert_input_type(input_type, item.clone());
     ctx.push_runtime_trace_label(|| format!("iter={} value={}", iter_index, preview_value(item)));
-    let signal = run(thunk_node, ctx);
+    let signal = run.run_thunk(thunk_node, ctx).await;
     ctx.clear_input_type(input_type);
     signal
 }
 
-fn run_with_binary_inputs(
+async fn run_with_binary_inputs(
     ctx: &mut ValueStore,
     left_input: InputType,
     right_input: InputType,
@@ -123,10 +123,80 @@ fn run_with_binary_inputs(
             preview_value(right)
         )
     });
-    let signal = run(thunk_node, ctx);
+    let signal = run.run_thunk(thunk_node, ctx).await;
     ctx.clear_input_type(left_input);
     ctx.clear_input_type(right_input);
     signal
+}
+
+/// Stable sort driven by an async comparator sub-flow. `slice::sort_by` can't
+/// be used because its comparator is synchronous and the comparator here runs
+/// a (possibly remote) sub-flow that must be `.await`ed. Bottom-up merge sort
+/// keeps the comparisons in a flat loop (no recursion, so no borrow gymnastics
+/// across the awaits) and is stable and O(n log n) in comparator calls -- the
+/// calls, not the element moves, are the expensive part here.
+#[allow(clippy::too_many_arguments)]
+async fn async_merge_sort(
+    mut values: Vec<Value>,
+    ctx: &mut ValueStore,
+    left_input: InputType,
+    right_input: InputType,
+    run: &mut crate::handler::registry::ThunkRunner<'_>,
+    thunk_node: &crate::handler::argument::Thunk,
+    reverse: bool,
+) -> Result<Vec<Value>, Signal> {
+    let n = values.len();
+    if n < 2 {
+        return Ok(values);
+    }
+
+    let mut cmp_idx = 0usize;
+    let mut buf: Vec<Value> = Vec::with_capacity(n);
+    let mut width = 1;
+    while width < n {
+        let mut i = 0;
+        while i < n {
+            let left_end = (i + width).min(n);
+            let right_end = (i + 2 * width).min(n);
+            let (mut l, mut r) = (i, left_end);
+            while l < left_end && r < right_end {
+                let signal = run_with_binary_inputs(
+                    ctx,
+                    left_input,
+                    right_input,
+                    cmp_idx,
+                    &values[l],
+                    &values[r],
+                    run,
+                    thunk_node,
+                )
+                .await;
+                cmp_idx += 1;
+                // Stable: on a tie (or left-first ordering) take the left run.
+                if comparator_ordering(signal, reverse)? != Ordering::Greater {
+                    buf.push(values[l].clone());
+                    l += 1;
+                } else {
+                    buf.push(values[r].clone());
+                    r += 1;
+                }
+            }
+            while l < left_end {
+                buf.push(values[l].clone());
+                l += 1;
+            }
+            while r < right_end {
+                buf.push(values[r].clone());
+                r += 1;
+            }
+            i = right_end;
+        }
+        std::mem::swap(&mut values, &mut buf);
+        buf.clear();
+        width *= 2;
+    }
+
+    Ok(values)
 }
 
 fn callback_result_value(signal: Signal) -> Result<Value, Signal> {
@@ -294,7 +364,7 @@ fn concat(
         en_US = "A function that takes an element of the list and returns a boolean indicating whether the element should be included in the output list."
     )
 )]
-fn filter(
+async fn filter(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -312,7 +382,7 @@ fn filter(
     let mut out: Vec<Value> = Vec::new();
     let input_type = unary_input_type(ctx);
     for (idx, item) in array.values.iter().enumerate() {
-        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node);
+        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node).await;
         let predicate_value = match callback_result_value(pred_sig) {
             Ok(v) => v,
             Err(other) => return other,
@@ -355,7 +425,7 @@ fn filter(
         en_US = "A function that takes an element of the list and returns a boolean indicating if the element matches the search criteria."
     )
 )]
-fn find(
+async fn find(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -372,7 +442,7 @@ fn find(
     let input_type = unary_input_type(ctx);
 
     for (idx, item) in array.values.iter().enumerate() {
-        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node);
+        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node).await;
         let predicate_value = match callback_result_value(pred_sig) {
             Ok(v) => v,
             Err(other) => return other,
@@ -415,7 +485,7 @@ fn find(
         en_US = "A function that takes an element of the list and returns a boolean indicating if the element matches the search criteria."
     )
 )]
-fn find_last(
+async fn find_last(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -432,7 +502,7 @@ fn find_last(
     let input_type = unary_input_type(ctx);
 
     for (idx, item) in array.values.iter().enumerate().rev() {
-        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node);
+        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node).await;
         let predicate_value = match callback_result_value(pred_sig) {
             Ok(v) => v,
             Err(other) => return other,
@@ -477,7 +547,7 @@ fn find_last(
         en_US = "A function that takes an element of the list and returns a boolean indicating if the element satisfies the search criteria."
     )
 )]
-fn find_index(
+async fn find_index(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -494,7 +564,7 @@ fn find_index(
     let input_type = unary_input_type(ctx);
 
     for (idx, item) in array.values.iter().enumerate() {
-        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node);
+        let pred_sig = run_with_unary_input(ctx, input_type, idx, item, run, predicate_node).await;
         let predicate_value = match callback_result_value(pred_sig) {
             Ok(v) => v,
             Err(other) => return other,
@@ -604,7 +674,7 @@ fn last(
         en_US = "This function is invoked once for each element in the list. It is not expected to return a value."
     )
 )]
-fn for_each(
+async fn for_each(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -621,7 +691,7 @@ fn for_each(
     let input_type = unary_input_type(ctx);
 
     for (idx, item) in array.values.iter().enumerate() {
-        let sig = run_with_unary_input(ctx, input_type, idx, item, run, transform_node);
+        let sig = run_with_unary_input(ctx, input_type, idx, item, run, transform_node).await;
 
         match callback_result_value(sig) {
             Ok(_) => {}
@@ -691,7 +761,7 @@ fn format_value_json(value: &Value) -> String {
         en_US = "The transform function is applied to every element of the list to produce a new list."
     )
 )]
-fn map(
+async fn map(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -710,7 +780,7 @@ fn map(
     let input_type = unary_input_type(ctx);
 
     for (idx, item) in array.values.iter().enumerate() {
-        let sig = run_with_unary_input(ctx, input_type, idx, item, run, transform_node);
+        let sig = run_with_unary_input(ctx, input_type, idx, item, run, transform_node).await;
         match callback_result_value(sig) {
             Ok(v) => out.push(v),
             Err(other) => return other,
@@ -1025,7 +1095,7 @@ fn to_unique(
         en_US = "A function that takes two elements and returns a negative, zero, or positive number to indicate their ordering."
     )
 )]
-fn sort(
+async fn sort(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -1053,37 +1123,20 @@ fn sort(
         input_index: 1,
     };
 
-    let mut comparator_failure: Option<Signal> = None;
-    let mut cmp_idx = 0usize;
-    array.values.sort_by(|left, right| {
-        if comparator_failure.is_some() {
-            return Ordering::Equal;
-        }
-
-        let signal = run_with_binary_inputs(
-            ctx,
-            left_input,
-            right_input,
-            cmp_idx,
-            left,
-            right,
-            run,
-            transform_node,
-        );
-        cmp_idx += 1;
-
-        match comparator_ordering(signal, false) {
-            Ok(ordering) => ordering,
-            Err(signal) => {
-                comparator_failure = Some(signal);
-                Ordering::Equal
-            }
-        }
-    });
-
-    if let Some(signal) = comparator_failure {
-        return signal;
-    }
+    array.values = match async_merge_sort(
+        array.values,
+        ctx,
+        left_input,
+        right_input,
+        run,
+        transform_node,
+        false,
+    )
+    .await
+    {
+        Ok(values) => values,
+        Err(signal) => return signal,
+    };
 
     Signal::Success(Value {
         kind: Some(Kind::ListValue(array)),
@@ -1114,7 +1167,7 @@ fn sort(
         en_US = "A function that takes two elements and returns a negative, zero, or positive number to indicate their ordering."
     )
 )]
-fn sort_reverse(
+async fn sort_reverse(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -1142,37 +1195,20 @@ fn sort_reverse(
         input_index: 1,
     };
 
-    let mut comparator_failure: Option<Signal> = None;
-    let mut cmp_idx = 0usize;
-    array.values.sort_by(|left, right| {
-        if comparator_failure.is_some() {
-            return Ordering::Equal;
-        }
-
-        let signal = run_with_binary_inputs(
-            ctx,
-            left_input,
-            right_input,
-            cmp_idx,
-            left,
-            right,
-            run,
-            transform_node,
-        );
-        cmp_idx += 1;
-
-        match comparator_ordering(signal, true) {
-            Ok(ordering) => ordering,
-            Err(signal) => {
-                comparator_failure = Some(signal);
-                Ordering::Equal
-            }
-        }
-    });
-
-    if let Some(signal) = comparator_failure {
-        return signal;
-    }
+    array.values = match async_merge_sort(
+        array.values,
+        ctx,
+        left_input,
+        right_input,
+        run,
+        transform_node,
+        true,
+    )
+    .await
+    {
+        Ok(values) => values,
+        Err(signal) => return signal,
+    };
 
     Signal::Success(Value {
         kind: Some(Kind::ListValue(array)),
@@ -1471,6 +1507,37 @@ fn join(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_lite::future::block_on;
+
+    // The callback-driven list handlers are async now (a consumer/comparator
+    // sub-flow may `.await` a remote node). These sync shadows let the existing
+    // synchronous tests keep calling them unchanged by driving the future to
+    // completion with `block_on`.
+    type Runner<'r> = dyn crate::handler::registry::AsyncThunkRunner + Send + 'r;
+    fn filter(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::filter(a, c, r))
+    }
+    fn find(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::find(a, c, r))
+    }
+    fn find_last(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::find_last(a, c, r))
+    }
+    fn find_index(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::find_index(a, c, r))
+    }
+    fn for_each(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::for_each(a, c, r))
+    }
+    fn map(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::map(a, c, r))
+    }
+    fn sort(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::sort(a, c, r))
+    }
+    fn sort_reverse(a: &[Argument], c: &mut ValueStore, r: &mut Runner<'_>) -> Signal {
+        block_on(super::sort_reverse(a, c, r))
+    }
     use crate::runtime::execution::value_store::ValueStore;
     use crate::value::{number_to_f64, number_value_from_f64, value_from_f64};
     use tucana::shared::{ListValue, Value, value::Kind};
@@ -1541,36 +1608,48 @@ mod tests {
         }
     }
 
-    fn dummy_run(_: &crate::handler::argument::Thunk, _: &mut ValueStore) -> Signal {
-        Signal::Success(Value {
-            kind: Some(Kind::NullValue(0)),
-        })
+    struct DummyRun;
+    impl crate::handler::registry::AsyncThunkRunner for DummyRun {
+        fn run_thunk<'a>(
+            &'a mut self,
+            _: &'a crate::handler::argument::Thunk,
+            _: &'a mut ValueStore,
+        ) -> crate::handler::registry::HandlerFuture<'a> {
+            Box::pin(async { Signal::Success(Value { kind: Some(Kind::NullValue(0)) }) })
+        }
     }
+    #[allow(non_upper_case_globals)]
+    const dummy_run: DummyRun = DummyRun;
 
     fn run_from_bools(
         seq: Vec<bool>,
-    ) -> impl FnMut(&crate::handler::argument::Thunk, &mut ValueStore) -> Signal {
+    ) -> crate::handler::registry::FnThunkRunner<
+        impl FnMut(&crate::handler::argument::Thunk, &mut ValueStore) -> Signal,
+    > {
         let mut i = 0usize;
-        move |_, _| {
+        crate::handler::registry::FnThunkRunner(move |_: &_, _: &mut _| {
             let b = *seq.get(i).unwrap_or(&false);
             i += 1;
             Signal::Success(Value {
                 kind: Some(Kind::BoolValue(b)),
             })
-        }
+        })
     }
 
     fn run_from_values(
         seq: Vec<Value>,
-    ) -> impl FnMut(&crate::handler::argument::Thunk, &mut ValueStore) -> Signal {
+    ) -> crate::handler::registry::FnThunkRunner<
+        impl FnMut(&crate::handler::argument::Thunk, &mut ValueStore) -> Signal,
+    > {
         let mut i = 0usize;
-        move |_, _| {
-            let v = seq.get(i).cloned().unwrap_or(Value {
-                kind: Some(Kind::NullValue(0)),
-            });
+        crate::handler::registry::FnThunkRunner(move |_: &_, _: &mut _| {
+            // Past the end, yield `0.0` -- a finite "equal" for comparator-style
+            // uses -- so a sort that makes more comparisons than the supplied
+            // sequence (algorithm-dependent) still gets a valid ordering.
+            let v = seq.get(i).cloned().unwrap_or(v_num(0.0));
             i += 1;
             Signal::Success(v)
-        }
+        })
     }
 
     // --- at ------------------------------------------------------------------
@@ -1763,12 +1842,14 @@ mod tests {
     fn test_for_each_and_map() {
         let mut ctx = ValueStore::default();
         let mut called = 0usize;
-        let mut run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
-            called += 1;
-            Signal::Success(Value {
-                kind: Some(Kind::NullValue(0)),
-            })
-        };
+        let mut run = crate::handler::registry::FnThunkRunner(
+            |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
+                called += 1;
+                Signal::Success(Value {
+                    kind: Some(Kind::NullValue(0)),
+                })
+            },
+        );
         match for_each(
             &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(1)],
             &mut ctx,
@@ -1803,10 +1884,12 @@ mod tests {
         let return_value = v_str("early_return");
 
         let mut for_each_calls = 0usize;
-        let mut for_each_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
-            for_each_calls += 1;
-            Signal::Return(return_value.clone())
-        };
+        let mut for_each_run = crate::handler::registry::FnThunkRunner(
+            |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
+                for_each_calls += 1;
+                Signal::Return(return_value.clone())
+            },
+        );
         let for_each_result = for_each(
             &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(1)],
             &mut ctx,
@@ -1821,10 +1904,12 @@ mod tests {
         assert_eq!(for_each_calls, 2);
 
         let mut map_calls = 0usize;
-        let mut map_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
-            map_calls += 1;
-            Signal::Return(return_value.clone())
-        };
+        let mut map_run = crate::handler::registry::FnThunkRunner(
+            |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
+                map_calls += 1;
+                Signal::Return(return_value.clone())
+            },
+        );
         let map_result = map(
             &[a_val(v_list(vec![v_num(1.0), v_num(2.0)])), a_thunk(2)],
             &mut ctx,
@@ -1850,11 +1935,13 @@ mod tests {
 
         let mut filter_index = 0usize;
         let filter_returns = [true, false, true];
-        let mut filter_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
-            let out = filter_returns.get(filter_index).copied().unwrap_or(false);
-            filter_index += 1;
-            Signal::Return(v_bool(out))
-        };
+        let mut filter_run = crate::handler::registry::FnThunkRunner(
+            |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
+                let out = filter_returns.get(filter_index).copied().unwrap_or(false);
+                filter_index += 1;
+                Signal::Return(v_bool(out))
+            },
+        );
         let filtered = expect_list(filter(
             &[
                 a_val(v_list(vec![v_num(1.0), v_num(2.0), v_num(3.0)])),
@@ -1867,11 +1954,13 @@ mod tests {
 
         let mut find_index = 0usize;
         let find_returns = [false, true];
-        let mut find_run = |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
-            let out = find_returns.get(find_index).copied().unwrap_or(false);
-            find_index += 1;
-            Signal::Return(v_bool(out))
-        };
+        let mut find_run = crate::handler::registry::FnThunkRunner(
+            |_: &crate::handler::argument::Thunk, _ctx: &mut ValueStore| {
+                let out = find_returns.get(find_index).copied().unwrap_or(false);
+                find_index += 1;
+                Signal::Return(v_bool(out))
+            },
+        );
         let found = find(
             &[a_val(v_list(vec![v_str("A"), v_str("B")])), a_thunk(2)],
             &mut ctx,

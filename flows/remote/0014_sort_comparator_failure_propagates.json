@@ -1,0 +1,60 @@
+{
+	"name": "0014_sort_comparator_failure_propagates",
+	"description": "When the sort comparator sub flow fails (remote::fail), the async merge sort aborts and surfaces that failure rather than returning a half-sorted list -- guards the `?` error path in async_merge_sort.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"name": "SimulatedActionFailure",
+				"message": "remote::fail was executed"
+			}
+		}
+	],
+	"flow": {
+		"flowId": "24",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::list::sort",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{ "numberValue": { "integer": "2" } },
+											{ "numberValue": { "integer": "1" } }
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "comparator",
+						"value": {
+							"sub_flow": {
+								"signature": "(a: NUMBER, b: NUMBER): NUMBER",
+								"parameters": [],
+								"startingNodeId": "2"
+							}
+						}
+					}
+				]
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::fail",
+				"parameters": []
+			}
+		]
+	}
+}

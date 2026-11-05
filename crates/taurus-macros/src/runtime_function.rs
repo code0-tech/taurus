@@ -43,16 +43,40 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
     }
 
     let fn_ident = &item_fn.sig.ident;
+
+    // The registry's `HandlerFn` is a `fn` returning a boxed future. Author
+    // handlers stay ordinary functions (sync `-> Signal` for pure ones, or
+    // `async fn ... -> Signal` for ones that `.await` their callback via
+    // `run`); this generated wrapper adapts either shape to `HandlerFn` and is
+    // what actually gets registered. Keeping the adaptation here means the ~9
+    // pure handler modules need no edits for the async callback model.
+    let wrapper_ident = format_ident!("__taurus_handler_{}", fn_ident);
+    let wrapped_call = if item_fn.sig.asyncness.is_some() {
+        quote! { ::std::boxed::Box::pin(#fn_ident(args, ctx, run)) }
+    } else {
+        quote! { ::std::boxed::Box::pin(async move { #fn_ident(args, ctx, run) }) }
+    };
+    let wrapper_fn = quote! {
+        #[doc(hidden)]
+        fn #wrapper_ident<'a>(
+            args: &'a [crate::handler::argument::Argument],
+            ctx: &'a mut crate::runtime::execution::value_store::ValueStore,
+            run: &'a mut crate::handler::registry::ThunkRunner<'a>,
+        ) -> crate::handler::registry::HandlerFuture<'a> {
+            #wrapped_call
+        }
+    };
+
     let dispatch_entry = if param_modes.is_empty() {
         quote! {
             crate::handler::registry::FunctionRegistration::eager(
-                #identifier, #fn_ident, #param_count as u8,
+                #identifier, #wrapper_ident, #param_count as u8,
             )
         }
     } else {
         quote! {
             crate::handler::registry::FunctionRegistration::modes(
-                #identifier, #fn_ident,
+                #identifier, #wrapper_ident,
                 &[#(crate::handler::argument::ParameterNode::#param_modes),*],
             )
         }
@@ -62,6 +86,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
 
     Ok(quote! {
         #item_fn
+
+        #wrapper_fn
 
         ::inventory::submit! {
             #dispatch_entry

@@ -1112,7 +1112,9 @@ mod tests {
             }),
         ];
         let mut ctx = ValueStore::default();
-        let mut run = |_: &crate::handler::argument::Thunk, _: &mut ValueStore| Signal::Stop;
+        let mut run = crate::handler::registry::FnThunkRunner(
+            |_: &crate::handler::argument::Thunk, _: &mut ValueStore| Signal::Stop,
+        );
 
         let signal = send_request(&args, &mut ctx, &mut run);
 

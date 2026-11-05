@@ -1,0 +1,85 @@
+{
+	"name": "0010_returned_subflow_bare_action_source_rejected",
+	"description": "Reproduces code0-tech/taurus#345: an action returns a sub flow function whose definition_source is the bare legacy value \"action\" (no `action.<service>` identifier) -- exactly what aquila used to send. It must be rejected cleanly (T-CORE-000008) instead of being minted and misrouted to a service literally named \"action\". A later map tries to consume it.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": {
+				"name": "SubFlowFunctionResultInvalid",
+				"message": "Returned sub flow function remote::double has a definition source without a service"
+			}
+		}
+	],
+	"flow": {
+		"flowId": "20",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::sub_flow_function",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "function_identifier",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "remote::double"
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "definition_source",
+						"value": {
+							"literalValue": {
+								"value": {
+									"stringValue": "action"
+								}
+							}
+						}
+					}
+				],
+				"nextNodeId": "2"
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "2",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{
+												"numberValue": {
+													"integer": "1"
+												}
+											}
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "201",
+						"runtimeParameterId": "transform",
+						"value": {
+							"referenceValue": {
+								"nodeId": "1"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

@@ -1,12 +1,14 @@
 //! Runtime engine execution loop for compiled flow plans.
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use crate::handler::argument::{
     Argument, FunctionThunk, ParameterNode, TemplateArgument, TemplateReferenceArgument, Thunk,
 };
-use crate::handler::registry::{FunctionStore, HandlerFunctionEntry};
+use crate::handler::registry::{AsyncThunkRunner, FunctionStore, HandlerFunctionEntry, HandlerFuture};
 use crate::runtime::engine::model::{
     CompiledArg, CompiledFlow, CompiledNode, CompiledThunk, NodeExecutionTarget, SubFlowSetting,
 };
@@ -21,7 +23,6 @@ use crate::time::now_unix_micros;
 use crate::types::errors::runtime_error::RuntimeError;
 use crate::types::signal::Signal;
 use crate::value::{node_value_result_to_value, raw_value_of, raw_value_result};
-use futures_lite::future::block_on;
 use tokio::sync::Notify;
 use tucana::aquila::{
     ActionExecutionRequest, ActionInlineReferenceValue, ActionLiteralValue, ActionNodeSubFlowValue,
@@ -43,6 +44,7 @@ use tucana::shared::{
 #[allow(clippy::too_many_arguments)]
 pub async fn execute_compiled_from(
     execution_id: &str,
+    flow_execution_id: &str,
     flow: &Arc<CompiledFlow>,
     start_idx: usize,
     handlers: &FunctionStore,
@@ -55,6 +57,7 @@ pub async fn execute_compiled_from(
     let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
         execution_id,
+        flow_execution_id,
         flow: Arc::clone(flow),
         handlers,
         remote,
@@ -72,9 +75,15 @@ pub async fn execute_compiled_from(
 /// returned and Taurus handed on to an action, which now invokes it. The
 /// function reads its arguments from the input slots `value_store` was
 /// seeded with for its caller.
+///
+/// Async so the function's own remote call is `.await`ed rather than blocking
+/// a runtime worker thread: this path is driven from the `sub_flow_execution.*`
+/// subscriber while the parent call is outstanding, and blocking it stalled
+/// delivery of every other message until a timeout fired (code0-tech/taurus#347).
 #[allow(clippy::too_many_arguments)]
-pub fn execute_function_standalone(
+pub async fn execute_function_standalone(
     execution_id: &str,
+    flow_execution_id: &str,
     flow: &Arc<CompiledFlow>,
     function: &FunctionThunk,
     handlers: &FunctionStore,
@@ -86,6 +95,7 @@ pub fn execute_function_standalone(
     let tracer = with_trace.then(Mutex::default);
     let executor = EngineExecutor {
         execution_id,
+        flow_execution_id,
         flow: Arc::clone(flow),
         handlers,
         remote,
@@ -93,7 +103,9 @@ pub fn execute_function_standalone(
         sub_flow_registry,
     };
 
-    let result = executor.execute_function_thunk(function, value_store);
+    let result = executor
+        .execute_function_thunk(function, value_store)
+        .await;
     let trace = tracer.and_then(|collector| collector.into_inner().ok()?.take_run());
     (result.signal, trace)
 }
@@ -122,6 +134,12 @@ struct EngineExecutor<'a> {
     /// action can correlate a callback (e.g. `respond`) against the run
     /// that triggered it.
     execution_id: &'a str,
+    /// Id of the top-level flow execution this executor belongs to. Equal to
+    /// `execution_id` for a top-level run; for a sub-flow run it is inherited
+    /// from the pending entry so every sub-flow registry id minted here is
+    /// owned by -- and swept with -- the same top-level flow (see
+    /// `sub_flow_registry` and code0-tech/taurus#346).
+    flow_execution_id: &'a str,
     /// `Arc`-wrapped so minting a sub-flow registry entry (which captures
     /// the flow standalone -- see `sub_flow_registry`) is a cheap refcount
     /// bump rather than a deep clone of the node graph.
@@ -130,6 +148,32 @@ struct EngineExecutor<'a> {
     remote: Option<&'a dyn RemoteRuntime>,
     tracer: Option<&'a Mutex<Tracer>>,
     sub_flow_registry: SubFlowRegistry,
+}
+
+/// The [`AsyncThunkRunner`] a handler is handed so it can run its lazy args /
+/// callback bodies back through the executor. Carries the executor and the
+/// calling node's trace frame so each re-entrant run is linked into the trace
+/// exactly as the old synchronous `run` closure did -- the difference is that
+/// a remote node reached inside the callback now `.await`s rather than
+/// blocking the worker thread.
+struct ThunkExec<'e, 'x> {
+    executor: &'x EngineExecutor<'e>,
+    frame_id: Option<u64>,
+}
+
+impl AsyncThunkRunner for ThunkExec<'_, '_> {
+    fn run_thunk<'a>(&'a mut self, thunk: &'a Thunk, ctx: &'a mut ValueStore) -> HandlerFuture<'a> {
+        Box::pin(async move {
+            self.executor.trace_mark_thunk_executed(self.frame_id, thunk);
+            let label = ctx.pop_runtime_trace_label();
+            let child = self.executor.execute_thunk(thunk, ctx).await;
+            if let (Some(parent), Some(child_root)) = (self.frame_id, child.root_frame) {
+                self.executor
+                    .trace_link_child(parent, child_root, EdgeKind::RuntimeCall { label });
+            }
+            child.signal
+        })
+    }
 }
 
 impl<'a> EngineExecutor<'a> {
@@ -179,86 +223,68 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn execute_from_index_sync(
-        &self,
-        start_idx: usize,
-        value_store: &mut ValueStore,
-    ) -> ExecutionResult {
-        // Synchronous thunk execution is retained for local handler callbacks.
-        let mut current_idx = start_idx;
-        let mut call_root_frame = None;
-        let mut previous_frame = None;
-
-        loop {
-            let next_idx = self.flow.nodes[current_idx].next_idx;
-            let result = self.execute_single_node_sync(current_idx, value_store);
-
-            if call_root_frame.is_none() {
-                call_root_frame = result.frame_id;
-            }
-            if let (Some(prev), Some(current)) = (previous_frame, result.frame_id) {
-                self.trace_link_child(prev, current, EdgeKind::Next);
-            }
-            if let Some(frame) = result.frame_id {
-                previous_frame = Some(frame);
-            }
-
-            match result.signal {
-                Signal::Success(value) => match next_idx {
-                    Some(next) => current_idx = next,
-                    None => {
-                        return ExecutionResult {
-                            signal: Signal::Success(value),
-                            root_frame: call_root_frame,
-                        };
-                    }
+    /// Runs a node range reached through a handler callback (an `if`/`if_else`
+    /// branch body, a `for_each`/`map` consumer, an eager parameter node).
+    /// Routes through the same async `execute_from_index` as a top-level run,
+    /// so a remote node inside a callback `.await`s rather than blocking a
+    /// worker thread (code0-tech/taurus#347).
+    fn execute_from_node_id<'n>(
+        &'n self,
+        node_id: i64,
+        value_store: &'n mut ValueStore,
+    ) -> Pin<Box<dyn Future<Output = ExecutionResult> + Send + 'n>> {
+        Box::pin(async move {
+            match self.flow.node_idx_by_id.get(&node_id).copied() {
+                Some(idx) => self.execute_from_index(idx, value_store).await,
+                None => ExecutionResult {
+                    signal: Signal::Failure(RuntimeError::new(
+                        "T-CORE-000001",
+                        "NodeNotFound",
+                        format!("Node {} not found", node_id),
+                    )),
+                    root_frame: None,
                 },
-                other => {
-                    return ExecutionResult {
-                        signal: other,
-                        root_frame: call_root_frame,
-                    };
+            }
+        })
+    }
+
+    // Boxed (rather than a plain `async fn`) to break the otherwise infinite
+    // future type: this re-enters the executor and so appears in its own async
+    // call cycle (execute_thunk -> execute_function_thunk -> ... -> execute_thunk).
+    fn execute_thunk<'t>(
+        &'t self,
+        thunk: &'t Thunk,
+        value_store: &'t mut ValueStore,
+    ) -> Pin<Box<dyn Future<Output = ExecutionResult> + Send + 't>> {
+        Box::pin(async move {
+            match thunk {
+                Thunk::Node { node_id, .. } => {
+                    self.execute_from_node_id(*node_id, value_store).await
+                }
+                Thunk::Function(function) => {
+                    self.execute_function_thunk(function, value_store).await
                 }
             }
-        }
+        })
     }
 
-    fn execute_from_node_id(&self, node_id: i64, value_store: &mut ValueStore) -> ExecutionResult {
-        // Used by thunk execution (callbacks, branch blocks, eager parameter nodes).
-        match self.flow.node_idx_by_id.get(&node_id).copied() {
-            Some(idx) => self.execute_from_index_sync(idx, value_store),
-            None => ExecutionResult {
-                signal: Signal::Failure(RuntimeError::new(
-                    "T-CORE-000001",
-                    "NodeNotFound",
-                    format!("Node {} not found", node_id),
-                )),
-                root_frame: None,
-            },
-        }
-    }
-
-    fn execute_thunk(&self, thunk: &Thunk, value_store: &mut ValueStore) -> ExecutionResult {
-        match thunk {
-            Thunk::Node { node_id, .. } => self.execute_from_node_id(*node_id, value_store),
-            Thunk::Function(function) => self.execute_function_thunk(function, value_store),
-        }
-    }
-
-    fn execute_function_thunk(
+    async fn execute_function_thunk(
         &self,
         function: &FunctionThunk,
         value_store: &mut ValueStore,
     ) -> ExecutionResult {
         match &function.execution_target {
-            NodeExecutionTarget::Local => self.execute_local_function_thunk(function, value_store),
+            NodeExecutionTarget::Local => {
+                self.execute_local_function_thunk(function, value_store).await
+            }
             NodeExecutionTarget::Remote { service } => {
                 self.execute_remote_function_thunk(function, service.as_str(), value_store)
+                    .await
             }
         }
     }
 
-    fn execute_local_function_thunk(
+    async fn execute_local_function_thunk(
         &self,
         function: &FunctionThunk,
         value_store: &mut ValueStore,
@@ -292,7 +318,7 @@ impl<'a> EngineExecutor<'a> {
             value_store,
         );
 
-        let mut args = match self.build_function_thunk_args(function, value_store, frame_id) {
+        let mut args = match self.build_function_thunk_args(function, value_store, frame_id).await {
             Ok(args) => args,
             Err(err) => {
                 let signal = Signal::Failure(err);
@@ -314,22 +340,19 @@ impl<'a> EngineExecutor<'a> {
         };
         let parameter_results = parameter_results_from_args(&args);
 
-        let signal =
-            if let Some(signal) = self.force_eager_args(&entry, &mut args, value_store, frame_id) {
-                signal
-            } else {
-                let mut run = |thunk: &Thunk, store: &mut ValueStore| {
-                    self.trace_mark_thunk_executed(frame_id, thunk);
-                    let label = store.pop_runtime_trace_label();
-                    let child_result = self.execute_thunk(thunk, store);
-                    if let (Some(parent), Some(child)) = (frame_id, child_result.root_frame) {
-                        self.trace_link_child(parent, child, EdgeKind::RuntimeCall { label });
-                    }
-                    child_result.signal
+        let signal = match self
+            .force_eager_args(&entry, &mut args, value_store, frame_id)
+            .await
+        {
+            Some(signal) => signal,
+            None => {
+                let mut run = ThunkExec {
+                    executor: self,
+                    frame_id,
                 };
-
-                (entry.handler)(&args, value_store, &mut run)
-            };
+                (entry.handler)(&args, value_store, &mut run).await
+            }
+        };
 
         self.trace_exit(frame_id, &signal, value_store);
         self.commit_function_result(
@@ -347,7 +370,7 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
-    fn execute_remote_function_thunk(
+    async fn execute_remote_function_thunk(
         &self,
         function: &FunctionThunk,
         service: &str,
@@ -360,7 +383,7 @@ impl<'a> EngineExecutor<'a> {
             value_store,
         );
 
-        let args = match self.build_function_thunk_args(function, value_store, frame_id) {
+        let args = match self.build_function_thunk_args(function, value_store, frame_id).await {
             Ok(args) => args,
             Err(err) => {
                 let signal = Signal::Failure(err);
@@ -391,17 +414,24 @@ impl<'a> EngineExecutor<'a> {
                 let request = self.build_remote_function_request(function, &args);
                 match request {
                     Err(err) => Signal::Failure(err),
-                    // Handler callbacks are synchronous today. Block only this flow invocation
-                    // while the configured remote transport completes its async request.
-                    Ok(request) => match block_on(remote_runtime.execute_remote(RemoteExecution {
-                        target_service: service.to_string(),
-                        request,
-                        // Function-thunk settings are always eagerly resolved
-                        // to literals (see `build_function_thunk_args`) --
-                        // never a `CompiledThunk::Node` reference -- so this
-                        // path never mints a sub-flow UUID.
-                        sub_flow_activity: None,
-                    })) {
+                    Ok(request) => match remote_runtime
+                        .execute_remote(RemoteExecution {
+                            target_service: service.to_string(),
+                            request,
+                            // This call doesn't mint anything itself (function-
+                            // thunk settings are eagerly resolved to literals,
+                            // see `build_function_thunk_args`), but it is itself
+                            // a sub-flow invocation running under the flow's
+                            // execution id -- so it waits on the flow's shared
+                            // activity and is renewed by any sub-flow traffic
+                            // this invocation drives in turn, instead of being
+                            // bounded by the flat deadline alone.
+                            sub_flow_activity: Some(
+                                self.sub_flow_registry.activity_for(self.flow_execution_id),
+                            ),
+                        })
+                        .await
+                    {
                         Ok(result) => remote_result_to_signal(result),
                         Err(err) => Signal::Failure(err),
                     },
@@ -424,6 +454,7 @@ impl<'a> EngineExecutor<'a> {
         }
     }
 
+
     async fn execute_single_node(
         &self,
         node_idx: usize,
@@ -437,7 +468,7 @@ impl<'a> EngineExecutor<'a> {
         let result = match &node.execution_target {
             NodeExecutionTarget::Local => {
                 let started_at = now_unix_micros();
-                let executed = self.execute_local_node(node, value_store, frame_id);
+                let executed = self.execute_local_node(node, value_store, frame_id).await;
                 let finished_at = now_unix_micros();
                 let parameter_results = executed.parameter_results;
                 let signal = self.commit_result(
@@ -462,53 +493,7 @@ impl<'a> EngineExecutor<'a> {
         result
     }
 
-    fn execute_single_node_sync(
-        &self,
-        node_idx: usize,
-        value_store: &mut ValueStore,
-    ) -> NodeResult {
-        let node = &self.flow.nodes[node_idx];
-        value_store.set_current_node_id(node.id);
-
-        let frame_id = self.trace_enter(node, value_store);
-        let result = match &node.execution_target {
-            NodeExecutionTarget::Local => {
-                let started_at = now_unix_micros();
-                let executed = self.execute_local_node(node, value_store, frame_id);
-                let finished_at = now_unix_micros();
-                let parameter_results = executed.parameter_results;
-                let signal = self.commit_result(
-                    node.id,
-                    executed.signal,
-                    parameter_results.clone(),
-                    started_at,
-                    finished_at,
-                    value_store,
-                );
-                NodeResult { signal, frame_id }
-            }
-            NodeExecutionTarget::Remote { service } => {
-                // Branch bodies (`if`/`if_else`) and other lazy-arg
-                // callbacks re-enter the executor synchronously (see
-                // `execute_from_index_sync`), so a `Remote` node reached
-                // this way has no `.await` point to hang off of. Bridge it
-                // the same way `execute_remote_function_thunk` already
-                // bridges a local-function-thunk's remote call: block only
-                // this flow invocation's thread while the one genuine
-                // `.await` inside `execute_remote_node` (the actual remote
-                // request) completes. Safe to nest under the multi-thread
-                // runtime this service always runs under -- other worker
-                // threads keep servicing the reactor.
-                let signal = block_on(self.execute_remote_node(node, service, value_store, frame_id));
-                NodeResult { signal, frame_id }
-            }
-        };
-        self.trace_exit(frame_id, &result.signal, value_store);
-
-        result
-    }
-
-    fn execute_local_node(
+    async fn execute_local_node(
         &self,
         node: &CompiledNode,
         value_store: &mut ValueStore,
@@ -538,14 +523,20 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        if let Err(err) = self.resolve_local_templates(&mut args, value_store, frame_id) {
+        if let Err(err) = self
+            .resolve_local_templates(&mut args, value_store, frame_id)
+            .await
+        {
             return ExecutedNode {
                 signal: Signal::Failure(err),
                 parameter_results: Vec::new(),
             };
         }
 
-        if let Some(signal) = self.force_eager_args(entry, &mut args, value_store, frame_id) {
+        if let Some(signal) = self
+            .force_eager_args(entry, &mut args, value_store, frame_id)
+            .await
+        {
             return ExecutedNode {
                 signal,
                 parameter_results: parameter_results_from_args(&args),
@@ -554,19 +545,16 @@ impl<'a> EngineExecutor<'a> {
 
         let parameter_results = parameter_results_from_args(&args);
 
-        // Handler-owned runtime calls (for lazy args / callbacks) re-enter the same executor.
-        let mut run = |thunk: &Thunk, store: &mut ValueStore| {
-            self.trace_mark_thunk_executed(frame_id, thunk);
-            let label = store.pop_runtime_trace_label();
-            let child_result = self.execute_thunk(thunk, store);
-            if let (Some(parent), Some(child)) = (frame_id, child_result.root_frame) {
-                self.trace_link_child(parent, child, EdgeKind::RuntimeCall { label });
-            }
-            child_result.signal
+        // Handler-owned runtime calls (for lazy args / callbacks) re-enter the
+        // same executor through the async path, so a remote node inside the
+        // callback awaits instead of blocking a worker thread.
+        let mut run = ThunkExec {
+            executor: self,
+            frame_id,
         };
 
         ExecutedNode {
-            signal: (entry.handler)(&args, value_store, &mut run),
+            signal: (entry.handler)(&args, value_store, &mut run).await,
             parameter_results,
         }
     }
@@ -611,13 +599,19 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        // Shared by every sub-flow UUID minted while resolving this call's
-        // parameters (if any): the `sub_flow_execution.*` subscriber bumps
-        // it on every lookup+run, so the idle timeout below only fires on
-        // genuine inactivity, not because the call is legitimately long-lived.
-        let activity = Arc::new(Notify::new());
+        // The flow execution's shared idle-timeout activity: every remote call
+        // of this flow waits on it and the `sub_flow_execution.*` subscriber
+        // bumps it on every lookup+run, so this call's deadline only fires on
+        // genuine inactivity across the *whole* flow, not because a legitimately
+        // long-lived sub-flow invocation happens to be driven by another call
+        // (see `SubFlowRegistry::activity_for`). References minted below also
+        // record this same `Notify` so a later invocation renews it too.
+        let activity = self.sub_flow_registry.activity_for(self.flow_execution_id);
         let (params, minted_ids) =
-            match self.resolve_remote_args(&mut args, value_store, frame_id, &activity) {
+            match self
+                .resolve_remote_args(&mut args, value_store, frame_id, &activity)
+                .await
+            {
                 Ok(resolved) => resolved,
                 Err(signal) => {
                     return self.commit_result(
@@ -649,31 +643,28 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        // Only calls that actually minted a sub-flow reference get the
-        // renewable idle timeout; an ordinary call with no sub-flow
-        // parameters has no activity to track and keeps today's flat
-        // from-the-start deadline (see `NATSRemoteRuntime::execute_remote`).
-        let sub_flow_activity = if minted_ids.is_empty() {
-            None
-        } else {
-            Some(Arc::clone(&activity))
-        };
-
+        // Every remote call gets the flow execution's renewable idle timeout,
+        // not only one that minted a reference itself: the action may invoke a
+        // reference minted by an *earlier* call while this one is outstanding,
+        // and that invocation must reset *this* call's deadline. For a flow
+        // with no sub-flow traffic at all the `Notify` is simply never bumped,
+        // so the wait degrades to the flat from-the-start deadline exactly as
+        // before (see `NATSRemoteRuntime::wait_for_reply`).
         let result = remote_runtime
             .execute_remote(RemoteExecution {
                 target_service: service.to_string(),
                 request,
-                sub_flow_activity,
+                sub_flow_activity: Some(Arc::clone(&activity)),
             })
             .await;
 
-        // The parent call is done (success or failure) -- every sub-flow
-        // UUID minted for it is no longer reachable by the action and can
-        // be dropped, regardless of how many times (if any) it was actually
-        // invoked while the call was outstanding.
-        for id in &minted_ids {
-            self.sub_flow_registry.remove(id);
-        }
+        // Deliberately *not* removing `minted_ids` here. A reference this call
+        // minted may be carried by a sub flow function the action returns and
+        // invoked by a *later* node, long after this call resolved (e.g. a
+        // model handed to `create agent`, invoked only when the agent runs in
+        // `invoke agent`). Dropping it now would make that invocation fail with
+        // T-TAURUS-000002. The whole flow execution sweeps these at the end
+        // instead (`SubFlowRegistry::remove_for_execution`, code0-tech/taurus#346).
 
         match result {
             Ok(result) => self.commit_remote_result(
@@ -874,7 +865,7 @@ impl<'a> EngineExecutor<'a> {
         Ok(args)
     }
 
-    fn build_function_thunk_args(
+    async fn build_function_thunk_args(
         &self,
         function: &FunctionThunk,
         value_store: &mut ValueStore,
@@ -909,7 +900,9 @@ impl<'a> EngineExecutor<'a> {
                 parameter_index: function.parameter_index,
                 input_index: index as i64,
             };
-            let value = resolve_function_setting(function, setting, input_type, value_store)?;
+            let value = self
+                .resolve_function_setting(function, setting, input_type, value_store)
+                .await?;
             self.trace_record_arg(
                 frame_id,
                 ArgTrace {
@@ -983,7 +976,7 @@ impl<'a> EngineExecutor<'a> {
     /// path, which forwards the template structure as-is (see
     /// `resolve_remote_args`) so the action can interpolate on its own
     /// schedule and decide when (or whether) to run any nested sub flow.
-    fn resolve_local_templates(
+    async fn resolve_local_templates(
         &self,
         args: &mut [Argument],
         value_store: &mut ValueStore,
@@ -991,14 +984,16 @@ impl<'a> EngineExecutor<'a> {
     ) -> Result<(), RuntimeError> {
         for argument in args.iter_mut() {
             if let Argument::Template(template) = argument {
-                let value = self.resolve_template_value(template, value_store, frame_id)?;
+                let value = self
+                    .resolve_template_value(template, value_store, frame_id)
+                    .await?;
                 *argument = Argument::Eval(value);
             }
         }
         Ok(())
     }
 
-    fn resolve_template_value(
+    async fn resolve_template_value(
         &self,
         template: &TemplateArgument,
         value_store: &mut ValueStore,
@@ -1006,7 +1001,9 @@ impl<'a> EngineExecutor<'a> {
     ) -> Result<Value, RuntimeError> {
         let mut resolved = HashMap::with_capacity(template.references.len());
         for reference in &template.references {
-            let value = self.resolve_argument_value(&reference.arg, value_store, frame_id)?;
+            let value = self
+                .resolve_argument_value(&reference.arg, value_store, frame_id)
+                .await?;
             resolved.insert(reference.signature.clone(), value);
         }
         Ok(substitute_template(&template.value, &resolved))
@@ -1015,37 +1012,41 @@ impl<'a> EngineExecutor<'a> {
     /// Resolves one inline reference to a concrete value, running a deferred
     /// sub-flow thunk synchronously since the interpolated result is needed
     /// immediately.
-    fn resolve_argument_value(
-        &self,
-        argument: &Argument,
-        value_store: &mut ValueStore,
+    // Boxed to break the mutual async recursion with `resolve_template_value`
+    // (a template reference can itself be a nested template).
+    fn resolve_argument_value<'s>(
+        &'s self,
+        argument: &'s Argument,
+        value_store: &'s mut ValueStore,
         frame_id: Option<u64>,
-    ) -> Result<Value, RuntimeError> {
-        match argument {
-            Argument::Eval(value) => Ok(value.clone()),
-            Argument::Thunk(thunk) => {
-                self.trace_mark_thunk_executed(frame_id, thunk);
-                match self.execute_thunk(thunk, value_store).signal {
-                    // A reference resolved via `return` inside the sub flow
-                    // it points at yields that value the same as `Success`
-                    // would -- there's no meaningful difference for the
-                    // purpose of filling in one `${signature}` slot.
-                    Signal::Success(value) | Signal::Return(value) => Ok(value),
-                    Signal::Failure(err) => Err(err),
-                    Signal::Stop => Err(RuntimeError::new(
-                        "T-CORE-000108",
-                        "TemplateReferenceStopped",
-                        "Inline reference resolution was stopped before producing a value",
-                    )),
+    ) -> Pin<Box<dyn Future<Output = Result<Value, RuntimeError>> + Send + 's>> {
+        Box::pin(async move {
+            match argument {
+                Argument::Eval(value) => Ok(value.clone()),
+                Argument::Thunk(thunk) => {
+                    self.trace_mark_thunk_executed(frame_id, thunk);
+                    match self.execute_thunk(thunk, value_store).await.signal {
+                        // A reference resolved via `return` inside the sub flow
+                        // it points at yields that value the same as `Success`
+                        // would -- there's no meaningful difference for the
+                        // purpose of filling in one `${signature}` slot.
+                        Signal::Success(value) | Signal::Return(value) => Ok(value),
+                        Signal::Failure(err) => Err(err),
+                        Signal::Stop => Err(RuntimeError::new(
+                            "T-CORE-000108",
+                            "TemplateReferenceStopped",
+                            "Inline reference resolution was stopped before producing a value",
+                        )),
+                    }
+                }
+                Argument::Template(nested) => {
+                    self.resolve_template_value(nested, value_store, frame_id).await
                 }
             }
-            Argument::Template(nested) => {
-                self.resolve_template_value(nested, value_store, frame_id)
-            }
-        }
+        })
     }
 
-    fn force_eager_args(
+    async fn force_eager_args(
         &self,
         entry: &HandlerFunctionEntry,
         args: &mut [Argument],
@@ -1059,7 +1060,7 @@ impl<'a> EngineExecutor<'a> {
                 && let Argument::Thunk(thunk) = argument
             {
                 self.trace_mark_thunk(frame_id, index, true, true);
-                let child = self.execute_thunk(thunk, value_store);
+                let child = self.execute_thunk(thunk, value_store).await;
                 if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
                     self.trace_link_child(
                         parent,
@@ -1087,7 +1088,7 @@ impl<'a> EngineExecutor<'a> {
     /// slots alongside every id minted along the way, so the caller can
     /// remove them all once the remote call this request belongs to
     /// resolves (see `execute_remote_node`).
-    fn resolve_remote_args(
+    async fn resolve_remote_args(
         &self,
         args: &mut [Argument],
         value_store: &mut ValueStore,
@@ -1098,14 +1099,16 @@ impl<'a> EngineExecutor<'a> {
         let mut minted_ids = Vec::new();
 
         for (index, argument) in args.iter_mut().enumerate() {
-            let param = self.resolve_remote_argument(
-                argument,
-                index,
-                value_store,
-                frame_id,
-                activity,
-                &mut minted_ids,
-            )?;
+            let param = self
+                .resolve_remote_argument(
+                    argument,
+                    index,
+                    value_store,
+                    frame_id,
+                    activity,
+                    &mut minted_ids,
+                )
+                .await?;
             params.push(param);
         }
 
@@ -1115,33 +1118,33 @@ impl<'a> EngineExecutor<'a> {
     /// Resolves one remote-call argument (top-level or nested inside a
     /// `Template`'s inline references) into a `RemoteParam`, minting any
     /// sub-flow UUID it needs into `minted_ids`.
-    fn resolve_remote_argument(
-        &self,
-        argument: &mut Argument,
+    fn resolve_remote_argument<'s>(
+        &'s self,
+        argument: &'s mut Argument,
         index: usize,
-        value_store: &mut ValueStore,
+        value_store: &'s mut ValueStore,
         frame_id: Option<u64>,
-        activity: &Arc<Notify>,
-        minted_ids: &mut Vec<String>,
-    ) -> Result<RemoteParam, Signal> {
+        activity: &'s Arc<Notify>,
+        minted_ids: &'s mut Vec<String>,
+    ) -> Pin<Box<dyn Future<Output = Result<RemoteParam, Signal>> + Send + 's>> {
+        Box::pin(async move {
         match argument {
             Argument::Eval(value) => Ok(RemoteParam::Literal(value.clone())),
-            // A `CompiledThunk::Node` sub-flow reference destined for a
-            // *remote* node's parameter is not resolved here at all --
-            // unlike every other thunk in this engine (including the
-            // exact same variant reached through the local `build_args`
-            // path used by `std::control::if`/`if_else`, which stays
-            // eager and synchronous, see `control.rs`), it may need to
-            // run zero, one, or many times, driven by the action itself
-            // over `ActionSubFlowExecutionRequest` while this call is
-            // outstanding. So instead of executing it we mint a UUID
-            // and hand the action a `SubFlow` reference it can invoke
-            // on its own schedule (see `sub_flow_registry`).
-            //
-            // `CompiledThunk::Function` (the other `Deferred` variant)
-            // is unaffected and keeps executing eagerly below, exactly
-            // as before -- only a bare node reference gets this
-            // treatment.
+            // A sub-flow reference destined for a *remote* node's parameter
+            // is not resolved here at all -- unlike the same thunk reached
+            // through the local `build_args` path, where the consuming
+            // handler decides when (and whether) to run it (`std::control::if`
+            // runs its `runnable`, an eager param is forced, see
+            // `control.rs`/`force_eager_args`). A remote action is the
+            // consumer instead, and it may invoke the sub flow zero, one, or
+            // many times over `ActionSubFlowExecutionRequest` while this call
+            // is outstanding. So Taurus -- which is *not* the consumer of a
+            // remote node's arguments -- never runs it: it mints a UUID and
+            // hands the action a `SubFlow` reference it can invoke on its own
+            // schedule (see `sub_flow_registry`). This applies to both
+            // sub-flow variants below: a bare node range (`Thunk::Node`) and
+            // a flow-declared function (`Thunk::Function`), exactly like a
+            // function a remote runtime returned as a node result.
             Argument::Thunk(Thunk::Node {
                 node_id,
                 input_schema,
@@ -1153,6 +1156,7 @@ impl<'a> EngineExecutor<'a> {
                     &self.flow,
                     *node_id,
                     self.execution_id,
+                    self.flow_execution_id,
                     Arc::clone(activity),
                     value_store.get_current_node_id(),
                     index as i64,
@@ -1173,16 +1177,27 @@ impl<'a> EngineExecutor<'a> {
                     ))),
                 }
             }
-            // A sub flow function a remote runtime returned is handed on
-            // as-is, exactly like a node range above: the receiving action
-            // may be a consumer (e.g. a handler) that runs it zero, one or
-            // many times, so it is never run on the action's behalf here.
-            Argument::Thunk(Thunk::Function(function)) if function.sub_flow_function.is_some() => {
+            // A sub flow function -- whether a remote runtime returned it as a
+            // node result (`sub_flow_function: Some`) or it was declared in
+            // the flow and compiled (`None`) -- is handed on as a callable
+            // reference, never run here: the receiving action is the consumer
+            // and decides whether and how often to invoke it. Either way the
+            // `FunctionThunk` carries the declared `input_schema`/
+            // `output_schema` (from `shared::SubFlow` for a flow-declared
+            // function, from the result for a returned one), forwarded on the
+            // wire exactly like a node range above. When the action invokes
+            // the minted id, `execute_sub_flow` seeds the caller's input slots
+            // and `execute_function_standalone` -> `build_function_thunk_args`
+            // resolves the declared `settings` from them (see `engine.rs`).
+            Argument::Thunk(Thunk::Function(function)) => {
                 let returned = function.sub_flow_function.clone();
+                let input_schema = function.input_schema.clone();
+                let output_schema = function.output_schema.clone();
                 let id = self.sub_flow_registry.mint_function(
                     &self.flow,
                     function.clone(),
                     self.execution_id,
+                    self.flow_execution_id,
                     Arc::clone(activity),
                     value_store.get_current_node_id(),
                     index as i64,
@@ -1190,33 +1205,10 @@ impl<'a> EngineExecutor<'a> {
                 minted_ids.push(id.clone());
                 Ok(RemoteParam::SubFlow {
                     execution_identifier: id,
-                    input_schema: returned.as_ref().and_then(|f| f.input_schema.clone()),
-                    output_schema: returned.as_ref().and_then(|f| f.output_schema.clone()),
+                    input_schema,
+                    output_schema,
                     sub_flow_function: returned,
                 })
-            }
-            Argument::Thunk(thunk @ Thunk::Function(_)) => {
-                // Remote execution always receives materialized values for
-                // function-thunk args compiled from the flow -- this mirrors
-                // the pre-existing eager-resolution behavior unchanged.
-                self.trace_mark_thunk(frame_id, index, true, true);
-                let child = self.execute_thunk(thunk, value_store);
-                if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
-                    self.trace_link_child(
-                        parent,
-                        child_root,
-                        EdgeKind::EagerCall { arg_index: index },
-                    );
-                }
-                match child.signal {
-                    Signal::Success(value) => {
-                        *argument = Argument::Eval(value.clone());
-                        Ok(RemoteParam::Literal(value))
-                    }
-                    // Same unwind rule as local eager params: return exits this call frame only.
-                    Signal::Return(value) => Err(Signal::Success(value)),
-                    other => Err(other),
-                }
             }
             // The template's own text is forwarded to the action as-is
             // (see `ActionLiteralValue`/`ActionInlineReferenceValue`) -- only
@@ -1227,14 +1219,16 @@ impl<'a> EngineExecutor<'a> {
             Argument::Template(template) => {
                 let mut references = Vec::with_capacity(template.references.len());
                 for reference in &mut template.references {
-                    let param = self.resolve_remote_argument(
-                        &mut *reference.arg,
-                        index,
-                        value_store,
-                        frame_id,
-                        activity,
-                        minted_ids,
-                    )?;
+                    let param = self
+                        .resolve_remote_argument(
+                            &mut *reference.arg,
+                            index,
+                            value_store,
+                            frame_id,
+                            activity,
+                            minted_ids,
+                        )
+                        .await?;
                     references.push((reference.signature.clone(), param));
                 }
                 Ok(RemoteParam::Template {
@@ -1243,6 +1237,7 @@ impl<'a> EngineExecutor<'a> {
                 })
             }
         }
+        })
     }
 
     fn build_remote_request(
@@ -1559,6 +1554,85 @@ impl<'a> EngineExecutor<'a> {
                 .mark_thunk_executed(frame_id, thunk.trace_target().as_str());
         }
     }
+
+    /// Resolves the value a function sub-flow callback receives for one
+    /// parameter: the caller-supplied input if present (and non-null),
+    /// otherwise the parameter's compiled default. The default is resolved the
+    /// same way a node parameter is -- so it may be a literal, a reference, a
+    /// template, or a nested sub-flow (code0-tech/taurus#346 follow-up). A
+    /// parameter with no caller value and no default is an error.
+    async fn resolve_function_setting(
+        &self,
+        function: &FunctionThunk,
+        setting: &SubFlowSetting,
+        input_type: InputType,
+        value_store: &mut ValueStore,
+    ) -> Result<Value, RuntimeError> {
+        let reference = ReferenceValue {
+            target: Some(Target::InputType(input_type)),
+            paths: Vec::new(),
+        };
+
+        // Own the lookup result so the value_store borrow is released before we
+        // may re-borrow it to resolve the default.
+        match value_store.get(&reference) {
+            ValueStoreResult::Success(value) => {
+                if is_null_value(&value) && setting.default.is_some() {
+                    self.resolve_setting_default(function, setting, value_store)
+                        .await
+                } else {
+                    Ok(value)
+                }
+            }
+            ValueStoreResult::Error(err) => Err(err),
+            // Input slots only ever hold values, so a sub flow function can't
+            // be found here; treat it like a missing input.
+            ValueStoreResult::NotFound | ValueStoreResult::SubFlowFunction(_) => {
+                self.resolve_setting_default(function, setting, value_store)
+                    .await
+            }
+        }
+    }
+
+    /// Resolves a sub-flow parameter's compiled default to a concrete value,
+    /// or errors if it has no default (required parameter, unsupplied).
+    async fn resolve_setting_default(
+        &self,
+        function: &FunctionThunk,
+        setting: &SubFlowSetting,
+        value_store: &mut ValueStore,
+    ) -> Result<Value, RuntimeError> {
+        let Some(default) = setting.default.as_ref() else {
+            return Err(RuntimeError::new(
+                "T-CORE-000107",
+                "SubFlowSettingValueMissing",
+                format!(
+                    "Required sub_flow setting {} for function {} is missing",
+                    setting.identifier, function.identifier
+                ),
+            ));
+        };
+
+        match self.compiled_arg_to_argument(
+            default,
+            function.parameter_index as usize,
+            value_store,
+        )? {
+            Argument::Eval(value) => Ok(value),
+            Argument::Template(template) => {
+                self.resolve_template_value(&template, value_store, None).await
+            }
+            // A reference resolving to a sub flow function, or a nested sub
+            // flow default, runs to produce the default value.
+            Argument::Thunk(thunk) => match self.execute_thunk(&thunk, value_store).await.signal {
+                Signal::Success(value) | Signal::Return(value) => Ok(value),
+                Signal::Failure(err) => Err(err),
+                Signal::Stop => Ok(Value {
+                    kind: Some(Kind::NullValue(0)),
+                }),
+            },
+        }
+    }
 }
 
 fn parameter_results_from_args(args: &[Argument]) -> Vec<NodeValueExecutionResult> {
@@ -1618,6 +1692,8 @@ fn returned_function_thunk(
         execution_target,
         parameter_index: parameter_index as i64,
         settings: Vec::new(),
+        input_schema: function.input_schema.clone(),
+        output_schema: function.output_schema.clone(),
         sub_flow_function: Some(function),
     }))
 }
@@ -1711,11 +1787,15 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             execution_target,
             parameter_index,
             settings,
+            input_schema,
+            output_schema,
         } => Thunk::Function(FunctionThunk {
             identifier: identifier.clone(),
             execution_target: execution_target.clone(),
             parameter_index: *parameter_index,
             settings: settings.clone(),
+            input_schema: input_schema.clone(),
+            output_schema: output_schema.clone(),
             sub_flow_function: None,
         }),
     }
@@ -1735,47 +1815,6 @@ fn remote_result_to_signal(result: TucanaNodeExecutionResult) -> Signal {
             "NodeExecutionResultMissingOutcome",
             "Remote function execution result is missing success/error outcome",
         )),
-    }
-}
-
-fn resolve_function_setting(
-    function: &FunctionThunk,
-    setting: &SubFlowSetting,
-    input_type: InputType,
-    value_store: &mut ValueStore,
-) -> Result<Value, RuntimeError> {
-    let reference = ReferenceValue {
-        target: Some(Target::InputType(input_type)),
-        paths: Vec::new(),
-    };
-
-    match value_store.get(&reference) {
-        ValueStoreResult::Success(value) => {
-            if is_null_value(&value)
-                && let Some(default_value) = setting.default_value.clone()
-            {
-                Ok(default_value)
-            } else {
-                Ok(value)
-            }
-        }
-        ValueStoreResult::Error(err) => Err(err),
-        // Input slots only ever hold values, so a sub flow function can't be
-        // found here; treat it like a missing input.
-        ValueStoreResult::NotFound | ValueStoreResult::SubFlowFunction(_) => {
-            if let Some(default_value) = setting.default_value.clone() {
-                Ok(default_value)
-            } else {
-                Err(RuntimeError::new(
-                    "T-CORE-000107",
-                    "SubFlowSettingValueMissing",
-                    format!(
-                        "Required sub_flow setting {} for function {} is missing",
-                        setting.identifier, function.identifier
-                    ),
-                ))
-            }
-        }
     }
 }
 

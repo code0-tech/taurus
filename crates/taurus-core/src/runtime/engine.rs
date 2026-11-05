@@ -345,6 +345,7 @@ impl ExecutionEngine {
 
         let (signal, trace_run) = executor::execute_compiled_from(
             execution_id,
+            execution_id,
             &compiled,
             start_idx,
             &self.handlers,
@@ -354,7 +355,31 @@ impl ExecutionEngine {
             self.sub_flow_registry.clone(),
         )
         .await;
-        Self::finish_report(signal, trace_run, &mut value_store, with_trace)
+
+        // This is the top-level flow run, so every sub-flow registry entry it
+        // (or any sub-flow run nested under it) minted is now unreachable --
+        // the action can no longer invoke any of them. Sweep them all in one
+        // go, keyed on this flow execution id (see `sub_flow_registry` and
+        // code0-tech/taurus#346); per-call cleanup would drop references a
+        // returned sub flow function still needs for a later node.
+        // Drain the node results of every (remote) sub-flow invocation made
+        // under this flow execution before the sweep clears them, then fold
+        // them into this run's own results so the execution result lists every
+        // executed function with its params regardless of where it ran.
+        let sub_flow_results = self.sub_flow_registry.take_sub_flow_results(execution_id);
+        self.sub_flow_registry.remove_for_execution(execution_id);
+
+        let mut report = Self::finish_report(signal, trace_run, &mut value_store, with_trace);
+        if !sub_flow_results.is_empty() {
+            report.node_execution_results.extend(sub_flow_results);
+            // Each entry carries its own start timestamp; a stable sort gives a
+            // single chronological list that interleaves sub-flow runs with the
+            // top-level nodes rather than tacking them all on at the end.
+            report
+                .node_execution_results
+                .sort_by_key(|result| result.started_at);
+        }
+        report
     }
 
     /// Run a previously minted sub-flow (see `SubFlowRegistry`): a node range
@@ -433,6 +458,7 @@ impl ExecutionEngine {
             PendingSubFlowTarget::NodeRange { start_idx } => {
                 executor::execute_compiled_from(
                     &run_execution_id,
+                    &pending.flow_execution_id,
                     &pending.flow,
                     *start_idx,
                     &self.handlers,
@@ -449,6 +475,7 @@ impl ExecutionEngine {
                 value_store.set_current_node_id(pending.caller_node_id);
                 executor::execute_function_standalone(
                     &run_execution_id,
+                    &pending.flow_execution_id,
                     &pending.flow,
                     function,
                     &self.handlers,
@@ -457,14 +484,19 @@ impl ExecutionEngine {
                     with_trace,
                     self.sub_flow_registry.clone(),
                 )
+                .await
             }
         };
-        Some(Self::finish_report(
-            signal,
-            trace_run,
-            &mut value_store,
-            with_trace,
-        ))
+        let report = Self::finish_report(signal, trace_run, &mut value_store, with_trace);
+        // Surface this sub-flow run's node results in the top-level execution
+        // result. A remote sub-flow invocation runs in its own value store, so
+        // unlike a local consumer sub flow its results wouldn't otherwise reach
+        // the owning flow's result; record a copy under the top-level flow
+        // execution id for the top-level run to merge in when it finishes. The
+        // action still receives the full report below as its reply.
+        self.sub_flow_registry
+            .record_sub_flow_results(&pending.flow_execution_id, report.node_execution_results.clone());
+        Some(report)
     }
 
     fn finish_report(
@@ -599,6 +631,130 @@ mod tests {
         }
     }
 
+    /// A function sub-flow parameter whose default value is a *reference*
+    /// (to a node result) rather than a literal -- the case that used to be
+    /// silently dropped.
+    fn subflow_setting_reference(identifier: &str, node_id: i64) -> SubFlowParameters {
+        SubFlowParameters {
+            identifier: identifier.to_string(),
+            value: Some(NodeValue {
+                value: Some(node_value::Value::ReferenceValue(ReferenceValue {
+                    target: Some(reference_value::Target::NodeId(node_id)),
+                    paths: Vec::new(),
+                })),
+            }),
+            cast: None,
+        }
+    }
+
+    #[test]
+    fn sub_flow_parameter_reference_default_is_compiled_not_dropped() {
+        use crate::runtime::engine::compiler::compile_flow;
+        use crate::runtime::engine::model::{CompiledArg, CompiledThunk};
+
+        // A local node with a function-thunk parameter whose sub-flow
+        // parameter default is a reference. Before resolving SubFlowParameters
+        // like node parameters, a non-literal default compiled to `None` and
+        // was lost; now it must survive as a compiled `Reference`.
+        let consumer = node(
+            1,
+            "std::list::map",
+            vec![function_thunk_param_with_source(
+                101,
+                "transform",
+                "remote::identity",
+                Some("action.example"),
+                vec![subflow_setting_reference("value", 9)],
+            )],
+            None,
+        );
+
+        let flow = compile_flow(1, 1, vec![consumer]).expect("flow compiles");
+        let compiled = &flow.nodes[flow.start_idx];
+        match &compiled.parameters[0].arg {
+            CompiledArg::Deferred(CompiledThunk::Function { settings, .. }) => {
+                assert_eq!(settings.len(), 1);
+                assert_eq!(settings[0].identifier, "value");
+                assert!(
+                    matches!(settings[0].default, Some(CompiledArg::Reference(_))),
+                    "a reference default must be compiled, not dropped to None; got {:?}",
+                    settings[0].default
+                );
+            }
+            other => panic!("expected a deferred function thunk, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn callback_trace_links_control_node_to_its_branch() {
+        use crate::runtime::engine::compiler::compile_flow;
+        use crate::runtime::execution::trace::EdgeKind;
+        use std::sync::Arc;
+
+        // if(true) { return "x" }. The branch runs through the async ThunkExec
+        // runner, which must reproduce the old synchronous `run` closure's
+        // trace bookkeeping: a RuntimeCall edge from the `if` node's frame to
+        // the branch's frame.
+        let if_node = node(
+            1,
+            "std::control::if",
+            vec![
+                literal_param(
+                    100,
+                    "condition",
+                    Value {
+                        kind: Some(Kind::BoolValue(true)),
+                    },
+                ),
+                thunk_param(101, "runnable", 2),
+            ],
+            None,
+        );
+        let branch = node(
+            2,
+            "std::control::return",
+            vec![literal_param(200, "value", string_value("x"))],
+            None,
+        );
+
+        let compiled = Arc::new(compile_flow(1, 1, vec![if_node, branch]).expect("compiles"));
+        let handlers = FunctionStore::default();
+        let mut value_store = ValueStore::new(null_value(), true);
+
+        let (_signal, trace) = futures_lite::future::block_on(executor::execute_compiled_from(
+            "trace-test",
+            "trace-test",
+            &compiled,
+            compiled.start_idx,
+            &handlers,
+            &mut value_store,
+            None,
+            true,
+            SubFlowRegistry::new(),
+        ));
+        let trace = trace.expect("tracing was enabled");
+
+        let if_frame = trace
+            .frames
+            .iter()
+            .find(|frame| frame.node_id == 1)
+            .expect("if node frame present");
+        let runtime_call = if_frame
+            .children
+            .iter()
+            .find(|child| matches!(child.edge, EdgeKind::RuntimeCall { .. }))
+            .expect("if node must record a RuntimeCall edge to its branch");
+        let branch_frame = trace
+            .frames
+            .iter()
+            .find(|frame| frame.frame_id == runtime_call.child_frame_id)
+            .expect("branch frame present");
+        assert_eq!(
+            branch_frame.node_id, 2,
+            "the RuntimeCall edge must link to the branch body node"
+        );
+    }
+
     fn node_result_ref_param(
         database_id: i64,
         runtime_parameter_id: &str,
@@ -685,28 +841,32 @@ mod tests {
         );
     }
 
-    fn sleep_handler(
-        _args: &[Argument],
-        _ctx: &mut ValueStore,
-        _run: &mut ThunkRunner<'_>,
-    ) -> Signal {
-        std::thread::sleep(Duration::from_micros(2_000));
-        Signal::Success(null_value())
+    fn sleep_handler<'a>(
+        _args: &'a [Argument],
+        _ctx: &'a mut ValueStore,
+        _run: &'a mut ThunkRunner<'a>,
+    ) -> crate::handler::registry::HandlerFuture<'a> {
+        Box::pin(async move {
+            std::thread::sleep(Duration::from_micros(2_000));
+            Signal::Success(null_value())
+        })
     }
 
-    fn echo_first_arg_handler(
-        args: &[Argument],
-        _ctx: &mut ValueStore,
-        _run: &mut ThunkRunner<'_>,
-    ) -> Signal {
-        match args.first() {
-            Some(Argument::Eval(value)) => Signal::Success(value.clone()),
-            _ => Signal::Failure(crate::types::errors::runtime_error::RuntimeError::new(
-                "T-TEST-000001",
-                "MissingEchoArgument",
-                "expected first eager argument",
-            )),
-        }
+    fn echo_first_arg_handler<'a>(
+        args: &'a [Argument],
+        _ctx: &'a mut ValueStore,
+        _run: &'a mut ThunkRunner<'a>,
+    ) -> crate::handler::registry::HandlerFuture<'a> {
+        Box::pin(async move {
+            match args.first() {
+                Some(Argument::Eval(value)) => Signal::Success(value.clone()),
+                _ => Signal::Failure(crate::types::errors::runtime_error::RuntimeError::new(
+                    "T-TEST-000001",
+                    "MissingEchoArgument",
+                    "expected first eager argument",
+                )),
+            }
+        })
     }
 
     #[derive(Clone)]
@@ -1061,7 +1221,7 @@ mod tests {
                     101,
                     "transform",
                     "remote::identity",
-                    Some("remote-service"),
+                    Some("action.remote-service"),
                     vec![subflow_setting("value", None)],
                 ),
             ],
@@ -1426,7 +1586,7 @@ mod tests {
             vec![literal_param(100, "payload", int_value(20))],
             None,
         );
-        remote_node.definition_source = Some("remote-service".to_string());
+        remote_node.definition_source = Some("action.remote-service".to_string());
 
         let report =
             engine.execute_graph_report("test", 1, vec![remote_node], None, Some(&remote), false);
@@ -1575,6 +1735,244 @@ mod tests {
         }
     }
 
+    fn sub_flow_node_result(identifier: &str, started_at: i64) -> NodeExecutionResult {
+        NodeExecutionResult {
+            started_at,
+            finished_at: started_at + 1,
+            parameter_results: Vec::new(),
+            id: Some(node_execution_result::Id::FunctionIdentifier(
+                identifier.to_string(),
+            )),
+            result: Some(node_execution_result::Result::Success(raw_value_result(
+                int_value(started_at),
+            ))),
+        }
+    }
+
+    /// A remote runtime that, while handling the call, records a sub-flow run's
+    /// node results into the registry -- exactly what `execute_sub_flow` does
+    /// when the action invokes a minted reference during this call.
+    struct RecordsSubFlowResultsRuntime {
+        registry: SubFlowRegistry,
+        flow_execution_id: String,
+        recorded: Vec<NodeExecutionResult>,
+        result: NodeExecutionResult,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for RecordsSubFlowResultsRuntime {
+        async fn execute_remote(
+            &self,
+            _execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            self.registry
+                .record_sub_flow_results(&self.flow_execution_id, self.recorded.clone());
+            Ok(self.result.clone())
+        }
+    }
+
+    /// The node results of a remote sub-flow invocation must appear in the
+    /// top-level execution result (a remote sub flow runs in its own value
+    /// store, so unlike a local consumer sub flow its results only reach the
+    /// flow result via the registry merge). The merged list stays chronological.
+    #[test]
+    fn sub_flow_run_node_results_are_merged_into_the_top_level_execution_result() {
+        let engine = ExecutionEngine::new();
+        // Recorded out of order, to also prove the merged list is sorted.
+        let recorded = vec![
+            sub_flow_node_result("sub::late", 30),
+            sub_flow_node_result("sub::early", 10),
+        ];
+        let remote = RecordsSubFlowResultsRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            flow_execution_id: "exec-1".to_string(),
+            recorded,
+            result: NodeExecutionResult {
+                started_at: 20,
+                finished_at: 40,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
+            },
+        };
+
+        let mut remote_node = node(1, "remote::noop", vec![], None);
+        remote_node.definition_source = Some("action.example".to_string());
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![remote_node],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("exec-1", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        // The remote node's own result plus both sub-flow run results are here.
+        let ids: Vec<_> = report
+            .node_execution_results
+            .iter()
+            .map(|result| result.id.clone())
+            .collect();
+        assert_eq!(report.node_execution_results.len(), 3);
+        assert!(ids.contains(&Some(node_execution_result::Id::NodeId(1))));
+        let early = ids
+            .iter()
+            .position(|id| {
+                *id == Some(node_execution_result::Id::FunctionIdentifier(
+                    "sub::early".to_string(),
+                ))
+            })
+            .expect("sub::early result is present");
+        let late = ids
+            .iter()
+            .position(|id| {
+                *id == Some(node_execution_result::Id::FunctionIdentifier(
+                    "sub::late".to_string(),
+                ))
+            })
+            .expect("sub::late result is present");
+        assert!(early < late, "sub-flow results keep their run order");
+
+        // The whole list is chronological by start time.
+        let starts: Vec<i64> = report
+            .node_execution_results
+            .iter()
+            .map(|result| result.started_at)
+            .collect();
+        let mut sorted = starts.clone();
+        sorted.sort();
+        assert_eq!(starts, sorted, "merged results are sorted by started_at");
+
+        // The flow execution's collected results were drained by the merge.
+        assert!(
+            engine
+                .sub_flow_registry
+                .take_sub_flow_results("exec-1")
+                .is_empty(),
+            "sub-flow results are swept once merged into the top-level result"
+        );
+    }
+
+    /// code0-tech/taurus#349: a sub flow a flow *declares* as a function
+    /// (`ExecutionReference::Function`) on a remote node's parameter must be
+    /// minted and handed to the action as a callable `SubFlow` reference --
+    /// exactly like a node range or a returned function -- not executed in
+    /// Taurus and passed on as a materialized literal. The action is the
+    /// consumer and decides whether/when to invoke it.
+    #[test]
+    fn remote_node_with_function_sub_flow_parameter_mints_uuid_instead_of_executing_eagerly() {
+        let engine = ExecutionEngine::new();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let found_pending_during_call = Arc::new(Mutex::new(None));
+        let remote = SubFlowMintProbeRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
+            },
+            requests: Arc::clone(&requests),
+            found_pending_during_call: Arc::clone(&found_pending_during_call),
+        };
+
+        // Node 1 is dispatched remotely and takes a *flow-declared* function
+        // sub flow (`std::date::now`, the code0-tech/taurus#349 repro) as its
+        // single parameter. Under the old behavior Taurus ran `std::date::now`
+        // and sent the resulting date literal; now it must mint a reference.
+        // The declared input/output schemas must travel to the action with it.
+        let input_schema = Struct {
+            fields: std::collections::HashMap::from([("in".to_string(), int_value(1))]),
+        };
+        let output_schema = Struct {
+            fields: std::collections::HashMap::from([("out".to_string(), int_value(2))]),
+        };
+        let tool_param = NodeParameter {
+            database_id: 100,
+            runtime_parameter_id: "tools".to_string(),
+            value: Some(NodeValue {
+                value: Some(node_value::Value::SubFlow(SubFlow {
+                    input_schema: Some(input_schema.clone()),
+                    output_schema: Some(output_schema.clone()),
+                    name: None,
+                    description: None,
+                    signature: String::new(),
+                    parameters: Vec::new(),
+                    execution_reference: Some(ExecutionReference::Function(SubFlowFunction {
+                        function_identifier: "std::date::now".to_string(),
+                        definition_source: Some("taurus".to_string()),
+                    })),
+                })),
+            }),
+            cast: None,
+        };
+        let mut remote_node = node(1, "remote::agent_create", vec![tool_param], None);
+        remote_node.definition_source = Some("action.example".to_string());
+
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![remote_node],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        assert_eq!(
+            *found_pending_during_call
+                .lock()
+                .expect("probe recorder should not be poisoned"),
+            Some(true),
+            "registry should hold a matching entry while the remote call is outstanding"
+        );
+
+        let requests = requests
+            .lock()
+            .expect("request recorder should not be poisoned");
+        assert_eq!(requests.len(), 1);
+        let parameters = &requests[0].parameters;
+        assert_eq!(parameters.len(), 1);
+
+        match &parameters[0].value {
+            Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+                input_schema: got_input,
+                output_schema: got_output,
+            })) => {
+                assert!(
+                    uuid::Uuid::parse_str(execution_identifier).is_ok(),
+                    "expected a minted UUID, got {:?}",
+                    execution_identifier
+                );
+                assert_eq!(
+                    got_input.as_ref(),
+                    Some(&input_schema),
+                    "the flow-declared sub flow's input_schema must be forwarded to the action"
+                );
+                assert_eq!(
+                    got_output.as_ref(),
+                    Some(&output_schema),
+                    "the flow-declared sub flow's output_schema must be forwarded to the action"
+                );
+            }
+            other => panic!(
+                "expected a minted sub_flow parameter, got {:?} -- a flow-declared function \
+                 sub flow must not be eagerly resolved to a literal for a remote node",
+                other
+            ),
+        }
+    }
+
     #[test]
     fn remote_node_with_sub_flow_parameter_mints_uuid_instead_of_executing_eagerly() {
         let engine = ExecutionEngine::new();
@@ -1660,14 +2058,158 @@ mod tests {
             ),
         };
 
-        // The parent node's own remote call has resolved (successfully), so
-        // the registry entry it minted must already have been cleaned up.
+        // The whole flow run has finished, so its minted registry entries are
+        // swept (flow-execution-scoped lifetime -- see `sub_flow_registry`).
         assert!(
             engine
                 .sub_flow_registry
                 .get(&execution_identifier)
                 .is_none(),
-            "registry entry should be removed once the parent call resolves"
+            "registry entry should be removed once the flow execution finishes"
+        );
+    }
+
+    /// Drives the code0-tech/taurus#346 scenario across two sequential remote
+    /// nodes. The first call carries a minted sub-flow reference (as a returned
+    /// function would); the second, later call probes whether that reference is
+    /// still registered. Under the old per-call cleanup the first call's
+    /// resolution dropped it, so a reference handed on to a later node was dead
+    /// by the time that node ran.
+    struct SubFlowOutlivesMintingCallRuntime {
+        registry: SubFlowRegistry,
+        result: NodeExecutionResult,
+        minted_id: Arc<Mutex<Option<String>>>,
+        registered_during_later_node: Arc<Mutex<Option<bool>>>,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for SubFlowOutlivesMintingCallRuntime {
+        async fn execute_remote(
+            &self,
+            execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            match execution
+                .request
+                .parameters
+                .first()
+                .and_then(|parameter| parameter.value.as_ref())
+            {
+                // The first node's call carries the minted sub-flow reference.
+                Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                    execution_identifier,
+                    ..
+                })) => {
+                    *self
+                        .minted_id
+                        .lock()
+                        .expect("minted id recorder should not be poisoned") =
+                        Some(execution_identifier.clone());
+                }
+                // A later node's call (no sub-flow parameter): is the reference
+                // the earlier call minted still resolvable?
+                _ => {
+                    if let Some(id) = self
+                        .minted_id
+                        .lock()
+                        .expect("minted id recorder should not be poisoned")
+                        .clone()
+                    {
+                        *self
+                            .registered_during_later_node
+                            .lock()
+                            .expect("liveness recorder should not be poisoned") =
+                            Some(self.registry.get(&id).is_some());
+                    }
+                }
+            }
+            Ok(self.result.clone())
+        }
+    }
+
+    #[test]
+    fn sub_flow_reference_survives_until_a_later_node_invokes_it() {
+        let engine = ExecutionEngine::new();
+        let minted_id = Arc::new(Mutex::new(None));
+        let registered_during_later_node = Arc::new(Mutex::new(None));
+        let remote = SubFlowOutlivesMintingCallRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
+            },
+            minted_id: Arc::clone(&minted_id),
+            registered_during_later_node: Arc::clone(&registered_during_later_node),
+        };
+
+        // Node 1 (remote) mints a sub-flow reference from node 3's range, then
+        // hands control to node 2 (remote) -- which runs only after node 1's
+        // call has fully resolved.
+        let mut minting_node = node(
+            1,
+            "remote::open_stream",
+            vec![thunk_param(100, "on_message", 3)],
+            Some(2),
+        );
+        minting_node.definition_source = Some("action.example".to_string());
+
+        let mut later_node = node(
+            2,
+            "remote::next",
+            vec![literal_param(200, "value", int_value(7))],
+            None,
+        );
+        later_node.definition_source = Some("action.example".to_string());
+
+        // Node 3 is the minted sub-flow's target range; never run by this test.
+        let sub_flow_target = node(
+            3,
+            "std::control::value",
+            vec![literal_param(300, "value", int_value(9))],
+            None,
+        );
+
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![minting_node, later_node, sub_flow_target],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        assert!(
+            minted_id
+                .lock()
+                .expect("minted id recorder should not be poisoned")
+                .is_some(),
+            "node 1 should have minted a sub-flow reference"
+        );
+        assert_eq!(
+            *registered_during_later_node
+                .lock()
+                .expect("liveness recorder should not be poisoned"),
+            Some(true),
+            "a reference minted by node 1 must still be registered while node 2 runs \
+             (code0-tech/taurus#346)"
+        );
+
+        // Once the whole flow finishes it is swept regardless.
+        let minted = minted_id
+            .lock()
+            .expect("minted id recorder should not be poisoned")
+            .clone()
+            .expect("node 1 minted an id");
+        assert!(
+            engine.sub_flow_registry.get(&minted).is_none(),
+            "flow-end sweep should remove the reference once the run completes"
         );
     }
 
@@ -1995,7 +2537,7 @@ mod tests {
             ],
             Some(1),
         );
-        for_each_node.definition_source = Some("draco-draco-cron".to_string());
+        for_each_node.definition_source = Some("taurus".to_string());
 
         let report = engine.execute_graph_report(
             "test",

@@ -1,0 +1,76 @@
+{
+	"name": "0015_map_consumer_node_range_invokes_remote",
+	"description": "A local std::list::map whose consumer is a node-range sub flow (not a function thunk) whose body dispatches to a remote action (remote::double). Exercises the callback -> execute_from_node_id -> execute_remote_node async path (formerly bridged with block_on in execute_single_node_sync). [1,2,3] doubles to [2,4,6].",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": [
+				2,
+				4,
+				6
+			]
+		}
+	],
+	"flow": {
+		"flowId": "25",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::list::map",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{ "numberValue": { "integer": "1" } },
+											{ "numberValue": { "integer": "2" } },
+											{ "numberValue": { "integer": "3" } }
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "transform",
+						"value": {
+							"sub_flow": {
+								"signature": "(value: NUMBER): NUMBER",
+								"parameters": [],
+								"startingNodeId": "2"
+							}
+						}
+					}
+				]
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::double",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "value",
+						"value": {
+							"referenceValue": {
+								"inputType": {
+									"nodeId": "1",
+									"parameterIndex": "1",
+									"inputIndex": "0"
+								}
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

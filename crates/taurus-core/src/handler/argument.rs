@@ -18,6 +18,13 @@ pub struct FunctionThunk {
     pub execution_target: NodeExecutionTarget,
     pub parameter_index: i64,
     pub settings: Vec<SubFlowSetting>,
+    /// Declared shape of the sub flow's input/output, carried from
+    /// `shared::SubFlow` (for a flow-declared function) or the
+    /// `SubFlowFunctionResult` (for a returned one) so a remote node that
+    /// mints this function as a callable reference can forward them on the
+    /// wire. `None` when the frontend/result omits them.
+    pub input_schema: Option<Struct>,
+    pub output_schema: Option<Struct>,
     /// Set when this function is a sub flow a remote runtime returned as a
     /// node result, rather than one compiled from the flow. Such a function
     /// declares no parameters, so it receives every positional input its

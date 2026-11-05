@@ -252,6 +252,8 @@ fn compile_node_value(
                         .iter()
                         .map(|parameter| compile_sub_flow_setting(node_id, parameter_index, parameter))
                         .collect::<Result<Vec<_>, _>>()?,
+                    input_schema: sub_flow.input_schema.clone(),
+                    output_schema: sub_flow.output_schema.clone(),
                 }))
             }
             None => Err(CompileError::SubFlowExecutionReferenceMissing {

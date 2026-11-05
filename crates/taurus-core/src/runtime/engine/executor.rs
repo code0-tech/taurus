@@ -418,11 +418,17 @@ impl<'a> EngineExecutor<'a> {
                         .execute_remote(RemoteExecution {
                             target_service: service.to_string(),
                             request,
-                            // Function-thunk settings are always eagerly resolved
-                            // to literals (see `build_function_thunk_args`) --
-                            // never a `CompiledThunk::Node` reference -- so this
-                            // path never mints a sub-flow UUID.
-                            sub_flow_activity: None,
+                            // This call doesn't mint anything itself (function-
+                            // thunk settings are eagerly resolved to literals,
+                            // see `build_function_thunk_args`), but it is itself
+                            // a sub-flow invocation running under the flow's
+                            // execution id -- so it waits on the flow's shared
+                            // activity and is renewed by any sub-flow traffic
+                            // this invocation drives in turn, instead of being
+                            // bounded by the flat deadline alone.
+                            sub_flow_activity: Some(
+                                self.sub_flow_registry.activity_for(self.flow_execution_id),
+                            ),
                         })
                         .await
                     {
@@ -593,11 +599,14 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        // Shared by every sub-flow UUID minted while resolving this call's
-        // parameters (if any): the `sub_flow_execution.*` subscriber bumps
-        // it on every lookup+run, so the idle timeout below only fires on
-        // genuine inactivity, not because the call is legitimately long-lived.
-        let activity = Arc::new(Notify::new());
+        // The flow execution's shared idle-timeout activity: every remote call
+        // of this flow waits on it and the `sub_flow_execution.*` subscriber
+        // bumps it on every lookup+run, so this call's deadline only fires on
+        // genuine inactivity across the *whole* flow, not because a legitimately
+        // long-lived sub-flow invocation happens to be driven by another call
+        // (see `SubFlowRegistry::activity_for`). References minted below also
+        // record this same `Notify` so a later invocation renews it too.
+        let activity = self.sub_flow_registry.activity_for(self.flow_execution_id);
         let (params, minted_ids) =
             match self
                 .resolve_remote_args(&mut args, value_store, frame_id, &activity)
@@ -634,21 +643,18 @@ impl<'a> EngineExecutor<'a> {
             }
         };
 
-        // Only calls that actually minted a sub-flow reference get the
-        // renewable idle timeout; an ordinary call with no sub-flow
-        // parameters has no activity to track and keeps today's flat
-        // from-the-start deadline (see `NATSRemoteRuntime::execute_remote`).
-        let sub_flow_activity = if minted_ids.is_empty() {
-            None
-        } else {
-            Some(Arc::clone(&activity))
-        };
-
+        // Every remote call gets the flow execution's renewable idle timeout,
+        // not only one that minted a reference itself: the action may invoke a
+        // reference minted by an *earlier* call while this one is outstanding,
+        // and that invocation must reset *this* call's deadline. For a flow
+        // with no sub-flow traffic at all the `Notify` is simply never bumped,
+        // so the wait degrades to the flat from-the-start deadline exactly as
+        // before (see `NATSRemoteRuntime::wait_for_reply`).
         let result = remote_runtime
             .execute_remote(RemoteExecution {
                 target_service: service.to_string(),
                 request,
-                sub_flow_activity,
+                sub_flow_activity: Some(Arc::clone(&activity)),
             })
             .await;
 
@@ -1124,22 +1130,21 @@ impl<'a> EngineExecutor<'a> {
         Box::pin(async move {
         match argument {
             Argument::Eval(value) => Ok(RemoteParam::Literal(value.clone())),
-            // A `CompiledThunk::Node` sub-flow reference destined for a
-            // *remote* node's parameter is not resolved here at all --
-            // unlike every other thunk in this engine (including the
-            // exact same variant reached through the local `build_args`
-            // path used by `std::control::if`/`if_else`, which stays
-            // eager and synchronous, see `control.rs`), it may need to
-            // run zero, one, or many times, driven by the action itself
-            // over `ActionSubFlowExecutionRequest` while this call is
-            // outstanding. So instead of executing it we mint a UUID
-            // and hand the action a `SubFlow` reference it can invoke
-            // on its own schedule (see `sub_flow_registry`).
-            //
-            // `CompiledThunk::Function` (the other `Deferred` variant)
-            // is unaffected and keeps executing eagerly below, exactly
-            // as before -- only a bare node reference gets this
-            // treatment.
+            // A sub-flow reference destined for a *remote* node's parameter
+            // is not resolved here at all -- unlike the same thunk reached
+            // through the local `build_args` path, where the consuming
+            // handler decides when (and whether) to run it (`std::control::if`
+            // runs its `runnable`, an eager param is forced, see
+            // `control.rs`/`force_eager_args`). A remote action is the
+            // consumer instead, and it may invoke the sub flow zero, one, or
+            // many times over `ActionSubFlowExecutionRequest` while this call
+            // is outstanding. So Taurus -- which is *not* the consumer of a
+            // remote node's arguments -- never runs it: it mints a UUID and
+            // hands the action a `SubFlow` reference it can invoke on its own
+            // schedule (see `sub_flow_registry`). This applies to both
+            // sub-flow variants below: a bare node range (`Thunk::Node`) and
+            // a flow-declared function (`Thunk::Function`), exactly like a
+            // function a remote runtime returned as a node result.
             Argument::Thunk(Thunk::Node {
                 node_id,
                 input_schema,
@@ -1172,12 +1177,22 @@ impl<'a> EngineExecutor<'a> {
                     ))),
                 }
             }
-            // A sub flow function a remote runtime returned is handed on
-            // as-is, exactly like a node range above: the receiving action
-            // may be a consumer (e.g. a handler) that runs it zero, one or
-            // many times, so it is never run on the action's behalf here.
-            Argument::Thunk(Thunk::Function(function)) if function.sub_flow_function.is_some() => {
+            // A sub flow function -- whether a remote runtime returned it as a
+            // node result (`sub_flow_function: Some`) or it was declared in
+            // the flow and compiled (`None`) -- is handed on as a callable
+            // reference, never run here: the receiving action is the consumer
+            // and decides whether and how often to invoke it. Either way the
+            // `FunctionThunk` carries the declared `input_schema`/
+            // `output_schema` (from `shared::SubFlow` for a flow-declared
+            // function, from the result for a returned one), forwarded on the
+            // wire exactly like a node range above. When the action invokes
+            // the minted id, `execute_sub_flow` seeds the caller's input slots
+            // and `execute_function_standalone` -> `build_function_thunk_args`
+            // resolves the declared `settings` from them (see `engine.rs`).
+            Argument::Thunk(Thunk::Function(function)) => {
                 let returned = function.sub_flow_function.clone();
+                let input_schema = function.input_schema.clone();
+                let output_schema = function.output_schema.clone();
                 let id = self.sub_flow_registry.mint_function(
                     &self.flow,
                     function.clone(),
@@ -1190,33 +1205,10 @@ impl<'a> EngineExecutor<'a> {
                 minted_ids.push(id.clone());
                 Ok(RemoteParam::SubFlow {
                     execution_identifier: id,
-                    input_schema: returned.as_ref().and_then(|f| f.input_schema.clone()),
-                    output_schema: returned.as_ref().and_then(|f| f.output_schema.clone()),
+                    input_schema,
+                    output_schema,
                     sub_flow_function: returned,
                 })
-            }
-            Argument::Thunk(thunk @ Thunk::Function(_)) => {
-                // Remote execution always receives materialized values for
-                // function-thunk args compiled from the flow -- this mirrors
-                // the pre-existing eager-resolution behavior unchanged.
-                self.trace_mark_thunk(frame_id, index, true, true);
-                let child = self.execute_thunk(thunk, value_store).await;
-                if let (Some(parent), Some(child_root)) = (frame_id, child.root_frame) {
-                    self.trace_link_child(
-                        parent,
-                        child_root,
-                        EdgeKind::EagerCall { arg_index: index },
-                    );
-                }
-                match child.signal {
-                    Signal::Success(value) => {
-                        *argument = Argument::Eval(value.clone());
-                        Ok(RemoteParam::Literal(value))
-                    }
-                    // Same unwind rule as local eager params: return exits this call frame only.
-                    Signal::Return(value) => Err(Signal::Success(value)),
-                    other => Err(other),
-                }
             }
             // The template's own text is forwarded to the action as-is
             // (see `ActionLiteralValue`/`ActionInlineReferenceValue`) -- only
@@ -1700,6 +1692,8 @@ fn returned_function_thunk(
         execution_target,
         parameter_index: parameter_index as i64,
         settings: Vec::new(),
+        input_schema: function.input_schema.clone(),
+        output_schema: function.output_schema.clone(),
         sub_flow_function: Some(function),
     }))
 }
@@ -1793,11 +1787,15 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             execution_target,
             parameter_index,
             settings,
+            input_schema,
+            output_schema,
         } => Thunk::Function(FunctionThunk {
             identifier: identifier.clone(),
             execution_target: execution_target.clone(),
             parameter_index: *parameter_index,
             settings: settings.clone(),
+            input_schema: input_schema.clone(),
+            output_schema: output_schema.clone(),
             sub_flow_function: None,
         }),
     }

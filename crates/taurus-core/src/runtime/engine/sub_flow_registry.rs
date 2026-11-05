@@ -68,11 +68,13 @@ pub struct PendingSubFlow {
     /// node range standalone.
     pub caller_node_id: i64,
     pub caller_parameter_index: i64,
-    /// Shared with the in-flight `NATSRemoteRuntime::execute_remote` call
-    /// that minted this entry (and any sibling entries minted for the same
-    /// remote call). Every successful lookup+run bumps this so that call's
-    /// idle timeout resets instead of firing while the action is still
-    /// actively driving sub-flow traffic.
+    /// The flow execution's shared idle-timeout activity (see
+    /// `SubFlowRegistry::activity_for`) -- the same `Notify` every remote call
+    /// of this `flow_execution_id` waits on, not just the one that minted this
+    /// entry. Every successful lookup+run bumps it so that whichever remote
+    /// call is currently driving sub-flow traffic has its idle timeout reset,
+    /// even though it may be a later call than the one that minted this
+    /// reference (which the old minting-call-scoped activity could not renew).
     pub activity: Arc<Notify>,
 }
 
@@ -82,6 +84,14 @@ pub struct PendingSubFlow {
 #[derive(Clone, Default)]
 pub struct SubFlowRegistry {
     entries: Arc<Mutex<HashMap<String, PendingSubFlow>>>,
+    /// One idle-timeout activity `Notify` per *flow execution*, shared by
+    /// every remote call that flow makes and bumped on every sub-flow lookup
+    /// for that flow (see `activity_for`). Keyed by `flow_execution_id` and
+    /// swept by `remove_for_execution`. A minted reference now lives for the
+    /// whole flow execution and may be invoked by a later call than the one
+    /// that minted it, so the renewable window has to follow the flow rather
+    /// than the single minting call.
+    activities: Arc<Mutex<HashMap<String, Arc<Notify>>>>,
 }
 
 impl SubFlowRegistry {
@@ -141,6 +151,23 @@ impl SubFlowRegistry {
         })
     }
 
+    /// The shared idle-timeout activity for `flow_execution_id`, created on
+    /// first use and reused by every subsequent remote call and sub-flow
+    /// lookup of that flow execution. Every remote call (whether or not it
+    /// mints a reference) waits on this, and `ExecutionEngine::execute_sub_flow`
+    /// bumps it on every lookup+run, so any remote call of a flow that is
+    /// still making sub-flow progress has its idle deadline renewed -- not
+    /// only the call that happened to mint the reference being invoked. Swept
+    /// by `remove_for_execution`.
+    pub fn activity_for(&self, flow_execution_id: &str) -> Arc<Notify> {
+        self.activities
+            .lock()
+            .expect("sub flow registry mutex should not be poisoned")
+            .entry(flow_execution_id.to_string())
+            .or_insert_with(|| Arc::new(Notify::new()))
+            .clone()
+    }
+
     fn insert(&self, pending: PendingSubFlow) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.entries
@@ -179,6 +206,10 @@ impl SubFlowRegistry {
             .lock()
             .expect("sub flow registry mutex should not be poisoned")
             .retain(|_, pending| pending.flow_execution_id != flow_execution_id);
+        self.activities
+            .lock()
+            .expect("sub flow registry mutex should not be poisoned")
+            .remove(flow_execution_id);
     }
 
     #[cfg(test)]
@@ -286,6 +317,36 @@ mod tests {
     }
 
     #[test]
+    fn activity_is_shared_per_flow_execution_and_swept_with_it() {
+        let registry = SubFlowRegistry::new();
+
+        // Every remote call of one flow execution must wait on the *same*
+        // `Notify`, so a sub-flow invocation renews whichever call is driving
+        // it -- not just the one that minted the reference.
+        let a1 = registry.activity_for("flow-a");
+        let a2 = registry.activity_for("flow-a");
+        let b = registry.activity_for("flow-b");
+        assert!(Arc::ptr_eq(&a1, &a2), "same flow execution shares one Notify");
+        assert!(
+            !Arc::ptr_eq(&a1, &b),
+            "different flow executions get distinct Notifys"
+        );
+
+        // Sweeping a flow drops its activity (no leak), and an unrelated flow
+        // is untouched.
+        registry.remove_for_execution("flow-a");
+        let a3 = registry.activity_for("flow-a");
+        assert!(
+            !Arc::ptr_eq(&a1, &a3),
+            "a swept flow's next activity is a fresh Notify"
+        );
+        assert!(
+            Arc::ptr_eq(&b, &registry.activity_for("flow-b")),
+            "sweeping one flow leaves another's activity intact"
+        );
+    }
+
+    #[test]
     fn mint_function_registers_the_returned_function() {
         let registry = SubFlowRegistry::new();
         let flow = flow_with_node(7);
@@ -297,6 +358,8 @@ mod tests {
             },
             parameter_index: 5,
             settings: Vec::new(),
+            input_schema: None,
+            output_schema: None,
             sub_flow_function: None,
         };
 
@@ -335,6 +398,8 @@ mod tests {
                     },
                 parameter_index: 0,
                 settings: Vec::new(),
+                input_schema: None,
+                output_schema: None,
                 sub_flow_function: None,
             },
             "parent-a",

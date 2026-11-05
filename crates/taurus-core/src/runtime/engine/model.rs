@@ -98,6 +98,12 @@ pub enum CompiledThunk {
         execution_target: NodeExecutionTarget,
         parameter_index: i64,
         settings: Vec<SubFlowSetting>,
+        /// Declared shape of the sub-flow's input/output, carried from
+        /// `shared::SubFlow` just like `Node` above so a remote action call
+        /// that mints this function reference into a wire-format
+        /// `ActionNodeSubFlowValue` can attach them (see `resolve_remote_args`).
+        input_schema: Option<Struct>,
+        output_schema: Option<Struct>,
     },
 }
 

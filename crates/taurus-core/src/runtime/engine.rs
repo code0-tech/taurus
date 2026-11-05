@@ -1716,6 +1716,121 @@ mod tests {
         }
     }
 
+    /// code0-tech/taurus#349: a sub flow a flow *declares* as a function
+    /// (`ExecutionReference::Function`) on a remote node's parameter must be
+    /// minted and handed to the action as a callable `SubFlow` reference --
+    /// exactly like a node range or a returned function -- not executed in
+    /// Taurus and passed on as a materialized literal. The action is the
+    /// consumer and decides whether/when to invoke it.
+    #[test]
+    fn remote_node_with_function_sub_flow_parameter_mints_uuid_instead_of_executing_eagerly() {
+        let engine = ExecutionEngine::new();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let found_pending_during_call = Arc::new(Mutex::new(None));
+        let remote = SubFlowMintProbeRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            result: NodeExecutionResult {
+                started_at: 1,
+                finished_at: 2,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
+            },
+            requests: Arc::clone(&requests),
+            found_pending_during_call: Arc::clone(&found_pending_during_call),
+        };
+
+        // Node 1 is dispatched remotely and takes a *flow-declared* function
+        // sub flow (`std::date::now`, the code0-tech/taurus#349 repro) as its
+        // single parameter. Under the old behavior Taurus ran `std::date::now`
+        // and sent the resulting date literal; now it must mint a reference.
+        // The declared input/output schemas must travel to the action with it.
+        let input_schema = Struct {
+            fields: std::collections::HashMap::from([("in".to_string(), int_value(1))]),
+        };
+        let output_schema = Struct {
+            fields: std::collections::HashMap::from([("out".to_string(), int_value(2))]),
+        };
+        let tool_param = NodeParameter {
+            database_id: 100,
+            runtime_parameter_id: "tools".to_string(),
+            value: Some(NodeValue {
+                value: Some(node_value::Value::SubFlow(SubFlow {
+                    input_schema: Some(input_schema.clone()),
+                    output_schema: Some(output_schema.clone()),
+                    name: None,
+                    description: None,
+                    signature: String::new(),
+                    parameters: Vec::new(),
+                    execution_reference: Some(ExecutionReference::Function(SubFlowFunction {
+                        function_identifier: "std::date::now".to_string(),
+                        definition_source: Some("taurus".to_string()),
+                    })),
+                })),
+            }),
+            cast: None,
+        };
+        let mut remote_node = node(1, "remote::agent_create", vec![tool_param], None);
+        remote_node.definition_source = Some("action.example".to_string());
+
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![remote_node],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        assert_eq!(
+            *found_pending_during_call
+                .lock()
+                .expect("probe recorder should not be poisoned"),
+            Some(true),
+            "registry should hold a matching entry while the remote call is outstanding"
+        );
+
+        let requests = requests
+            .lock()
+            .expect("request recorder should not be poisoned");
+        assert_eq!(requests.len(), 1);
+        let parameters = &requests[0].parameters;
+        assert_eq!(parameters.len(), 1);
+
+        match &parameters[0].value {
+            Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+                input_schema: got_input,
+                output_schema: got_output,
+            })) => {
+                assert!(
+                    uuid::Uuid::parse_str(execution_identifier).is_ok(),
+                    "expected a minted UUID, got {:?}",
+                    execution_identifier
+                );
+                assert_eq!(
+                    got_input.as_ref(),
+                    Some(&input_schema),
+                    "the flow-declared sub flow's input_schema must be forwarded to the action"
+                );
+                assert_eq!(
+                    got_output.as_ref(),
+                    Some(&output_schema),
+                    "the flow-declared sub flow's output_schema must be forwarded to the action"
+                );
+            }
+            other => panic!(
+                "expected a minted sub_flow parameter, got {:?} -- a flow-declared function \
+                 sub flow must not be eagerly resolved to a literal for a remote node",
+                other
+            ),
+        }
+    }
+
     #[test]
     fn remote_node_with_sub_flow_parameter_mints_uuid_instead_of_executing_eagerly() {
         let engine = ExecutionEngine::new();

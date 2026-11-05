@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
+use tucana::shared::NodeExecutionResult;
 
 use crate::handler::argument::FunctionThunk;
 use crate::runtime::engine::model::CompiledFlow;
@@ -92,6 +93,17 @@ pub struct SubFlowRegistry {
     /// that minted it, so the renewable window has to follow the flow rather
     /// than the single minting call.
     activities: Arc<Mutex<HashMap<String, Arc<Notify>>>>,
+    /// Node execution results collected from every sub-flow run of a flow
+    /// execution (keyed by `flow_execution_id`). A remote sub-flow invocation
+    /// runs standalone in `ExecutionEngine::execute_sub_flow` with its own
+    /// value store, so its results never reach the parent run's store the way
+    /// a locally-run consumer sub flow's do. Each run records its results here
+    /// (`record_sub_flow_results`) and the top-level run drains them
+    /// (`take_sub_flow_results`) into its own `node_execution_results`, so the
+    /// execution result lists every executed function with its params --
+    /// whether it ran in the top-level flow, a local consumer, or a remote
+    /// sub-flow invocation.
+    sub_flow_results: Arc<Mutex<HashMap<String, Vec<NodeExecutionResult>>>>,
 }
 
 impl SubFlowRegistry {
@@ -168,6 +180,38 @@ impl SubFlowRegistry {
             .clone()
     }
 
+    /// Record the node execution results of one sub-flow run so the owning
+    /// top-level flow execution can fold them into its own result. Appends, so
+    /// a sub flow invoked many times (and nested sub flows, which carry the
+    /// same `flow_execution_id`) all accumulate under one key in run order.
+    pub fn record_sub_flow_results(
+        &self,
+        flow_execution_id: &str,
+        results: Vec<NodeExecutionResult>,
+    ) {
+        if results.is_empty() {
+            return;
+        }
+        self.sub_flow_results
+            .lock()
+            .expect("sub flow registry mutex should not be poisoned")
+            .entry(flow_execution_id.to_string())
+            .or_default()
+            .extend(results);
+    }
+
+    /// Remove and return every sub-flow node execution result collected for a
+    /// flow execution. Called once by the top-level run when it finishes, to
+    /// merge them into its `node_execution_results` (see
+    /// `ExecutionEngine::execute_graph_with_project_id_report_async`).
+    pub fn take_sub_flow_results(&self, flow_execution_id: &str) -> Vec<NodeExecutionResult> {
+        self.sub_flow_results
+            .lock()
+            .expect("sub flow registry mutex should not be poisoned")
+            .remove(flow_execution_id)
+            .unwrap_or_default()
+    }
+
     fn insert(&self, pending: PendingSubFlow) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.entries
@@ -207,6 +251,13 @@ impl SubFlowRegistry {
             .expect("sub flow registry mutex should not be poisoned")
             .retain(|_, pending| pending.flow_execution_id != flow_execution_id);
         self.activities
+            .lock()
+            .expect("sub flow registry mutex should not be poisoned")
+            .remove(flow_execution_id);
+        // Defensive: the top-level run drains these via `take_sub_flow_results`
+        // before sweeping, but clear any straggler (e.g. a late record that
+        // lost the race) so a finished flow execution leaves nothing behind.
+        self.sub_flow_results
             .lock()
             .expect("sub flow registry mutex should not be poisoned")
             .remove(flow_execution_id);

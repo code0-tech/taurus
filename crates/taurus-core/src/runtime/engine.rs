@@ -362,9 +362,24 @@ impl ExecutionEngine {
         // go, keyed on this flow execution id (see `sub_flow_registry` and
         // code0-tech/taurus#346); per-call cleanup would drop references a
         // returned sub flow function still needs for a later node.
+        // Drain the node results of every (remote) sub-flow invocation made
+        // under this flow execution before the sweep clears them, then fold
+        // them into this run's own results so the execution result lists every
+        // executed function with its params regardless of where it ran.
+        let sub_flow_results = self.sub_flow_registry.take_sub_flow_results(execution_id);
         self.sub_flow_registry.remove_for_execution(execution_id);
 
-        Self::finish_report(signal, trace_run, &mut value_store, with_trace)
+        let mut report = Self::finish_report(signal, trace_run, &mut value_store, with_trace);
+        if !sub_flow_results.is_empty() {
+            report.node_execution_results.extend(sub_flow_results);
+            // Each entry carries its own start timestamp; a stable sort gives a
+            // single chronological list that interleaves sub-flow runs with the
+            // top-level nodes rather than tacking them all on at the end.
+            report
+                .node_execution_results
+                .sort_by_key(|result| result.started_at);
+        }
+        report
     }
 
     /// Run a previously minted sub-flow (see `SubFlowRegistry`): a node range
@@ -472,12 +487,16 @@ impl ExecutionEngine {
                 .await
             }
         };
-        Some(Self::finish_report(
-            signal,
-            trace_run,
-            &mut value_store,
-            with_trace,
-        ))
+        let report = Self::finish_report(signal, trace_run, &mut value_store, with_trace);
+        // Surface this sub-flow run's node results in the top-level execution
+        // result. A remote sub-flow invocation runs in its own value store, so
+        // unlike a local consumer sub flow its results wouldn't otherwise reach
+        // the owning flow's result; record a copy under the top-level flow
+        // execution id for the top-level run to merge in when it finishes. The
+        // action still receives the full report below as its reply.
+        self.sub_flow_registry
+            .record_sub_flow_results(&pending.flow_execution_id, report.node_execution_results.clone());
+        Some(report)
     }
 
     fn finish_report(
@@ -1714,6 +1733,129 @@ mod tests {
                 .push(execution.request.clone());
             Ok(self.result.clone())
         }
+    }
+
+    fn sub_flow_node_result(identifier: &str, started_at: i64) -> NodeExecutionResult {
+        NodeExecutionResult {
+            started_at,
+            finished_at: started_at + 1,
+            parameter_results: Vec::new(),
+            id: Some(node_execution_result::Id::FunctionIdentifier(
+                identifier.to_string(),
+            )),
+            result: Some(node_execution_result::Result::Success(raw_value_result(
+                int_value(started_at),
+            ))),
+        }
+    }
+
+    /// A remote runtime that, while handling the call, records a sub-flow run's
+    /// node results into the registry -- exactly what `execute_sub_flow` does
+    /// when the action invokes a minted reference during this call.
+    struct RecordsSubFlowResultsRuntime {
+        registry: SubFlowRegistry,
+        flow_execution_id: String,
+        recorded: Vec<NodeExecutionResult>,
+        result: NodeExecutionResult,
+    }
+
+    #[async_trait]
+    impl RemoteRuntime for RecordsSubFlowResultsRuntime {
+        async fn execute_remote(
+            &self,
+            _execution: RemoteExecution,
+        ) -> Result<NodeExecutionResult, crate::types::errors::runtime_error::RuntimeError>
+        {
+            self.registry
+                .record_sub_flow_results(&self.flow_execution_id, self.recorded.clone());
+            Ok(self.result.clone())
+        }
+    }
+
+    /// The node results of a remote sub-flow invocation must appear in the
+    /// top-level execution result (a remote sub flow runs in its own value
+    /// store, so unlike a local consumer sub flow its results only reach the
+    /// flow result via the registry merge). The merged list stays chronological.
+    #[test]
+    fn sub_flow_run_node_results_are_merged_into_the_top_level_execution_result() {
+        let engine = ExecutionEngine::new();
+        // Recorded out of order, to also prove the merged list is sorted.
+        let recorded = vec![
+            sub_flow_node_result("sub::late", 30),
+            sub_flow_node_result("sub::early", 10),
+        ];
+        let remote = RecordsSubFlowResultsRuntime {
+            registry: engine.sub_flow_registry.clone(),
+            flow_execution_id: "exec-1".to_string(),
+            recorded,
+            result: NodeExecutionResult {
+                started_at: 20,
+                finished_at: 40,
+                parameter_results: Vec::new(),
+                id: Some(node_execution_result::Id::NodeId(1)),
+                result: Some(node_execution_result::Result::Success(raw_value_result(
+                    int_value(1),
+                ))),
+            },
+        };
+
+        let mut remote_node = node(1, "remote::noop", vec![], None);
+        remote_node.definition_source = Some("action.example".to_string());
+        let flow = ExecutionFlow {
+            flow_id: 10,
+            project_id: 42,
+            starting_node_id: 1,
+            node_functions: vec![remote_node],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("exec-1", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        // The remote node's own result plus both sub-flow run results are here.
+        let ids: Vec<_> = report
+            .node_execution_results
+            .iter()
+            .map(|result| result.id.clone())
+            .collect();
+        assert_eq!(report.node_execution_results.len(), 3);
+        assert!(ids.contains(&Some(node_execution_result::Id::NodeId(1))));
+        let early = ids
+            .iter()
+            .position(|id| {
+                *id == Some(node_execution_result::Id::FunctionIdentifier(
+                    "sub::early".to_string(),
+                ))
+            })
+            .expect("sub::early result is present");
+        let late = ids
+            .iter()
+            .position(|id| {
+                *id == Some(node_execution_result::Id::FunctionIdentifier(
+                    "sub::late".to_string(),
+                ))
+            })
+            .expect("sub::late result is present");
+        assert!(early < late, "sub-flow results keep their run order");
+
+        // The whole list is chronological by start time.
+        let starts: Vec<i64> = report
+            .node_execution_results
+            .iter()
+            .map(|result| result.started_at)
+            .collect();
+        let mut sorted = starts.clone();
+        sorted.sort();
+        assert_eq!(starts, sorted, "merged results are sorted by started_at");
+
+        // The flow execution's collected results were drained by the merge.
+        assert!(
+            engine
+                .sub_flow_registry
+                .take_sub_flow_results("exec-1")
+                .is_empty(),
+            "sub-flow results are swept once merged into the top-level result"
+        );
     }
 
     /// code0-tech/taurus#349: a sub flow a flow *declares* as a function

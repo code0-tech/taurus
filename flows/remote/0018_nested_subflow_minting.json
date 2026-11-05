@@ -1,0 +1,63 @@
+{
+	"name": "0018_nested_subflow_minting",
+	"description": "Deeply nested sub-flow minting: an outer remote::apply invokes a handler that is itself a remote::apply, which mints and invokes a further inner handler. The inner reference is minted while a sub-flow run is in flight, so it must inherit the top-level flow's execution id (flow-scoped lifetime, code0-tech/taurus#346) and still resolve. The value 7 threads through both and comes back.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": 7
+		}
+	],
+	"flow": {
+		"flowId": "28",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "action.example",
+				"databaseId": "1",
+				"runtimeFunctionId": "remote::apply",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "handler",
+						"value": { "sub_flow": { "signature": "(value: NUMBER): NUMBER", "parameters": [{ "identifier": "value" }], "startingNodeId": "2" } }
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "value",
+						"value": { "literalValue": { "value": { "numberValue": { "integer": "7" } } } }
+					}
+				]
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::apply",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "handler",
+						"value": { "sub_flow": { "signature": "(value: NUMBER): NUMBER", "parameters": [{ "identifier": "value" }], "startingNodeId": "3" } }
+					},
+					{
+						"databaseId": "201",
+						"runtimeParameterId": "value",
+						"value": { "referenceValue": { "inputType": { "nodeId": "1", "parameterIndex": "0", "inputIndex": "0" } } }
+					}
+				]
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "3",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "300",
+						"runtimeParameterId": "value",
+						"value": { "referenceValue": { "inputType": { "nodeId": "2", "parameterIndex": "0", "inputIndex": "0" } } }
+					}
+				]
+			}
+		]
+	}
+}

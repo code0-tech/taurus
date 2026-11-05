@@ -1,0 +1,73 @@
+{
+	"name": "0019_sort_reverse_with_remote_comparator",
+	"description": "std::list::sort_reverse driven by a remote comparator (remote::compare returns a - b). The reverse flag inverts the ordering, so [1,3,2] sorts descending to [3,2,1] -- guards the `reverse` branch of async_merge_sort.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": [
+				3,
+				2,
+				1
+			]
+		}
+	],
+	"flow": {
+		"flowId": "29",
+		"projectId": "1",
+		"startingNodeId": "1",
+		"nodeFunctions": [
+			{
+				"definitionSource": "taurus",
+				"databaseId": "1",
+				"runtimeFunctionId": "std::list::sort_reverse",
+				"parameters": [
+					{
+						"databaseId": "100",
+						"runtimeParameterId": "list",
+						"value": {
+							"literalValue": {
+								"value": {
+									"listValue": {
+										"values": [
+											{ "numberValue": { "integer": "1" } },
+											{ "numberValue": { "integer": "3" } },
+											{ "numberValue": { "integer": "2" } }
+										]
+									}
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "101",
+						"runtimeParameterId": "comparator",
+						"value": {
+							"sub_flow": {
+								"signature": "(a: NUMBER, b: NUMBER): NUMBER",
+								"parameters": [],
+								"startingNodeId": "2"
+							}
+						}
+					}
+				]
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "2",
+				"runtimeFunctionId": "remote::compare",
+				"parameters": [
+					{
+						"databaseId": "200",
+						"runtimeParameterId": "a",
+						"value": { "referenceValue": { "inputType": { "nodeId": "1", "parameterIndex": "1", "inputIndex": "0" } } }
+					},
+					{
+						"databaseId": "201",
+						"runtimeParameterId": "b",
+						"value": { "referenceValue": { "inputType": { "nodeId": "1", "parameterIndex": "1", "inputIndex": "1" } } }
+					}
+				]
+			}
+		]
+	}
+}

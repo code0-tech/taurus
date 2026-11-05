@@ -1,0 +1,83 @@
+{
+	"name": "0012_if_branch_invokes_remote_action",
+	"description": "Exercises the path behind code0-tech/taurus#347: a remote action call reached through a synchronous handler callback (an `if` branch body). That path used to be bridged with `block_on`; it is now fully async. The true branch runs remote::double(5), and the continuation returns that stored result, so the flow yields 10.",
+	"inputs": [
+		{
+			"input": null,
+			"expected_result": 10
+		}
+	],
+	"flow": {
+		"flowId": "22",
+		"projectId": "1",
+		"startingNodeId": "11",
+		"nodeFunctions": [
+			{
+				"definitionSource": "taurus",
+				"databaseId": "11",
+				"runtimeFunctionId": "std::control::if",
+				"parameters": [
+					{
+						"databaseId": "110",
+						"runtimeParameterId": "condition",
+						"value": {
+							"literalValue": {
+								"value": {
+									"boolValue": true
+								}
+							}
+						}
+					},
+					{
+						"databaseId": "111",
+						"runtimeParameterId": "runnable",
+						"value": {
+							"sub_flow": {
+								"signature": "",
+								"parameters": [],
+								"startingNodeId": "12"
+							}
+						}
+					}
+				],
+				"nextNodeId": "14"
+			},
+			{
+				"definitionSource": "action.example",
+				"databaseId": "12",
+				"runtimeFunctionId": "remote::double",
+				"parameters": [
+					{
+						"databaseId": "120",
+						"runtimeParameterId": "value",
+						"value": {
+							"literalValue": {
+								"value": {
+									"numberValue": {
+										"integer": "5"
+									}
+								}
+							}
+						}
+					}
+				]
+			},
+			{
+				"definitionSource": "taurus",
+				"databaseId": "14",
+				"runtimeFunctionId": "std::control::return",
+				"parameters": [
+					{
+						"databaseId": "140",
+						"runtimeParameterId": "value",
+						"value": {
+							"referenceValue": {
+								"nodeId": "12"
+							}
+						}
+					}
+				]
+			}
+		]
+	}
+}

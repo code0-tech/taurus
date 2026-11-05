@@ -169,7 +169,7 @@ fn r#return(
     name(en_US = "Runnable"),
     description(en_US = "Defines the runnable that runs if the condition evaluates to true.")
 )]
-fn r#if(
+async fn r#if(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -191,7 +191,7 @@ fn r#if(
     if *bool {
         // Branch execution is delegated to the executor through `run`.
         ctx.push_runtime_trace_label(|| "branch=if".to_string());
-        run(if_pointer, ctx)
+        run.run_thunk(if_pointer, ctx).await
     } else {
         Signal::Success(Value {
             kind: Some(Kind::NullValue(0)),
@@ -231,7 +231,7 @@ fn r#if(
     name(en_US = "Else Runnable"),
     description(en_US = "Defines the runnable that runs if the condition evaluates to false.")
 )]
-fn if_else(
+async fn if_else(
     args: &[Argument],
     ctx: &mut ValueStore,
     run: &mut crate::handler::registry::ThunkRunner<'_>,
@@ -253,9 +253,9 @@ fn if_else(
 
     if *bool {
         ctx.push_runtime_trace_label(|| "branch=if".to_string());
-        run(if_pointer, ctx)
+        run.run_thunk(if_pointer, ctx).await
     } else {
         ctx.push_runtime_trace_label(|| "branch=else".to_string());
-        run(else_pointer, ctx)
+        run.run_thunk(else_pointer, ctx).await
     }
 }

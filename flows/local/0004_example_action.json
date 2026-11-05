@@ -14,7 +14,7 @@
 		"starting_node_id": "1",
 		"node_functions": [
 			{
-				"definition_source": "example",
+				"definition_source": "action.example",
 				"databaseId": "1",
 				"runtimeFunctionId": "fib",
 				"parameters": [

@@ -1728,12 +1728,25 @@ fn remote_param_to_action_value(param: RemoteParam) -> action_node_value::Value 
             execution_identifier,
             input_schema,
             output_schema,
-            ..
-        } => action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
-            execution_identifier,
-            input_schema,
-            output_schema,
-        }),
+            sub_flow_function,
+        } => {
+            // Forward the sub flow's name/description on the wire the same way
+            // its schemas are, when the reference was minted from a returned
+            // sub flow function that carries them; a bare node range has none.
+            let (name, description) = match &sub_flow_function {
+                Some(function) => {
+                    (Some(function.name.clone()), Some(function.description.clone()))
+                }
+                None => (None, None),
+            };
+            action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
+                execution_identifier,
+                input_schema,
+                output_schema,
+                name,
+                description,
+            })
+        }
         RemoteParam::Template { value, references } => {
             let references = references
                 .into_iter()

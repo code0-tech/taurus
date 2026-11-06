@@ -1719,6 +1719,7 @@ mod tests {
                 execution_identifier,
                 input_schema: _,
                 output_schema: _,
+                ..
             })) = &execution.request.parameters[0].value
             {
                 *self
@@ -1948,6 +1949,7 @@ mod tests {
                 execution_identifier,
                 input_schema: got_input,
                 output_schema: got_output,
+                ..
             })) => {
                 assert!(
                     uuid::Uuid::parse_str(execution_identifier).is_ok(),
@@ -2043,6 +2045,7 @@ mod tests {
                 execution_identifier,
                 input_schema: _,
                 output_schema: _,
+                ..
             })) => {
                 assert!(
                     uuid::Uuid::parse_str(execution_identifier).is_ok(),
@@ -2243,6 +2246,7 @@ mod tests {
                 execution_identifier,
                 input_schema: _,
                 output_schema: _,
+                ..
             })) = execution
                 .request
                 .parameters

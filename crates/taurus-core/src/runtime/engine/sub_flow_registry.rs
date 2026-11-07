@@ -411,6 +411,8 @@ mod tests {
             settings: Vec::new(),
             input_schema: None,
             output_schema: None,
+            name: None,
+            description: None,
             sub_flow_function: None,
         };
 
@@ -451,6 +453,8 @@ mod tests {
                 settings: Vec::new(),
                 input_schema: None,
                 output_schema: None,
+                name: None,
+                description: None,
                 sub_flow_function: None,
             },
             "parent-a",

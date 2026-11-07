@@ -1149,6 +1149,8 @@ impl<'a> EngineExecutor<'a> {
                 node_id,
                 input_schema,
                 output_schema,
+                name,
+                description,
             }) => {
                 // Not executed, so left exactly as `build_args` already
                 // recorded it: `eager: false, executed: false`.
@@ -1167,6 +1169,8 @@ impl<'a> EngineExecutor<'a> {
                             execution_identifier: id,
                             input_schema: input_schema.clone(),
                             output_schema: output_schema.clone(),
+                            name: name.clone(),
+                            description: description.clone(),
                             sub_flow_function: None,
                         })
                     }
@@ -1193,6 +1197,8 @@ impl<'a> EngineExecutor<'a> {
                 let returned = function.sub_flow_function.clone();
                 let input_schema = function.input_schema.clone();
                 let output_schema = function.output_schema.clone();
+                let name = function.name.clone();
+                let description = function.description.clone();
                 let id = self.sub_flow_registry.mint_function(
                     &self.flow,
                     function.clone(),
@@ -1207,6 +1213,8 @@ impl<'a> EngineExecutor<'a> {
                     execution_identifier: id,
                     input_schema,
                     output_schema,
+                    name,
+                    description,
                     sub_flow_function: returned,
                 })
             }
@@ -1694,6 +1702,8 @@ fn returned_function_thunk(
         settings: Vec::new(),
         input_schema: function.input_schema.clone(),
         output_schema: function.output_schema.clone(),
+        name: Some(function.name.clone()),
+        description: Some(function.description.clone()),
         sub_flow_function: Some(function),
     }))
 }
@@ -1708,6 +1718,12 @@ enum RemoteParam {
         execution_identifier: String,
         input_schema: Option<Struct>,
         output_schema: Option<Struct>,
+        /// Human-facing name/description carried from `shared::SubFlow` (or a
+        /// returned `SubFlowFunctionResult`) on the same path as the schemas,
+        /// forwarded on the wire so the action can use the sub flow as a
+        /// named tool instead of `tool_1`, `tool_2`, ...
+        name: Option<String>,
+        description: Option<String>,
         /// The returned sub flow function this reference was minted for,
         /// if any -- reported in the node's parameter results.
         sub_flow_function: Option<Arc<SubFlowFunctionResult>>,
@@ -1728,17 +1744,14 @@ fn remote_param_to_action_value(param: RemoteParam) -> action_node_value::Value 
             execution_identifier,
             input_schema,
             output_schema,
-            sub_flow_function,
+            name,
+            description,
+            sub_flow_function: _,
         } => {
-            // Forward the sub flow's name/description on the wire the same way
-            // its schemas are, when the reference was minted from a returned
-            // sub flow function that carries them; a bare node range has none.
-            let (name, description) = match &sub_flow_function {
-                Some(function) => {
-                    (Some(function.name.clone()), Some(function.description.clone()))
-                }
-                None => (None, None),
-            };
+            // Name/description are forwarded on the wire the same way the
+            // schemas are: carried here from `shared::SubFlow` (a flow-declared
+            // node range or function) or from a returned `SubFlowFunctionResult`
+            // -- see `resolve_remote_args` and `returned_function_thunk`.
             action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
                 execution_identifier,
                 input_schema,
@@ -1790,10 +1803,14 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             node_id,
             input_schema,
             output_schema,
+            name,
+            description,
         } => Thunk::Node {
             node_id: *node_id,
             input_schema: input_schema.clone(),
             output_schema: output_schema.clone(),
+            name: name.clone(),
+            description: description.clone(),
         },
         CompiledThunk::Function {
             identifier,
@@ -1802,6 +1819,8 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             settings,
             input_schema,
             output_schema,
+            name,
+            description,
         } => Thunk::Function(FunctionThunk {
             identifier: identifier.clone(),
             execution_target: execution_target.clone(),
@@ -1809,6 +1828,8 @@ fn compiled_thunk_to_argument(thunk: &CompiledThunk) -> Thunk {
             settings: settings.clone(),
             input_schema: input_schema.clone(),
             output_schema: output_schema.clone(),
+            name: name.clone(),
+            description: description.clone(),
             sub_flow_function: None,
         }),
     }

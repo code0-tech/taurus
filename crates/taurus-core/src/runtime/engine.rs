@@ -3046,6 +3046,8 @@ mod tests {
         definition_source: Option<&str>,
     ) -> SubFlowFunctionResult {
         SubFlowFunctionResult {
+            // Empty, as a returning action leaves it -- Taurus mints the id.
+            subflow_identifier: String::new(),
             function: Some(SubFlowFunction {
                 function_identifier: function_identifier.to_string(),
                 definition_source: definition_source.map(str::to_string),
@@ -3152,6 +3154,112 @@ mod tests {
         expect_reported_sub_flow_function(
             &consumer_result.parameter_results[1],
             "std::number::negate",
+        );
+    }
+
+    /// The `subflow_identifier` Taurus minted for a reported returned sub flow
+    /// function.
+    fn reported_subflow_identifier(result: &NodeValueExecutionResult) -> String {
+        match result.value.as_ref() {
+            Some(node_value_execution_result::Value::SubFlowFunctionResult(function)) => {
+                function.subflow_identifier.clone()
+            }
+            other => panic!("expected a reported sub flow function, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn returned_sub_flow_function_calls_share_one_minted_subflow_identifier() {
+        // A remote producer returns a sub flow function; a local `map`
+        // consumes it, invoking it once per list element. Taurus mints a
+        // `subflow_identifier` for the returned function, and every
+        // `NodeExecutionResult` those repeated calls produce is reported under
+        // that one id -- not the function identifier, which has no basis in
+        // Sagittarius -- so Sagittarius can map them all back to the node
+        // result that returned the function.
+        let engine = ExecutionEngine::new();
+        let remote = StubRemoteRuntime {
+            result: returning_sub_flow_function(returned_sub_flow_function(
+                "std::number::negate",
+                None,
+            )),
+            target_services: None,
+            project_ids: None,
+            requests: None,
+        };
+
+        let mut producer = node(1, "remote::make_transform", Vec::new(), Some(2));
+        producer.definition_source = Some("action.example".to_string());
+        let consumer = node(
+            2,
+            "std::list::map",
+            vec![
+                literal_param(200, "list", list_value(vec![int_value(1), int_value(2)])),
+                node_result_ref_param(201, "transform", 1),
+            ],
+            None,
+        );
+        let flow = ExecutionFlow {
+            flow_id: 1,
+            project_id: 1,
+            starting_node_id: 1,
+            node_functions: vec![producer, consumer],
+            input_value: None,
+        };
+
+        let report = engine.execute_flow_report("test", flow, Some(&remote), false);
+        assert_eq!(report.exit_reason, ExitReason::Success);
+
+        // Taurus minted a non-empty id for the returned function.
+        let producer_result = report
+            .node_execution_results
+            .iter()
+            .find(|result| result.id == Some(node_execution_result::Id::NodeId(1)))
+            .expect("producer result should be reported");
+        let minted_id = match producer_result.result.as_ref() {
+            Some(node_execution_result::Result::Success(value)) => {
+                reported_subflow_identifier(value)
+            }
+            other => panic!("expected producer success, got {:?}", other),
+        };
+        assert!(
+            !minted_id.is_empty(),
+            "the returned sub flow function must be given an id"
+        );
+
+        // The same id travels with the function to the node that consumed it.
+        let consumer_result = report
+            .node_execution_results
+            .iter()
+            .find(|result| result.id == Some(node_execution_result::Id::NodeId(2)))
+            .expect("consumer result should be reported");
+        assert_eq!(
+            reported_subflow_identifier(&consumer_result.parameter_results[1]),
+            minted_id,
+        );
+
+        // Each of the two calls is reported under that one minted id.
+        let subflow_result_count = report
+            .node_execution_results
+            .iter()
+            .filter(|result| {
+                result.id
+                    == Some(node_execution_result::Id::SubflowIdentifier(minted_id.clone()))
+            })
+            .count();
+        assert_eq!(
+            subflow_result_count, 2,
+            "both calls should be reported under the one minted subflow identifier"
+        );
+
+        // ... and never under the function identifier.
+        assert!(
+            !report.node_execution_results.iter().any(|result| matches!(
+                &result.id,
+                Some(node_execution_result::Id::FunctionIdentifier(id))
+                    if id == "std::number::negate"
+            )),
+            "a returned sub flow function must not be reported under its function identifier"
         );
     }
 

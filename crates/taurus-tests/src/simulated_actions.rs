@@ -195,6 +195,10 @@ fn sub_flow_function(
     Ok(NodeValueExecutionResult {
         value: Some(node_value_execution_result::Value::SubFlowFunctionResult(
             SubFlowFunctionResult {
+                // Left empty on purpose: an action has no id to give, so
+                // Taurus mints the `subflow_identifier` when the result
+                // reaches it (see `executor::ensure_subflow_identifier`).
+                subflow_identifier: String::new(),
                 function: Some(SubFlowFunction {
                     function_identifier: function_identifier.clone(),
                     definition_source,

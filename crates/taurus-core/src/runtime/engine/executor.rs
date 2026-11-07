@@ -28,7 +28,9 @@ use tucana::aquila::{
     ActionExecutionRequest, ActionInlineReferenceValue, ActionLiteralValue, ActionNodeSubFlowValue,
     ActionNodeValue, action_node_value,
 };
-use tucana::shared::node_execution_result::Result as TucanaNodeResult;
+use tucana::shared::node_execution_result::{
+    Id as TucanaNodeResultId, Result as TucanaNodeResult,
+};
 use tucana::shared::reference_value::Target;
 use tucana::shared::value::Kind;
 use tucana::shared::{
@@ -299,7 +301,7 @@ impl<'a> EngineExecutor<'a> {
                     format!("Function {} not found", function.identifier),
                 );
                 value_store.insert_function_error_with_timing(
-                    function.identifier.clone(),
+                    function_result_id(function),
                     error.clone(),
                     Vec::new(),
                     started_at,
@@ -325,7 +327,7 @@ impl<'a> EngineExecutor<'a> {
                 self.trace_exit(frame_id, &signal, value_store);
                 let parameter_results = Vec::new();
                 self.commit_function_result(
-                    function.identifier.as_str(),
+                    function,
                     signal.clone(),
                     parameter_results,
                     started_at,
@@ -356,7 +358,7 @@ impl<'a> EngineExecutor<'a> {
 
         self.trace_exit(frame_id, &signal, value_store);
         self.commit_function_result(
-            function.identifier.as_str(),
+            function,
             signal.clone(),
             parameter_results,
             started_at,
@@ -389,7 +391,7 @@ impl<'a> EngineExecutor<'a> {
                 let signal = Signal::Failure(err);
                 self.trace_exit(frame_id, &signal, value_store);
                 self.commit_function_result(
-                    function.identifier.as_str(),
+                    function,
                     signal.clone(),
                     Vec::new(),
                     started_at,
@@ -441,7 +443,7 @@ impl<'a> EngineExecutor<'a> {
 
         self.trace_exit(frame_id, &signal, value_store);
         self.commit_function_result(
-            function.identifier.as_str(),
+            function,
             signal.clone(),
             parameter_results,
             started_at,
@@ -1385,17 +1387,18 @@ impl<'a> EngineExecutor<'a> {
 
     fn commit_function_result(
         &self,
-        function_id: &str,
+        function: &FunctionThunk,
         signal: Signal,
         parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
         finished_at: i64,
         value_store: &mut ValueStore,
     ) -> Signal {
+        let result_id = function_result_id(function);
         match signal {
             Signal::Success(value) => {
                 value_store.insert_function_success_with_timing(
-                    function_id.to_string(),
+                    result_id,
                     value.clone(),
                     parameter_results,
                     started_at,
@@ -1405,7 +1408,7 @@ impl<'a> EngineExecutor<'a> {
             }
             Signal::Failure(err) => {
                 value_store.insert_function_error_with_timing(
-                    function_id.to_string(),
+                    result_id,
                     err.clone(),
                     parameter_results,
                     started_at,
@@ -1418,7 +1421,7 @@ impl<'a> EngineExecutor<'a> {
             // unconverted so control flow halts exactly as before.
             Signal::Stop => {
                 value_store.insert_function_success_with_timing(
-                    function_id.to_string(),
+                    result_id,
                     Value {
                         kind: Some(Kind::NullValue(0)),
                     },
@@ -1444,6 +1447,7 @@ impl<'a> EngineExecutor<'a> {
         if result.parameter_results.is_empty() {
             result.parameter_results = parameter_results;
         }
+        ensure_subflow_identifier(&mut result);
         match result.result.clone() {
             Some(TucanaNodeResult::Success(value)) => {
                 // A returned sub flow function stays in the store as-is, so a
@@ -1665,6 +1669,40 @@ fn sub_flow_function_value_result(function: &SubFlowFunctionResult) -> NodeValue
         value: Some(node_value_execution_result::Value::SubFlowFunctionResult(
             function.clone(),
         )),
+    }
+}
+
+/// The result id to record every `NodeExecutionResult` an executed sub flow
+/// function produces under. A sub flow function a remote runtime *returned* as
+/// a node result is reported under its `subflow_identifier` -- the id Taurus
+/// minted for it (see `ensure_subflow_identifier`) -- so Sagittarius can map
+/// the entry back to the node result that returned it, even when the same sub
+/// flow is called many times. A function compiled from the flow has no such id
+/// and is reported under its `function_identifier`, as before.
+fn function_result_id(function: &FunctionThunk) -> TucanaNodeResultId {
+    match &function.sub_flow_function {
+        Some(returned) if !returned.subflow_identifier.is_empty() => {
+            TucanaNodeResultId::SubflowIdentifier(returned.subflow_identifier.clone())
+        }
+        _ => TucanaNodeResultId::FunctionIdentifier(function.identifier.clone()),
+    }
+}
+
+/// Assigns a fresh unique id to a sub flow function a remote runtime returned
+/// as this node's result, unless it already carries one. The action that
+/// produced it has no stable id to give (nothing in Sagittarius backs the
+/// `function_identifier`), so Taurus mints the `subflow_identifier` when the
+/// result first enters the engine. Stored on the result, it then travels with
+/// the returned function (see `ValueStore::get` -> `returned_function_thunk`)
+/// and is reused by every `NodeExecutionResult` the sub flow later produces
+/// (see `function_result_id`), so repeated calls all share the one id.
+fn ensure_subflow_identifier(result: &mut TucanaNodeExecutionResult) {
+    if let Some(TucanaNodeResult::Success(NodeValueExecutionResult {
+        value: Some(node_value_execution_result::Value::SubFlowFunctionResult(function)),
+    })) = result.result.as_mut()
+        && function.subflow_identifier.is_empty()
+    {
+        function.subflow_identifier = uuid::Uuid::new_v4().to_string();
     }
 }
 

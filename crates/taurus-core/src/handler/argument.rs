@@ -25,6 +25,12 @@ pub struct FunctionThunk {
     /// wire. `None` when the frontend/result omits them.
     pub input_schema: Option<Struct>,
     pub output_schema: Option<Struct>,
+    /// Human-facing name/description of the sub flow, carried from
+    /// `shared::SubFlow` (for a flow-declared function) or the
+    /// `SubFlowFunctionResult` (for a returned one) on the same path as the
+    /// schemas above, so an action using it as a tool receives them.
+    pub name: Option<String>,
+    pub description: Option<String>,
     /// Set when this function is a sub flow a remote runtime returned as a
     /// node result, rather than one compiled from the flow. Such a function
     /// declares no parameters, so it receives every positional input its
@@ -51,6 +57,8 @@ pub enum Thunk {
         node_id: i64,
         input_schema: Option<Struct>,
         output_schema: Option<Struct>,
+        name: Option<String>,
+        description: Option<String>,
     },
     Function(FunctionThunk),
 }

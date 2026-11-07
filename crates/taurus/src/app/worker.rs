@@ -957,6 +957,9 @@ mod tests {
     /// A `SubFlow{starting_node_id}`-valued parameter, exactly what
     /// `resolve_remote_args` mints a UUID for when the owning node is
     /// dispatched remotely (see `taurus-core::runtime::engine::executor`).
+    /// Carries a `name`/`description` so a test can assert they travel from
+    /// `shared::SubFlow` onto the wire-format `ActionNodeSubFlowValue` the
+    /// action receives (the sub-flow-as-LLM-tool case).
     fn sub_flow_param(database_id: i64, runtime_parameter_id: &str, node_id: i64) -> NodeParameter {
         NodeParameter {
             database_id,
@@ -965,8 +968,8 @@ mod tests {
                 value: Some(node_value::Value::SubFlow(tucana::shared::SubFlow {
                     input_schema: None,
                     output_schema: None,
-                    name: None,
-                    description: None,
+                    name: Some(format!("{runtime_parameter_id} tool")),
+                    description: Some(format!("Handles {runtime_parameter_id} events")),
                     signature: String::new(),
                     parameters: Vec::new(),
                     execution_reference: Some(ExecutionReference::StartingNodeId(node_id)),
@@ -1036,7 +1039,10 @@ mod tests {
     /// would already be gone by the time the test tries a second lookup.
     struct BlockingMintCapturingRuntime {
         result: NodeExecutionResult,
-        minted_id: Arc<StdMutex<Option<String>>>,
+        /// The whole minted `SubFlow` value, so a test can assert on both the
+        /// `execution_identifier` and the `name`/`description` forwarded with
+        /// it.
+        minted: Arc<StdMutex<Option<ActionNodeSubFlowValue>>>,
         release: Arc<Notify>,
     }
 
@@ -1047,30 +1053,28 @@ mod tests {
             execution: RemoteExecution,
         ) -> Result<NodeExecutionResult, RuntimeError> {
             if let Some(parameter) = execution.request.parameters.first()
-                && let Some(action_node_value::Value::SubFlow(ActionNodeSubFlowValue {
-                    execution_identifier,
-                    ..
-                })) = &parameter.value
+                && let Some(action_node_value::Value::SubFlow(sub_flow)) = &parameter.value
             {
                 *self
-                    .minted_id
+                    .minted
                     .lock()
-                    .expect("mint recorder should not be poisoned") =
-                    Some(execution_identifier.clone());
+                    .expect("mint recorder should not be poisoned") = Some(sub_flow.clone());
             }
             self.release.notified().await;
             Ok(self.result.clone())
         }
     }
 
-    async fn wait_for_minted_id(minted_id: &StdMutex<Option<String>>) -> String {
+    async fn wait_for_minted_sub_flow(
+        minted: &StdMutex<Option<ActionNodeSubFlowValue>>,
+    ) -> ActionNodeSubFlowValue {
         for _ in 0..1000 {
-            if let Some(id) = minted_id
+            if let Some(sub_flow) = minted
                 .lock()
                 .expect("mint recorder should not be poisoned")
                 .clone()
             {
-                return id;
+                return sub_flow;
             }
             tokio::task::yield_now().await;
         }
@@ -1080,7 +1084,7 @@ mod tests {
     #[tokio::test]
     async fn sub_flow_execution_result_runs_pending_entry_and_can_be_invoked_repeatedly() {
         let engine = Arc::new(ExecutionEngine::new());
-        let minted_id = Arc::new(StdMutex::new(None));
+        let minted = Arc::new(StdMutex::new(None));
         let release = Arc::new(Notify::new());
         let remote = BlockingMintCapturingRuntime {
             result: NodeExecutionResult {
@@ -1092,7 +1096,7 @@ mod tests {
                     raw_value_result(int_value(1)),
                 )),
             },
-            minted_id: Arc::clone(&minted_id),
+            minted: Arc::clone(&minted),
             release: Arc::clone(&release),
         };
 
@@ -1132,7 +1136,15 @@ mod tests {
                 .await
         });
 
-        let execution_identifier = wait_for_minted_id(&minted_id).await;
+        let minted_sub_flow = wait_for_minted_sub_flow(&minted).await;
+        // The sub flow's name/description travel from `shared::SubFlow` onto
+        // the wire so the action can use it as a named tool.
+        assert_eq!(minted_sub_flow.name.as_deref(), Some("on_message tool"));
+        assert_eq!(
+            minted_sub_flow.description.as_deref(),
+            Some("Handles on_message events")
+        );
+        let execution_identifier = minted_sub_flow.execution_identifier;
 
         let first_request = ActionSubFlowExecutionRequest {
             execution_identifier: execution_identifier.clone(),
@@ -1196,7 +1208,7 @@ mod tests {
     #[tokio::test]
     async fn sub_flow_execution_seeds_every_positional_input_index_independently() {
         let engine = Arc::new(ExecutionEngine::new());
-        let minted_id = Arc::new(StdMutex::new(None));
+        let minted = Arc::new(StdMutex::new(None));
         let release = Arc::new(Notify::new());
         let remote = BlockingMintCapturingRuntime {
             result: NodeExecutionResult {
@@ -1208,7 +1220,7 @@ mod tests {
                     raw_value_result(int_value(1)),
                 )),
             },
-            minted_id: Arc::clone(&minted_id),
+            minted: Arc::clone(&minted),
             release: Arc::clone(&release),
         };
 
@@ -1248,7 +1260,9 @@ mod tests {
                 .await
         });
 
-        let execution_identifier = wait_for_minted_id(&minted_id).await;
+        let execution_identifier = wait_for_minted_sub_flow(&minted)
+            .await
+            .execution_identifier;
 
         let request = ActionSubFlowExecutionRequest {
             execution_identifier: execution_identifier.clone(),

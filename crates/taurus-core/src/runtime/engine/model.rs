@@ -92,6 +92,12 @@ pub enum CompiledThunk {
         /// them without a second lookup (see `resolve_remote_args`).
         input_schema: Option<Struct>,
         output_schema: Option<Struct>,
+        /// Human-facing name/description of the sub-flow, carried from
+        /// `shared::SubFlow` on the same path as the schemas above so an
+        /// action using the sub-flow as a tool (e.g. for an LLM) receives
+        /// them instead of having to fall back to `tool_1`, `tool_2`, ...
+        name: Option<String>,
+        description: Option<String>,
     },
     Function {
         identifier: String,
@@ -104,6 +110,10 @@ pub enum CompiledThunk {
         /// `ActionNodeSubFlowValue` can attach them (see `resolve_remote_args`).
         input_schema: Option<Struct>,
         output_schema: Option<Struct>,
+        /// Human-facing name/description of the sub-flow, carried from
+        /// `shared::SubFlow` just like `Node` above.
+        name: Option<String>,
+        description: Option<String>,
     },
 }
 

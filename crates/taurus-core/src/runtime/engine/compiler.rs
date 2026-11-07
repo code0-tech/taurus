@@ -237,6 +237,8 @@ fn compile_node_value(
                     node_id: *referenced_node_id,
                     input_schema: sub_flow.input_schema.clone(),
                     output_schema: sub_flow.output_schema.clone(),
+                    name: sub_flow.name.clone(),
+                    description: sub_flow.description.clone(),
                 }))
             }
             Some(sub_flow::ExecutionReference::Function(function)) => {
@@ -254,6 +256,8 @@ fn compile_node_value(
                         .collect::<Result<Vec<_>, _>>()?,
                     input_schema: sub_flow.input_schema.clone(),
                     output_schema: sub_flow.output_schema.clone(),
+                    name: sub_flow.name.clone(),
+                    description: sub_flow.description.clone(),
                 }))
             }
             None => Err(CompileError::SubFlowExecutionReferenceMissing {

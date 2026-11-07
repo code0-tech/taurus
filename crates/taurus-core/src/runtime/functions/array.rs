@@ -1559,6 +1559,8 @@ mod tests {
             node_id: id,
             input_schema: None,
             output_schema: None,
+            name: None,
+            description: None,
         })
     }
     fn v_num(n: f64) -> Value {

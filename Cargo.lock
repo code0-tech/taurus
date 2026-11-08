@@ -453,9 +453,9 @@ dependencies = [
 
 [[package]]
 name = "code0-flow"
-version = "0.0.47"
+version = "0.0.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83520bda842abac1bd3f7c583835519bc935b23def1cca42b63eac95116de9f6"
+checksum = "fc747443a23d8f7bdd12ba846f083fb245e16a9f27ca353ed2225cad0563cb77"
 dependencies = [
  "async-nats",
  "dotenv",
@@ -473,7 +473,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "tucana 0.0.84",
+ "tucana 0.0.86",
  "walkdir",
 ]
 
@@ -3638,26 +3638,6 @@ name = "tucana"
 version = "0.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4810f214ea212f895371454f99eb87b1af072b3275f89fa6b4d3aba7780dbef"
-dependencies = [
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost",
- "prost-build",
- "prost-types",
- "serde",
- "serde_json",
- "tonic",
- "tonic-build",
- "tonic-prost",
- "tonic-prost-build",
-]
-
-[[package]]
-name = "tucana"
-version = "0.0.84"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "991a0c0b13e70afe99e1ee4fc943f9242df59d39b1e47c023dc3508208aac527"
 dependencies = [
  "pbjson",
  "pbjson-build",

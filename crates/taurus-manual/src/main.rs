@@ -262,6 +262,9 @@ fn execution_result_id_label(result: &NodeExecutionResult) -> String {
         Some(NodeExecutionResultId::FunctionIdentifier(id)) => {
             format!("function_identifier={}", id)
         }
+        Some(NodeExecutionResultId::SubflowIdentifier(id)) => {
+            format!("subflow_identifier={}", id)
+        }
         None => "id=<missing>".to_string(),
     }
 }

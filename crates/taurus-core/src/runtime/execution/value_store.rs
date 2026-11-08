@@ -238,9 +238,16 @@ impl ValueStore {
         self.result_history.push(result);
     }
 
+    /// Records the result of an executed sub flow function. Its `id` is either
+    /// a `FunctionIdentifier` (a function compiled from the flow) or a
+    /// `SubflowIdentifier` (a sub flow function a remote runtime returned --
+    /// see `executor::function_result_id`), carried through from the caller so
+    /// Sagittarius can map the entry back to its origin. Unlike a node result
+    /// this is history-only -- no `latest_results` entry, since a function
+    /// result is never referenced by a node id.
     pub fn insert_function_success_with_timing(
         &mut self,
-        id: String,
+        id: TucanaNodeResultId,
         value: Value,
         parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
@@ -250,14 +257,14 @@ impl ValueStore {
             started_at,
             finished_at,
             parameter_results,
-            id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
+            id: Some(id),
             result: Some(TucanaNodeResult::Success(raw_value_result(value))),
         }));
     }
 
     pub fn insert_function_error_with_timing(
         &mut self,
-        id: String,
+        id: TucanaNodeResultId,
         runtime_error: RuntimeError,
         parameter_results: Vec<NodeValueExecutionResult>,
         started_at: i64,
@@ -267,7 +274,7 @@ impl ValueStore {
             started_at,
             finished_at,
             parameter_results,
-            id: Some(TucanaNodeResultId::FunctionIdentifier(id)),
+            id: Some(id),
             result: Some(TucanaNodeResult::Error(runtime_error.as_tucana_error())),
         }));
     }

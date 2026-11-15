@@ -1,10 +1,11 @@
 //! File standard-library handlers.
 //!
 //! `FILE<M>` is a storage reference: a struct
-//! `{ contentType: M; fileName: string; size: NUMBER; checksum: string;
-//! valueType: 'reference'; value: string }` where `value` is an opaque storage
-//! handle (not content, not a URL). Metadata is trusted; bytes are fetched lazily
-//! (not yet implemented, see taurus#363).
+//! `{ id: NUMBER; fileName: TEXT; contentType: M; size: NUMBER; checksum: TEXT; expiresAt?: NUMBER }`
+//! where `id` is the database id of the stored file (not content, not a URL), `size` is in bytes
+//! and `expiresAt` is epoch milliseconds. The metadata is a snapshot taken when the file was
+//! committed; Sagittarius stays authoritative. Bytes are fetched lazily (not yet implemented,
+//! see taurus#363).
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
@@ -33,8 +34,8 @@ taurus_macros::data_type! {
     display_message(en_US = "File"),
     alias(en_US = "file;document;blob;attachment;binary"),
     generic_keys = ["M extends TEXT"],
-    type_string = "{ contentType: M; fileName: string; size: NUMBER; checksum: string; valueType: 'reference'; value: string }",
-    linked_data_type_identifiers = ["TEXT"],
+    type_string = "{ id: NUMBER; fileName: TEXT; contentType: M; size: NUMBER; checksum: TEXT; expiresAt?: NUMBER }",
+    linked_data_type_identifiers = ["NUMBER", "TEXT"],
 }
 
 #[taurus_macros::runtime_function(
@@ -109,11 +110,11 @@ mod tests {
         let string = |v: &str| Value {
             kind: Some(Kind::StringValue(v.to_string())),
         };
-        put("contentType", string(content_type));
+        put("id", value_from_i64(123));
         put("fileName", string("a.txt"));
+        put("contentType", string(content_type));
         put("checksum", string("sha256:abc"));
-        put("valueType", string("reference"));
-        put("value", string("handle-123"));
+        put("expiresAt", value_from_i64(1_800_000_000_000));
         if let Some(size) = size {
             put("size", value_from_i64(size));
         }

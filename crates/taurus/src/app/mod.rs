@@ -7,6 +7,7 @@
 //! the worker task to stop via a `Notify` and waits for it to exit on its own,
 //! so in-flight flow executions can finish before the process exits.
 
+pub mod apus;
 mod definitions;
 mod worker;
 
@@ -37,34 +38,83 @@ pub async fn run() {
         config.compiled_flow_cache_capacity,
         config.compiled_flow_cache_max_bytes,
     );
-    let client = connect_nats(&config).await;
+    let client = if config.nats_enabled {
+        Some(connect_nats(&config).await)
+    } else {
+        log::info!("NATS disabled: no execution queue, Apus only");
+        None
+    };
 
     let mut health_task = spawn_health_task(&config);
     let (runtime_status_service, runtime_execution_service, mut runtime_status_heartbeat_task) =
         setup_dynamic_services_if_needed(&config).await;
-    let (runtime_usage, runtime_usage_task) = spawn_runtime_usage_if_needed(&config, &client);
+    let (runtime_usage, runtime_usage_task) =
+        spawn_runtime_usage_if_needed(&config, client.as_ref());
 
-    let nats_remote = NATSRemoteRuntime::with_execution_result_timeout(
-        client.clone(),
-        Duration::from_secs(config.remote_runtime_timeout_secs),
-    );
-    let worker_shutdown = Arc::new(Notify::new());
-    let mut worker_task = worker::spawn_worker(
-        client,
-        engine,
+    let nats_remote = client.as_ref().map(|client| {
+        NATSRemoteRuntime::with_execution_result_timeout(
+            client.clone(),
+            Duration::from_secs(config.remote_runtime_timeout_secs),
+        )
+    });
+    let engine = Arc::new(engine);
+    let remote_timeout = Duration::from_secs(config.remote_runtime_timeout_secs);
+    let apus_hub = config.apus_enabled.then(|| {
+        Arc::new(apus::ApusHub::new(
+            &config.apus_instance_id,
+            &apus_advertise(&config),
+        ))
+    });
+    let remote = apus::RoutingRemote::new(
+        apus_hub.clone(),
         nats_remote,
-        worker::ExecutionReporting {
-            runtime_execution_service,
-            runtime_usage,
-            result_sample_rate: config.execution_result_sample_rate,
-        },
-        mode_label(&config).to_string(),
-        worker_shutdown.clone(),
-        config.max_concurrent_executions,
-        config.environment == Environment::Development,
+        remote_timeout,
+        config.apus_trace,
     );
+    let mut apus_exec = None;
+    if let Some(hub) = &apus_hub {
+        apus_exec = Some(
+            start_apus_server(
+                &config,
+                hub.clone(),
+                client.as_ref(),
+                engine.clone(),
+                remote.clone(),
+                runtime_usage.clone(),
+            )
+            .await,
+        );
+    }
+    let worker_shutdown = Arc::new(Notify::new());
+    let mut worker_task = match client.clone() {
+        Some(client) => worker::spawn_worker(
+            client,
+            engine,
+            remote,
+            worker::ExecutionReporting {
+                runtime_execution_service,
+                runtime_usage,
+                result_sample_rate: config.execution_result_sample_rate,
+            },
+            mode_label(&config).to_string(),
+            worker_shutdown.clone(),
+            config.max_concurrent_executions,
+            config.environment == Environment::Development,
+        ),
+        // No queue worker without NATS; this task only ends on shutdown.
+        None => {
+            let shutdown = worker_shutdown.clone();
+            tokio::spawn(async move { shutdown.notified().await })
+        }
+    };
 
     wait_for_shutdown(&mut worker_task, &mut health_task, &worker_shutdown).await;
+    if let Some(hub) = &apus_hub {
+        hub.goaway_all("taurus is shutting down");
+    }
+    if let Some(exec) = &apus_exec {
+        exec.stop_runtime_usage();
+    }
     // The worker owned every runtime usage recorder, so with it finished the
     // publisher flushes what's left and exits on its own.
     if let Some(handle) = runtime_usage_task
@@ -91,6 +141,122 @@ pub async fn run() {
 
     log::info!("Taurus shutdown complete");
     telemetry.shutdown();
+}
+
+/// Accepts direct action connections (Apus data plane) next to the NATS worker.
+async fn start_apus_server(
+    config: &Config,
+    hub: Arc<apus::ApusHub>,
+    client: Option<&async_nats::Client>,
+    engine: Arc<ExecutionEngine>,
+    remote: apus::RoutingRemote,
+    runtime_usage: Option<RuntimeUsageRecorder>,
+) -> Arc<apus::ExecContext> {
+    let flows = if !config.apus_flows_path.is_empty() {
+        let flows = apus::load_flows_file(&config.apus_flows_path);
+        log::info!("Apus: {} flow(s) loaded into memory", flows.len());
+        apus::FlowSource::Memory(flows)
+    } else {
+        let client = client.expect("Apus: NATS is disabled, set APUS_FLOWS_PATH");
+        let jetstream = async_nats::jetstream::new(client.clone());
+        let kv = match jetstream
+            .get_key_value(config.apus_flow_bucket.clone())
+            .await
+        {
+            Ok(kv) => kv,
+            Err(err) => panic!(
+                "Apus: cannot open flow KV bucket '{}': {}",
+                config.apus_flow_bucket, err
+            ),
+        };
+        apus::FlowSource::Kv {
+            kv,
+            cache: config
+                .apus_flow_cache
+                .then(|| Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()))),
+        }
+    };
+    let mode = match (client, config.apus_execution.as_str()) {
+        (None, _) | (_, "local") => apus::ExecutionMode::Local,
+        _ => apus::ExecutionMode::Nats,
+    };
+    log::info!(
+        "Apus enabled execution_mode={:?} nats={} flows_in_memory={} flow_cache={}",
+        mode,
+        client.is_some(),
+        !config.apus_flows_path.is_empty(),
+        config.apus_flow_cache
+    );
+    let exec = Arc::new(apus::ExecContext {
+        client: client.cloned(),
+        flows,
+        mode,
+        engine,
+        remote,
+        timeout: Duration::from_secs(config.remote_runtime_timeout_secs),
+        flow_type: mode_label(config).to_string(),
+        with_trace: config.environment == Environment::Development,
+        runtime_usage: std::sync::Mutex::new(runtime_usage),
+    });
+    exec.watch_flows();
+    // With TLS, connections are mutual: the client certificate (issued by Aquila's CA)
+    // identifies the action. Without TLS (development) nobody is authenticated.
+    let tls_files = [
+        &config.apus_tls_cert,
+        &config.apus_tls_key,
+        &config.apus_tls_client_ca,
+    ];
+    let tls = if tls_files.iter().all(|path| path.is_empty()) {
+        log::warn!("Apus without TLS: actions are not authenticated (development only)");
+        None
+    } else if tls_files.iter().any(|path| path.is_empty()) {
+        panic!(
+            "Apus: TLS needs APUS_TLS_CERT, APUS_TLS_KEY and APUS_TLS_CLIENT_CA (client certificates identify actions)"
+        );
+    } else {
+        let read = |path: &str| {
+            std::fs::read(path).unwrap_or_else(|err| panic!("Apus: cannot read {path}: {err}"))
+        };
+        let server = apus_protocol::tls::server_config(
+            &read(&config.apus_tls_cert),
+            &read(&config.apus_tls_key),
+            Some(&read(&config.apus_tls_client_ca)),
+        )
+        .unwrap_or_else(|err| panic!("Apus: {err}"));
+        Some(apus_protocol::tls::TlsAcceptor::from(server))
+    };
+    if !config.apus_routing_path.is_empty() {
+        apus::watch_routes(
+            hub.clone(),
+            config.apus_routing_path.clone(),
+            config.apus_instance_id.clone(),
+        );
+    }
+    let settings = apus::ServerSettings {
+        host: config.apus_host.clone(),
+        port: config.apus_port,
+        instance_id: config.apus_instance_id.clone(),
+        max_in_flight: config.apus_max_in_flight,
+        heartbeat: Duration::from_millis(config.apus_heartbeat_ms),
+        max_frame: config.apus_max_frame,
+        stream_window: apus_protocol::limits::DEFAULT_STREAM_WINDOW,
+        stream_threshold: config.apus_stream_threshold,
+        tls,
+        max_connections: config.apus_max_connections,
+        max_connections_per_action: config.apus_max_connections_per_action,
+        handshake_timeout: Duration::from_millis(apus_protocol::limits::HANDSHAKE_TIMEOUT_MS),
+    };
+    tokio::spawn(apus::serve(settings, hub, exec.clone()));
+    exec
+}
+
+/// The endpoint other parties reach this Apus server at (for `ROUTES`).
+fn apus_advertise(config: &Config) -> String {
+    if config.apus_advertise.is_empty() {
+        format!("{}:{}", config.apus_host, config.apus_port)
+    } else {
+        config.apus_advertise.clone()
+    }
 }
 
 fn init_telemetry(config: &Config) -> telemetry::Telemetry {
@@ -278,11 +444,11 @@ async fn setup_dynamic_services_if_needed(
 /// Aquila drains the usage stream and forwards it to Sagittarius.
 fn spawn_runtime_usage_if_needed(
     config: &Config,
-    client: &async_nats::Client,
+    client: Option<&async_nats::Client>,
 ) -> (Option<RuntimeUsageRecorder>, Option<JoinHandle<()>>) {
-    if config.mode != DYNAMIC {
+    let Some(client) = client.filter(|_| config.mode == DYNAMIC) else {
         return (None, None);
-    }
+    };
 
     let (recorder, handle) = runtime_usage::spawn(
         client.clone(),

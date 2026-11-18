@@ -37,6 +37,7 @@
 //! [`crate::app::wait_for_shutdown`]) so the worker stops accepting new
 //! messages and waits for every in-flight execution to finish.
 
+use crate::app::apus::RoutingRemote;
 use futures_lite::StreamExt;
 use prost::Message;
 use std::sync::Arc;
@@ -45,7 +46,6 @@ use taurus_core::runtime::remote::RemoteRuntime;
 use taurus_core::time::now_unix_micros;
 use taurus_core::types::errors::runtime_error::RuntimeError;
 use taurus_core::types::signal::Signal;
-use taurus_provider::providers::remote::nats_remote_runtime::NATSRemoteRuntime;
 use tokio::sync::{Notify, Semaphore};
 use tokio::task::{JoinHandle, JoinSet};
 use tucana::aquila::ActionSubFlowExecutionRequest;
@@ -80,15 +80,14 @@ impl ExecutionReporting {
 
 pub fn spawn_worker(
     client: async_nats::Client,
-    engine: ExecutionEngine,
-    nats_remote: NATSRemoteRuntime,
+    engine: Arc<ExecutionEngine>,
+    nats_remote: RoutingRemote,
     reporting: ExecutionReporting,
     flow_type: String,
     shutdown: Arc<Notify>,
     max_concurrent_executions: usize,
     with_trace: bool,
 ) -> JoinHandle<()> {
-    let engine = Arc::new(engine);
     let semaphore = Arc::new(Semaphore::new(max_concurrent_executions.max(1)));
 
     tokio::spawn(async move {
@@ -149,10 +148,12 @@ pub fn spawn_worker(
                             let nats_remote = nats_remote.clone();
                             let reporting = reporting.clone();
                             let flow_type = flow_type.clone();
+                            let client = client.clone();
                             in_flight.spawn(async move {
                                 let _permit = permit;
                                 process_execution_message(
                                     message,
+                                    &client,
                                     &engine,
                                     &nats_remote,
                                     reporting,
@@ -223,8 +224,9 @@ pub fn spawn_worker(
 
 async fn process_execution_message(
     message: async_nats::Message,
+    client: &async_nats::Client,
     engine: &ExecutionEngine,
-    nats_remote: &NATSRemoteRuntime,
+    nats_remote: &RoutingRemote,
     mut reporting: ExecutionReporting,
     flow_type: &str,
     with_trace: bool,
@@ -295,6 +297,15 @@ async fn process_execution_message(
         flow_id
     );
 
+    // Apus: a Taurus instance that queued this execution on behalf of a
+    // directly connected action waits on the reply inbox for the outcome.
+    if let Some(reply) = message.reply.clone() {
+        let outcome = reported_execution_result(run_result.clone(), false);
+        if let Err(err) = client.publish(reply, outcome.encode_to_vec().into()).await {
+            log::error!("Failed to publish execution result reply: {:?}", err);
+        }
+    }
+
     if let Some(runtime_usage) = reporting.runtime_usage.as_ref() {
         runtime_usage.record(
             run_result.flow_id,
@@ -342,7 +353,7 @@ fn reported_execution_result(run_result: FlowRunResult, sampled: bool) -> Execut
 async fn process_sub_flow_execution_message(
     message: async_nats::Message,
     engine: &ExecutionEngine,
-    nats_remote: &NATSRemoteRuntime,
+    nats_remote: &RoutingRemote,
     client: &async_nats::Client,
     with_trace: bool,
 ) {
@@ -503,17 +514,17 @@ fn build_sub_flow_decode_error_result() -> ExecutionResult {
 }
 
 #[derive(Clone)]
-struct FlowRunResult {
+pub(crate) struct FlowRunResult {
     execution_id: ExecutionId,
-    flow_id: i64,
-    started_at: i64,
-    finished_at: i64,
+    pub(crate) flow_id: i64,
+    pub(crate) started_at: i64,
+    pub(crate) finished_at: i64,
     input: Option<Value>,
-    signal: Signal,
+    pub(crate) signal: Signal,
     node_execution_results: Vec<NodeExecutionResult>,
 }
 
-async fn execute_flow(
+pub(crate) async fn execute_flow(
     execution_id: ExecutionId,
     flow: ExecutionFlow,
     engine: &ExecutionEngine,
@@ -555,7 +566,9 @@ async fn execute_flow(
     }
 }
 
-fn function_identifiers_by_node_id(flow: &ExecutionFlow) -> std::collections::HashMap<i64, String> {
+pub(crate) fn function_identifiers_by_node_id(
+    flow: &ExecutionFlow,
+) -> std::collections::HashMap<i64, String> {
     flow.node_functions
         .iter()
         .filter_map(|function| {

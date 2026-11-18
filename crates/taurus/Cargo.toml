@@ -22,6 +22,10 @@ uuid = { workspace = true }
 env_logger = { workspace = true }
 jsonwebtoken = { workspace = true }
 serde = { workspace = true }
+apus-protocol = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+rcgen = "0.13"
+time = "0.3"

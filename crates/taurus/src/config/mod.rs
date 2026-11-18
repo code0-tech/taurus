@@ -91,6 +91,43 @@ pub struct Config {
 
     /// OpenTelemetry exporter configuration.
     pub opentelemetry: OpenTelemetry,
+
+    /// Apus: accept direct action connections (`APUS_ENABLED`).
+    pub apus_enabled: bool,
+    pub apus_host: String,
+    pub apus_port: u16,
+    /// `EXEC` + `SUBFLOW` requests accepted concurrently per action connection.
+    pub apus_max_in_flight: u32,
+    pub apus_heartbeat_ms: u64,
+    /// Attach a trace context to every `CALL`.
+    pub apus_trace: bool,
+    /// This instance in the routing table, and the endpoint actions reach it at.
+    pub apus_instance_id: String,
+    pub apus_advertise: String,
+    /// Routing table file (`{"version", "instances": [{"id", "endpoint", "projects"}]}`),
+    /// reloaded on change. Empty: this instance serves every project.
+    pub apus_routing_path: String,
+    /// TLS (all three or none): certificate chain, key and the client CA (Aquila's) whose
+    /// certificates identify actions. Without TLS nobody is authenticated (development).
+    pub apus_tls_cert: String,
+    pub apus_tls_key: String,
+    pub apus_tls_client_ca: String,
+    /// Strings of at least this many bytes are sent as streams (0 = never).
+    pub apus_stream_threshold: u32,
+    pub apus_max_frame: u32,
+    pub apus_max_connections: usize,
+    pub apus_max_connections_per_action: usize,
+    /// `nats` (default): queue action-triggered executions on NATS.
+    /// `local`: execute them in this process.
+    pub apus_execution: String,
+    pub apus_flow_bucket: String,
+    /// Cache flows looked up for `EXEC` instead of reading the KV store each time.
+    pub apus_flow_cache: bool,
+    /// Load flows into memory from this JSON export (`tucana::shared::Flows`) instead of
+    /// the NATS KV store. Stands in for Aquila pushing flows to Taurus (control plane).
+    pub apus_flows_path: String,
+    /// `false`: no NATS at all (no connection, no `execution.*` worker, no KV store).
+    pub nats_enabled: bool,
 }
 
 /// Implementation for all relevant `Taurus` startup configurations
@@ -162,6 +199,30 @@ impl Config {
                 metrics_endpoint: optional_env("OPENTELEMETRY_METRICS_ENDPOINT"),
                 traces_endpoint: optional_env("OPENTELEMETRY_TRACES_ENDPOINT"),
             },
+            apus_enabled: env_with_default("APUS_ENABLED", false),
+            apus_host: env_with_default("APUS_HOST", String::from("127.0.0.1")),
+            apus_port: env_with_default("APUS_PORT", 7676_u16),
+            apus_max_in_flight: env_with_default("APUS_MAX_IN_FLIGHT", 4096_u32),
+            apus_heartbeat_ms: env_with_default("APUS_HEARTBEAT_MS", 10_000_u64),
+            apus_trace: env_with_default("APUS_TRACE", false),
+            apus_instance_id: env_with_default("APUS_INSTANCE_ID", String::from("taurus-local")),
+            apus_advertise: env_with_default("APUS_ADVERTISE", String::new()),
+            apus_routing_path: env_with_default("APUS_ROUTING_PATH", String::new()),
+            apus_tls_cert: env_with_default("APUS_TLS_CERT", String::new()),
+            apus_tls_key: env_with_default("APUS_TLS_KEY", String::new()),
+            apus_tls_client_ca: env_with_default("APUS_TLS_CLIENT_CA", String::new()),
+            apus_stream_threshold: env_with_default("APUS_STREAM_THRESHOLD", 64 * 1024_u32),
+            apus_max_frame: env_with_default("APUS_MAX_FRAME", 16 * 1024 * 1024_u32),
+            apus_max_connections: env_with_default("APUS_MAX_CONNECTIONS", 10_000_usize),
+            apus_max_connections_per_action: env_with_default(
+                "APUS_MAX_CONNECTIONS_PER_ACTION",
+                64_usize,
+            ),
+            apus_execution: env_with_default("APUS_EXECUTION", String::from("nats")),
+            apus_flow_bucket: env_with_default("APUS_FLOW_BUCKET", String::from("flow_store")),
+            apus_flow_cache: env_with_default("APUS_FLOW_CACHE", false),
+            apus_flows_path: env_with_default("APUS_FLOWS_PATH", String::new()),
+            nats_enabled: env_with_default("NATS_ENABLED", true),
         }
     }
 }

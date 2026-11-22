@@ -1,15 +1,17 @@
 //! File standard-library handlers.
 //!
-//! `FILE<M>` is a struct `{ contentType: M; valueType: 'base64'; value: string }`.
-//! Only `value` (the base64 payload) matters for these handlers; `contentType`/
-//! `valueType` are carried through untouched by callers.
+//! `FILE<M>` is a storage reference: a struct
+//! `{ id: NUMBER; fileName: TEXT; contentType: M; size: NUMBER; checksum: TEXT; expiresAt?: NUMBER }`
+//! where `id` is the database id of the stored file (not content, not a URL), `size` is in bytes
+//! and `expiresAt` is epoch milliseconds. The metadata is a snapshot taken when the file was
+//! committed; Sagittarius stays authoritative. Bytes are fetched lazily (not yet implemented,
+//! see taurus#363).
 
 use crate::handler::argument::Argument;
 use crate::handler::macros::args;
 use crate::runtime::execution::value_store::ValueStore;
 use crate::types::signal::Signal;
-use crate::value::value_from_i64;
-use base64::Engine;
+use crate::value::{number_to_i64_lossy, value_from_i64};
 use tucana::shared::{Struct, value::Kind};
 
 // No `definitions/taurus-file/*.json` counterpart exists in this repo -- see
@@ -32,8 +34,8 @@ taurus_macros::data_type! {
     display_message(en_US = "File"),
     alias(en_US = "file;document;blob;attachment;binary"),
     generic_keys = ["M extends TEXT"],
-    type_string = "{ contentType: M; fileName: string; valueType: 'base64'; value: string }",
-    linked_data_type_identifiers = ["TEXT"],
+    type_string = "{ id: NUMBER; fileName: TEXT; contentType: M; size: NUMBER; checksum: TEXT; expiresAt?: NUMBER }",
+    linked_data_type_identifiers = ["NUMBER", "TEXT"],
 }
 
 #[taurus_macros::runtime_function(
@@ -59,24 +61,18 @@ fn size(
 ) -> Signal {
     args!(args => file: Struct);
 
-    // `throwsError: false` — a missing/malformed `value` field reports size 0
-    // rather than failing.
-    let byte_len = match file.fields.get("value").and_then(|v| v.kind.as_ref()) {
-        Some(Kind::StringValue(base64_value)) => base64::prelude::BASE64_STANDARD
-            .decode(base64_value)
-            .map(|bytes| bytes.len())
-            .unwrap_or(0),
+    // `throwsError: false` -- a missing/malformed `size` field reports 0.
+    let byte_len = match file.fields.get("size").and_then(|v| v.kind.as_ref()) {
+        Some(Kind::NumberValue(n)) => number_to_i64_lossy(n).unwrap_or(0),
         _ => 0,
     };
 
-    Signal::Success(value_from_i64(byte_len as i64))
+    Signal::Success(value_from_i64(byte_len))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::number_to_i64_lossy;
-    use base64::Engine;
     use std::collections::HashMap;
     use tucana::shared::Value;
 
@@ -87,7 +83,11 @@ mod tests {
             _: &'a crate::handler::argument::Thunk,
             _: &'a mut ValueStore,
         ) -> crate::handler::registry::HandlerFuture<'a> {
-            Box::pin(async { Signal::Success(Value { kind: Some(Kind::NullValue(0)) }) })
+            Box::pin(async {
+                Signal::Success(Value {
+                    kind: Some(Kind::NullValue(0)),
+                })
+            })
         }
     }
     #[allow(non_upper_case_globals)]
@@ -102,40 +102,34 @@ mod tests {
         }
     }
 
-    fn file_value(content_type: &str, value: &str) -> Argument {
+    fn file_value(content_type: &str, size: Option<i64>) -> Argument {
         let mut fields = HashMap::new();
-        fields.insert(
-            "contentType".to_string(),
-            Value {
-                kind: Some(Kind::StringValue(content_type.to_string())),
-            },
-        );
-        fields.insert(
-            "valueType".to_string(),
-            Value {
-                kind: Some(Kind::StringValue("base64".to_string())),
-            },
-        );
-        fields.insert(
-            "value".to_string(),
-            Value {
-                kind: Some(Kind::StringValue(value.to_string())),
-            },
-        );
+        let mut put = |k: &str, v: Value| {
+            fields.insert(k.to_string(), v);
+        };
+        let string = |v: &str| Value {
+            kind: Some(Kind::StringValue(v.to_string())),
+        };
+        put("id", value_from_i64(123));
+        put("fileName", string("a.txt"));
+        put("contentType", string(content_type));
+        put("checksum", string("sha256:abc"));
+        put("expiresAt", value_from_i64(1_800_000_000_000));
+        if let Some(size) = size {
+            put("size", value_from_i64(size));
+        }
         Argument::Eval(Value {
             kind: Some(Kind::StructValue(Struct { fields })),
         })
     }
 
     #[test]
-    fn test_size_decodes_base64_payload() {
+    fn test_size_reads_size_field() {
         let mut ctx = ValueStore::default();
         let mut run = dummy_run;
-        let encoded = base64::prelude::BASE64_STANDARD.encode("hello world");
-
         assert_eq!(
             expect_num(size(
-                &[file_value("text/plain", &encoded)],
+                &[file_value("text/plain", Some(11))],
                 &mut ctx,
                 &mut run
             )),
@@ -144,16 +138,11 @@ mod tests {
     }
 
     #[test]
-    fn test_size_returns_zero_for_malformed_input() {
+    fn test_size_returns_zero_when_size_missing() {
         let mut ctx = ValueStore::default();
-
         let mut run = dummy_run;
         assert_eq!(
-            expect_num(size(
-                &[file_value("text/plain", "not-valid-base64!!")],
-                &mut ctx,
-                &mut run
-            )),
+            expect_num(size(&[file_value("text/plain", None)], &mut ctx, &mut run)),
             0
         );
 
